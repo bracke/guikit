@@ -1,16 +1,15 @@
 with Ada.Command_Line;
 with Ada.Characters.Handling;
-with Ada.Containers.Indefinite_Hashed_Sets;
 with Ada.Directories;
 with Ada.Exceptions;
 with Ada.Strings.Fixed;
-with Ada.Strings.Hash;
 with Ada.Strings.Unbounded;
 with Ada.Text_IO;
 
 with GNAT.OS_Lib;
 
 with Project_Tools.Ada_Source;
+with Project_Tools.AUnit_Checks;
 with Project_Tools.Files;
 with Project_Tools.Processes;
 with Project_Tools.Text;
@@ -37,8 +36,6 @@ procedure Check_All is
      renames Project_Tools.Ada_Source.Is_Ada_Reserved_Word;
    function Is_Single_Identifier (Text : String) return Boolean
      renames Project_Tools.Ada_Source.Is_Single_Identifier;
-   function Is_Identifier_Character (Char : Character) return Boolean
-     renames Project_Tools.Ada_Source.Is_Identifier_Character;
 
    function Project_Root return String is
       Here : constant String := Ada.Directories.Current_Directory;
@@ -53,10 +50,6 @@ procedure Check_All is
    end Project_Root;
 
    Root : constant String := Project_Root;
-   --  The AUnit suite is split across per-section bodies; the registration
-   --  check searches this combined snapshot so a routine may live in any
-   --  section. Written once at startup (see main body).
-   Combined_Suite : constant String := Root & "/tools/obj/check_all_combined_suite.txt";
    Alr  : constant String := Project_Tools.Processes.Locate_Command ("alr");
 
    function Is_Text_Project_File (Name : String) return Boolean is
@@ -89,27 +82,6 @@ procedure Check_All is
       Program : String;
       Args    : GNAT.OS_Lib.Argument_List;
       Quiet   : Boolean := False) renames Project_Tools.Processes.Run;
-
-   --  Concatenate every split section body of the AUnit suite, so the
-   --  registration check can assert against the suite as a whole.
-   function Suite_Sources return String is
-      Dir    : constant String := Root & "/tests/tests/src/";
-      Result : Unbounded_String;
-
-      procedure Add (Name : String) is
-      begin
-         Append (Result, Project_Tools.Text.Read_Text_File (Dir & Name));
-         Append (Result, ASCII.LF);
-      end Add;
-   begin
-      Add ("guikit_suite.adb");
-      Add ("guikit_suite-frame_analysis.adb");
-      Add ("guikit_suite-input.adb");
-      Add ("guikit_suite-layout.adb");
-      Add ("guikit_suite-utf8.adb");
-      Add ("guikit_suite-widgets.adb");
-      return To_String (Result);
-   end Suite_Sources;
 
    procedure Check_Line_Lengths_In_File (Path : String) is
       Content : constant String := To_String (Project_Tools.Text.Read_Text_File (Path));
@@ -458,197 +430,9 @@ procedure Check_All is
       Check_Whitespace_In_File (Root & "/tools/guikit_check_all.gpr");
    end Check_Whitespace;
 
-   function Is_Subprogram_Spec_Line (Line : String) return Boolean is
-   begin
-      return
-        Starts_With (Line, "function ")
-        or else Starts_With (Line, "procedure ")
-        or else Starts_With (Line, "overriding function ")
-        or else Starts_With (Line, "overriding procedure ");
-   end Is_Subprogram_Spec_Line;
-
    procedure Check_GNATdoc_In_File (Path : String) is
-      Content      : constant String := To_String (Project_Tools.Text.Read_Text_File (Path));
-      Line_Number  : Natural := 1;
-      Line_Start   : Positive := Content'First;
-      Previous     : Unbounded_String;
-      Comment_Text : Unbounded_String;
-      Pending_Subprogram  : Boolean := False;
-      Pending_Is_Function : Boolean := False;
-      Pending_Has_Param   : Boolean := False;
-      Pending_Comments    : Unbounded_String;
-      Pending_Declaration : Unbounded_String;
-
-      procedure Fail (Message : String) is
-      begin
-         Put_Line (Standard_Error, Path & ":" & Natural'Image (Line_Number) & ": " & Message);
-         Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);
-         raise Program_Error;
-      end Fail;
-
-      procedure Finish_Pending is
-         Comments : constant String := To_String (Pending_Comments);
-         Declaration : constant String := To_String (Pending_Declaration);
-
-         function Documented_Param (Name : String) return Boolean is
-            Marker      : constant String := "@param " & Name;
-            Search_From : Positive := Comments'First;
-         begin
-            loop
-               declare
-                  Found : constant Natural :=
-                    Ada.Strings.Fixed.Index
-                      (Source  => Comments,
-                       Pattern => Marker,
-                       From    => Search_From);
-               begin
-                  if Found = 0 then
-                     return False;
-                  elsif Found + Marker'Length > Comments'Last
-                    or else not
-                      ((Comments (Found + Marker'Length) >= 'A'
-                        and then Comments (Found + Marker'Length) <= 'Z')
-                       or else (Comments (Found + Marker'Length) >= 'a'
-                                and then Comments (Found + Marker'Length) <= 'z')
-                       or else (Comments (Found + Marker'Length) >= '0'
-                                and then Comments (Found + Marker'Length) <= '9')
-                       or else Comments (Found + Marker'Length) = '_')
-                  then
-                     return True;
-                  end if;
-
-                  Search_From := Found + Marker'Length;
-               end;
-            end loop;
-         end Documented_Param;
-
-         procedure Check_Param_Group (Text : String) is
-            Colon : constant Natural := Ada.Strings.Fixed.Index (Text, ":");
-            Start : Positive := Text'First;
-
-            procedure Check_Name (Raw : String) is
-               Name : constant String := Ada.Strings.Fixed.Trim (Raw, Ada.Strings.Both);
-            begin
-               if Name /= "" and then not Documented_Param (Name) then
-                  Fail ("GNATdoc comment is missing @param " & Name);
-               end if;
-            end Check_Name;
-         begin
-            if Colon = 0 then
-               return;
-            end if;
-
-            for Index in Text'First .. Colon - 1 loop
-               if Text (Index) = ',' then
-                  Check_Name (Text (Start .. Index - 1));
-                  Start := Index + 1;
-               end if;
-            end loop;
-
-            if Start <= Colon - 1 then
-               Check_Name (Text (Start .. Colon - 1));
-            end if;
-         end Check_Param_Group;
-
-         procedure Check_Param_Names is
-            Open_Pos  : constant Natural := Ada.Strings.Fixed.Index (Declaration, "(");
-            Close_Pos : constant Natural :=
-              Ada.Strings.Fixed.Index
-                (Declaration,
-                 ")",
-                 Going => Ada.Strings.Backward);
-            Start     : Positive;
-         begin
-            if Open_Pos = 0 or else Close_Pos = 0 or else Close_Pos <= Open_Pos then
-               return;
-            end if;
-
-            Start := Open_Pos + 1;
-
-            for Index in Open_Pos + 1 .. Close_Pos - 1 loop
-               if Declaration (Index) = ';' then
-                  Check_Param_Group (Declaration (Start .. Index - 1));
-                  Start := Index + 1;
-               end if;
-            end loop;
-
-            if Start <= Close_Pos - 1 then
-               Check_Param_Group (Declaration (Start .. Close_Pos - 1));
-            end if;
-         end Check_Param_Names;
-      begin
-         if Pending_Is_Function and then not Contains (Comments, "@return") then
-            Fail ("function GNATdoc comment is missing @return");
-         elsif Pending_Has_Param and then not Contains (Comments, "@param") then
-            Fail ("parameterized GNATdoc comment is missing @param");
-         end if;
-
-         if Pending_Has_Param then
-            Check_Param_Names;
-         end if;
-
-         Pending_Subprogram := False;
-         Pending_Is_Function := False;
-         Pending_Has_Param := False;
-         Pending_Comments := Null_Unbounded_String;
-         Pending_Declaration := Null_Unbounded_String;
-      end Finish_Pending;
-
-      procedure Check_Line (Raw : String) is
-         Line      : constant String := Ada.Strings.Fixed.Trim (Raw, Ada.Strings.Both);
-         Prior     : constant String := To_String (Previous);
-         Comments  : constant String := To_String (Comment_Text);
-         Is_Func   : constant Boolean :=
-           Starts_With (Line, "function ") or else Starts_With (Line, "overriding function ");
-         Has_Param : constant Boolean := Contains (Line, "(");
-      begin
-         if Is_Subprogram_Spec_Line (Line) then
-            if not Starts_With (Prior, "--") then
-               Fail ("subprogram spec is missing preceding GNATdoc comment");
-            end if;
-
-            Pending_Subprogram := True;
-            Pending_Is_Function := Is_Func;
-            Pending_Has_Param := Has_Param;
-            Pending_Comments := To_Unbounded_String (Comments);
-            Pending_Declaration := To_Unbounded_String (Line);
-         elsif Pending_Subprogram and then Line /= "" and then not Starts_With (Line, "--") then
-            Pending_Has_Param := Pending_Has_Param or else Has_Param;
-            Append (Pending_Declaration, " ");
-            Append (Pending_Declaration, Line);
-         end if;
-
-         if Pending_Subprogram and then Contains (Line, ";") then
-            Finish_Pending;
-         end if;
-
-         if Starts_With (Line, "--") then
-            Append (Comment_Text, Line);
-            Append (Comment_Text, ASCII.LF);
-         elsif Line /= "" then
-            Comment_Text := Null_Unbounded_String;
-         end if;
-
-         if Line /= "" then
-            Previous := To_Unbounded_String (Line);
-         end if;
-      end Check_Line;
    begin
-      if Content = "" then
-         return;
-      end if;
-
-      for Index in Content'Range loop
-         if Content (Index) = ASCII.LF then
-            Check_Line (Content (Line_Start .. Index - 1));
-            Line_Number := Line_Number + 1;
-            Line_Start := Index + 1;
-         end if;
-      end loop;
-
-      if Line_Start <= Content'Last then
-         Check_Line (Content (Line_Start .. Content'Last));
-      end if;
+      Project_Tools.Ada_Source.Require_Public_GNATdoc_Tags (Path);
    end Check_GNATdoc_In_File;
 
    procedure Check_GNATdoc_In_Tree (Path : String) is
@@ -837,192 +621,14 @@ procedure Check_All is
    end Check_Ada_Keyword_Identifiers;
 
    procedure Check_AUnit_Test_Registration is
-      package Test_Name_Sets is new Ada.Containers.Indefinite_Hashed_Sets
-        (Element_Type        => String,
-         Hash                => Ada.Strings.Hash,
-         Equivalent_Elements => "=");
-
-      Path       : constant String := Combined_Suite;
-      Runner     : constant String := Root & "/tests/tests/src/guikit_tests.adb";
-      Content    : constant String := To_String (Project_Tools.Text.Read_Text_File (Path));
-      Declared   : Test_Name_Sets.Set;
-      Registered : Test_Name_Sets.Set;
-      Case_Types : Test_Name_Sets.Set;
-      Suite_Cases : Test_Name_Sets.Set;
-
-      procedure Fail (Message : String) is
-      begin
-         Put_Line (Standard_Error, Path & ": " & Message);
-         Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);
-         raise Program_Error;
-      end Fail;
-
-      procedure Check_Line (Raw : String) is
-         Line : constant String := Ada.Strings.Fixed.Trim (Raw, Ada.Strings.Both);
-         Name : constant String := Token_After (Line, "procedure ");
-      begin
-         if Starts_With (Name, "Test_") then
-            Declared.Include (Name);
-         elsif Starts_With (Line, "type ")
-           and then Ada.Strings.Fixed.Index (Line, " is new AUnit.Test_Cases.Test_Case") /= 0
-         then
-            declare
-               Case_Name : constant String := Token_After (Line, "type ");
-            begin
-               if Case_Name /= "" then
-                  Case_Types.Include (Case_Name);
-               end if;
-            end;
-         end if;
-      end Check_Line;
-
-      procedure Collect_Declared_Tests is
-         Line_Start : Positive := Content'First;
-      begin
-         if Content = "" then
-            return;
-         end if;
-
-         for Index in Content'Range loop
-            if Content (Index) = ASCII.LF then
-               Check_Line (Content (Line_Start .. Index - 1));
-               Line_Start := Index + 1;
-            end if;
-         end loop;
-
-         if Line_Start <= Content'Last then
-            Check_Line (Content (Line_Start .. Content'Last));
-         end if;
-      end Collect_Declared_Tests;
-
-      procedure Collect_Registered_Tests is
-         Search_From : Positive := Content'First;
-      begin
-         loop
-            declare
-               Found : constant Natural :=
-                 Ada.Strings.Fixed.Index
-                   (Source  => Content,
-                    Pattern => "Test_",
-                    From    => Search_From);
-            begin
-               exit when Found = 0;
-
-               declare
-                  Stop : Natural := Found;
-               begin
-                  while Stop <= Content'Last and then Is_Identifier_Character (Content (Stop)) loop
-                     Stop := Stop + 1;
-                  end loop;
-
-                  if Stop + 6 <= Content'Last
-                    and then Content (Stop .. Stop + 6) = "'Access"
-                  then
-                     declare
-                        Name : constant String := Content (Found .. Stop - 1);
-                     begin
-                        if Registered.Contains (Name) then
-                           Fail ("AUnit Test_* routine is registered more than once: " & Name);
-                        end if;
-
-                        Registered.Include (Name);
-                     end;
-                  end if;
-
-                  Search_From := Natural'Min (Stop + 1, Content'Last);
-               end;
-            end;
-         end loop;
-      end Collect_Registered_Tests;
-
-      procedure Collect_Suite_Cases is
-         Marker      : constant String := "Result.Add_Test (new ";
-         Search_From : Positive := Content'First;
-      begin
-         loop
-            declare
-               Found : constant Natural :=
-                 Ada.Strings.Fixed.Index
-                   (Source  => Content,
-                    Pattern => Marker,
-                    From    => Search_From);
-            begin
-               exit when Found = 0;
-
-               declare
-                  Start : constant Natural := Found + Marker'Length;
-                  Stop  : Natural := Start;
-               begin
-                  while Stop <= Content'Last and then Is_Identifier_Character (Content (Stop)) loop
-                     Stop := Stop + 1;
-                  end loop;
-
-                  if Stop > Start then
-                     declare
-                        Name : constant String := Content (Start .. Stop - 1);
-                     begin
-                        if Suite_Cases.Contains (Name) then
-                           Fail ("AUnit test case type is added to Suite more than once: " & Name);
-                        end if;
-
-                        Suite_Cases.Include (Name);
-                     end;
-                  end if;
-
-                  Search_From := Natural'Min (Stop + 1, Content'Last);
-               end;
-            end;
-         end loop;
-      end Collect_Suite_Cases;
    begin
-      Collect_Declared_Tests;
-      Collect_Registered_Tests;
-      Collect_Suite_Cases;
-
-      if Declared.Is_Empty then
-         Fail ("AUnit suite declares no Test_* routines");
-      end if;
-
-      if Case_Types.Is_Empty then
-         Fail ("AUnit suite declares no Test_Case types");
-      end if;
-
-      for Name of Declared loop
-         if not Registered.Contains (Name) then
-            Fail ("AUnit Test_* routine is not registered: " & Name);
-         end if;
-      end loop;
-
-      for Name of Registered loop
-         if not Declared.Contains (Name) then
-            Fail ("AUnit registration references an undeclared Test_* routine: " & Name);
-         end if;
-      end loop;
-
-      for Name of Case_Types loop
-         if not Suite_Cases.Contains (Name) then
-            Fail ("AUnit Test_Case type is not added to Suite: " & Name);
-         end if;
-      end loop;
-
-      for Name of Suite_Cases loop
-         if not Case_Types.Contains (Name) then
-            Fail ("AUnit Suite references an undeclared Test_Case type: " & Name);
-         end if;
-      end loop;
-
-      Project_Tools.Files.Require_Contains
-        (Runner,
-         "with Guikit_Suite;",
-         "AUnit executable must import the guikit suite");
-      Project_Tools.Files.Require_Contains
-        (Runner,
-         "Test_Runner_With_Status (Guikit_Suite.Suite)",
-         "AUnit executable must run the guikit suite with status reporting");
-      Project_Tools.Files.Require_Contains
-        (Runner,
-         "Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);",
-         "AUnit executable must propagate failed test status");
+      Project_Tools.AUnit_Checks.Require_Registered_Test_Packages
+        (Test_Dir         => Root & "/tests/tests/src",
+         Spec_Pattern     => "guikit_suite-*.ads",
+         Suite_Path       => Root & "/tests/tests/src/guikit_suite.adb",
+         Suite_Add_Prefix => "Result.Add_Test (",
+         Suite_Add_Suffix => ".Suite)",
+         Section_Marker   => "function Suite");
    end Check_AUnit_Test_Registration;
 
    function Has_Non_Ada_Tooling_Extension (Name : String) return Boolean is
@@ -1252,8 +858,6 @@ begin
    end if;
 
    Require_Command ("alr");
-
-   Project_Tools.Files.Write_Text_File (Combined_Suite, Suite_Sources);
 
    Check_Line_Lengths;
    Check_Consecutive_Empty_Lines;
