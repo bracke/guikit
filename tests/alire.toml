@@ -1,0 +1,21 @@
+name = "guikit_tests"
+description = "Standalone testsuite for the guikit crate"
+version = "0.1.0-dev"
+
+authors = ["Bent Bracke"]
+maintainers = ["Bent Bracke <bent@bracke.dk>"]
+maintainers-logins = ["bracke"]
+licenses = "MIT OR Apache-2.0 WITH LLVM-exception"
+website = ""
+tags = ["tests"]
+
+executables = ["guikit_tests"]
+
+[[depends-on]]
+guikit = "*"
+
+[[pins]]
+guikit = { path = ".." }
+
+[[depends-on]]
+aunit = "^26.0.0"
