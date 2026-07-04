@@ -7,6 +7,9 @@
 --  localization; callers that need localized labels measure them (with
 --  Label_Pixel_Width) and pass the resulting pixel widths in, so the geometry
 --  stays domain-free and the compiler can enforce the boundary.
+
+with Ada.Containers.Vectors;
+
 package Guikit.Layout is
 
    Bottom_Bar_Padding : constant Natural := 4;
@@ -295,5 +298,93 @@ package Guikit.Layout is
       Toolbar_Height : Natural;
       Line_Height    : Positive := 20)
       return Settings_Pane_Layout;
+
+   --  Inner padding of a command-palette-style overlay panel, and the vertical
+   --  padding inside each result row.
+   Palette_Padding            : constant Natural := 8;
+   Palette_Result_Row_Padding : constant Natural := 4;
+
+   --  Geometry of a searchable palette overlay: the outer panel, the search
+   --  input box, the scrollable results region, and the height of one result
+   --  row (which fits two text lines plus padding).
+   type Palette_Layout is record
+      X              : Natural := 0;
+      Y              : Natural := 0;
+      Width          : Natural := 0;
+      Height         : Natural := 0;
+      Search_X       : Natural := 0;
+      Search_Y       : Natural := 0;
+      Search_Width   : Natural := 0;
+      Search_Height  : Natural := 0;
+      Results_X      : Natural := 0;
+      Results_Y      : Natural := 0;
+      Results_Width  : Natural := 0;
+      Results_Height : Natural := 0;
+      Row_Height     : Natural := 0;
+   end record;
+
+   --  One laid-out result row: its one-based Result_Index into the full result
+   --  list, its rectangle, and whether it is the highlighted / enabled row.
+   type Palette_Result_Row is record
+      Result_Index : Natural := 0;
+      X            : Natural := 0;
+      Y            : Natural := 0;
+      Width        : Natural := 0;
+      Height       : Natural := 0;
+      Selected     : Boolean := False;
+      Enabled      : Boolean := False;
+   end record;
+
+   package Palette_Result_Row_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Palette_Result_Row);
+
+   package Palette_Enabled_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Boolean);
+
+   --  Calculate a palette overlay's search and results rectangles from the
+   --  command-overlay region of the window.
+   --
+   --  @param Command_X Left edge of the overlay region.
+   --  @param Command_Y Top edge of the overlay region.
+   --  @param Command_Width Width of the overlay region.
+   --  @param Command_Height Height of the overlay region.
+   --  @param Line_Height Text line height in pixels.
+   --  @return Palette panel, search and results geometry.
+   function Calculate_Palette_Layout
+     (Command_X      : Natural;
+      Command_Y      : Natural;
+      Command_Width  : Natural;
+      Command_Height : Natural;
+      Line_Height    : Positive := 20)
+      return Palette_Layout;
+
+   --  Lay out the visible result rows for a palette, honouring the scroll
+   --  offset and clipping to the results region.
+   --
+   --  @param Layout Palette geometry from Calculate_Palette_Layout.
+   --  @param Enabled Per-result enabled flags (one entry per result, in order).
+   --  @param Selected One-based index of the highlighted result (0 for none).
+   --  @param Offset One-based-exclusive scroll offset (rows scrolled off the top).
+   --  @return Visible result rows in result order.
+   function Calculate_Palette_Result_Rows
+     (Layout   : Palette_Layout;
+      Enabled  : Palette_Enabled_Vectors.Vector;
+      Selected : Natural;
+      Offset   : Natural)
+      return Palette_Result_Row_Vectors.Vector;
+
+   --  Return the result index at a window coordinate.
+   --
+   --  @param Rows Laid-out result rows from Calculate_Palette_Result_Rows.
+   --  @param X Horizontal window coordinate.
+   --  @param Y Vertical window coordinate.
+   --  @return The row's Result_Index, or zero when no row is hit.
+   function Palette_Result_At
+     (Rows : Palette_Result_Row_Vectors.Vector;
+      X    : Natural;
+      Y    : Natural)
+      return Natural;
 
 end Guikit.Layout;

@@ -403,4 +403,113 @@ package body Guikit.Layout is
          Text_Width => Text_W);
    end Calculate_Settings_Pane_Layout;
 
+   function Calculate_Palette_Layout
+     (Command_X      : Natural;
+      Command_Y      : Natural;
+      Command_Width  : Natural;
+      Command_Height : Natural;
+      Line_Height    : Positive := 20)
+      return Palette_Layout
+   is
+      Search_H  : constant Natural :=
+        Natural'Min
+          (Saturating_Add (Line_Height, Saturating_Multiply (Input_Field_Padding, 2)),
+           (if Command_Height > Saturating_Multiply (Palette_Padding, 2)
+            then Command_Height - Saturating_Multiply (Palette_Padding, 2)
+            else Command_Height));
+      Content_X : constant Natural := Saturating_Add (Command_X, Palette_Padding);
+      Content_Y : constant Natural := Saturating_Add (Command_Y, Palette_Padding);
+      Content_W : constant Natural :=
+        (if Command_Width > Saturating_Multiply (Palette_Padding, 2)
+         then Command_Width - Saturating_Multiply (Palette_Padding, 2)
+         else Command_Width);
+      Content_H : constant Natural :=
+        (if Command_Height > Saturating_Multiply (Palette_Padding, 2)
+         then Command_Height - Saturating_Multiply (Palette_Padding, 2)
+         else Command_Height);
+      Results_Y : constant Natural :=
+        Saturating_Add (Content_Y, Saturating_Add (Search_H, Palette_Padding));
+      Used_H    : constant Natural := Saturating_Add (Search_H, Palette_Padding);
+   begin
+      return
+        (X              => Command_X,
+         Y              => Command_Y,
+         Width          => Command_Width,
+         Height         => Command_Height,
+         Search_X       => Content_X,
+         Search_Y       => Content_Y,
+         Search_Width   => Content_W,
+         Search_Height  => Search_H,
+         Results_X      => Content_X,
+         Results_Y      => Results_Y,
+         Results_Width  => Content_W,
+         Results_Height => (if Content_H > Used_H then Content_H - Used_H else 0),
+         Row_Height     =>
+           Saturating_Add
+             (Saturating_Multiply (Line_Height, 2),
+              Saturating_Multiply (Palette_Result_Row_Padding, 2)));
+   end Calculate_Palette_Layout;
+
+   function Calculate_Palette_Result_Rows
+     (Layout   : Palette_Layout;
+      Enabled  : Palette_Enabled_Vectors.Vector;
+      Selected : Natural;
+      Offset   : Natural)
+      return Palette_Result_Row_Vectors.Vector
+   is
+      Result       : Palette_Result_Row_Vectors.Vector;
+      Result_Count : constant Natural := Natural (Enabled.Length);
+      Visible_Rows : constant Natural :=
+        (if Layout.Results_Height = 0 or else Layout.Row_Height = 0
+         then 0 else Layout.Results_Height / Layout.Row_Height);
+      Max_Offset   : constant Natural :=
+        (if Visible_Rows = 0 or else Result_Count <= Visible_Rows
+         then 0 else Result_Count - Visible_Rows);
+      First_Row    : constant Natural := Natural'Min (Offset, Max_Offset);
+   begin
+      if Layout.Row_Height = 0 then
+         return Result;
+      end if;
+
+      for Index in First_Row + 1 .. Result_Count loop
+         declare
+            Row_Y : constant Natural :=
+              Saturating_Add
+                (Layout.Results_Y,
+                 Saturating_Multiply (Natural (Index - First_Row - 1), Layout.Row_Height));
+            Results_End_Y : constant Natural :=
+              Saturating_Add (Layout.Results_Y, Layout.Results_Height);
+         begin
+            exit when Row_Y >= Results_End_Y;
+            exit when Results_End_Y - Row_Y < Layout.Row_Height;
+            Result.Append
+              (Palette_Result_Row'
+                 (Result_Index => Index,
+                  X            => Layout.Results_X,
+                  Y            => Row_Y,
+                  Width        => Layout.Results_Width,
+                  Height       => Layout.Row_Height,
+                  Selected     => Index = Selected,
+                  Enabled      => Enabled.Element (Index)));
+         end;
+      end loop;
+
+      return Result;
+   end Calculate_Palette_Result_Rows;
+
+   function Palette_Result_At
+     (Rows : Palette_Result_Row_Vectors.Vector;
+      X    : Natural;
+      Y    : Natural)
+      return Natural is
+   begin
+      for Row of Rows loop
+         if Within_Rect (X, Y, Row.X, Row.Y, Row.Width, Row.Height) then
+            return Row.Result_Index;
+         end if;
+      end loop;
+
+      return 0;
+   end Palette_Result_At;
+
 end Guikit.Layout;
