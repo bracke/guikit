@@ -551,6 +551,11 @@ private
       Surface               : Vk.Surface_KHR_T := System.Null_Address;
       Swapchain             : Vk.Swapchain_KHR_T := System.Null_Address;
       Render_Pass           : Vk.Render_Pass_T := System.Null_Address;
+      Color_MSAA_Image      : Vk.Image_T := System.Null_Address;
+      Color_MSAA_Memory     : Vk.Device_Memory_T := System.Null_Address;
+      Color_MSAA_View       : Vk.Image_View_T := System.Null_Address;
+      Color_MSAA_Live       : Boolean := False;
+      Color_Sample_Count    : Vk.Sample_Count_Flag_Bits_T := Vk.SAMPLE_COUNT_1_BIT;
       Descriptor_Set_Layout : Vk.Descriptor_Set_Layout_T := System.Null_Address;
       Descriptor_Pool       : Vk.Descriptor_Pool_T := System.Null_Address;
       Descriptor_Set        : Vk.Descriptor_Set_T := System.Null_Address;
