@@ -85,23 +85,18 @@ package body Guikit.Layout is
    --  edge of the toolbar section, matching the renderer's field margin.
    Scope_Chip_Margin : constant Natural := 6;
 
-   function Scope_Chip_Fixed_Width (Line_Height : Positive) return Natural is
-   begin
-      return Saturating_Multiply (Line_Height, 3);
-   end Scope_Chip_Fixed_Width;
-
    function Filter_Scope_Chip_Region_Of
      (Toolbar     : Toolbar_Layout;
+      Chip_Width  : Natural;
       Line_Height : Positive := 20)
       return Scope_Chip_Region
    is
-      Chip_Width : constant Natural := Scope_Chip_Fixed_Width (Line_Height);
       Min_Input  : constant Natural := Saturating_Multiply (Line_Height, 2);
       Required   : constant Natural :=
         Saturating_Add
           (Saturating_Add (Chip_Width, Min_Input), Saturating_Multiply (Scope_Chip_Margin, 3));
    begin
-      if Toolbar.Right_Width < Required then
+      if Chip_Width = 0 or else Toolbar.Right_Width < Required then
          return (Visible => False, others => 0);
       end if;
 
@@ -116,10 +111,12 @@ package body Guikit.Layout is
 
    function Filter_Input_Field_Width
      (Toolbar     : Toolbar_Layout;
+      Chip_Width  : Natural;
       Line_Height : Positive := 20)
       return Natural
    is
-      Chip : constant Scope_Chip_Region := Filter_Scope_Chip_Region_Of (Toolbar, Line_Height);
+      Chip : constant Scope_Chip_Region :=
+        Filter_Scope_Chip_Region_Of (Toolbar, Chip_Width, Line_Height);
       Both_Margins : constant Natural := Saturating_Multiply (Scope_Chip_Margin, 2);
    begin
       if not Chip.Visible then
@@ -140,7 +137,11 @@ package body Guikit.Layout is
       return Toolbar_Layout
    is
       Preferred_Left : constant Natural := Saturating_Multiply (Toolbar_Button_Width, Toolbar_Button_Count);
-      Side           : constant Natural := Width / 5;
+      --  The right region holds the filter/search input plus a fixed-width scope
+      --  chip; at Width/5 the chip left the input only a couple of characters
+      --  wide. Give it a larger share so the search field stays usable, while
+      --  still leaving the path bar (the middle) the majority of the width.
+      Side           : constant Natural := Width / 4;
       Left           : constant Natural := (if Width >= Preferred_Left then Preferred_Left else 0);
       Right          : constant Natural := Natural'Min (Side, Width - Left);
    begin

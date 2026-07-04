@@ -100,10 +100,10 @@ package body Guikit_Suite.Layout is
    begin
       Assert (Wide.Left_X = 0, "the left section starts at the origin");
       Assert (Wide.Left_Width = 280, "the left section fits all seven 40px buttons");
-      Assert (Wide.Right_Width = 200, "the right section is a fifth of the window");
-      Assert (Wide.Right_X = 800, "the right section is right-aligned");
+      Assert (Wide.Right_Width = 250, "the right section is a quarter of the window");
+      Assert (Wide.Right_X = 750, "the right section is right-aligned");
       Assert (Wide.Middle_X = 280, "the middle section follows the left section");
-      Assert (Wide.Middle_Width = 520, "the middle section fills the remaining width");
+      Assert (Wide.Middle_Width = 470, "the middle section fills the remaining width");
       Assert
         (Wide.Left_Width + Wide.Middle_Width + Wide.Right_Width = 1000,
          "the three sections span the whole window");
@@ -130,20 +130,23 @@ package body Guikit_Suite.Layout is
         (Right_X => 800, Right_Width => 200, others => 0);
       Narrow_Toolbar : constant Toolbar_Layout :=
         (Right_X => 900, Right_Width => 100, others => 0);
-      Chip : constant Scope_Chip_Region := Filter_Scope_Chip_Region_Of (Wide_Toolbar, 20);
+      Chip_W : constant Natural := 90;  --  caller-measured label width
+      Chip : constant Scope_Chip_Region := Filter_Scope_Chip_Region_Of (Wide_Toolbar, Chip_W, 20);
    begin
       Assert (Chip.Visible, "a wide filter section shows the scope chip");
-      Assert (Chip.Width = 60, "the chip is three line-heights wide");
+      Assert (Chip.Width = 90, "the chip is exactly the caller-measured label width");
       Assert (Chip.Height = 28, "the chip is one input-field tall");
       Assert (Chip.Y = 6, "the chip is vertically centered in the toolbar");
-      Assert (Chip.X = 934, "the chip is right-aligned inside the filter section");
-      Assert (Filter_Input_Field_Width (Wide_Toolbar, 20) = 122,
+      Assert (Chip.X = 904, "the chip is right-aligned inside the filter section");
+      Assert (Filter_Input_Field_Width (Wide_Toolbar, Chip_W, 20) = 92,
               "the filter field is narrowed to end before the chip");
 
-      Assert (not Filter_Scope_Chip_Region_Of (Narrow_Toolbar, 20).Visible,
+      Assert (not Filter_Scope_Chip_Region_Of (Narrow_Toolbar, Chip_W, 20).Visible,
               "a narrow filter section hides the scope chip");
-      Assert (Filter_Input_Field_Width (Narrow_Toolbar, 20) = 88,
+      Assert (Filter_Input_Field_Width (Narrow_Toolbar, Chip_W, 20) = 88,
               "with no chip the filter field spans the section less both margins");
+      Assert (not Filter_Scope_Chip_Region_Of (Wide_Toolbar, 0, 20).Visible,
+              "a zero-width chip is not shown");
    end Test_Scope_Chip;
 
    procedure Test_Bottom_Bar (T : in out AUnit.Test_Cases.Test_Case'Class) is

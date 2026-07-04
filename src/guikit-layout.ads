@@ -134,10 +134,14 @@ package Guikit.Layout is
    --  Return the filter-bar search-scope chip rectangle for a toolbar layout.
    --
    --  @param Toolbar Toolbar layout containing the right (filter) section.
+   --  @param Chip_Width Caller-measured chip width (sized to its label so it is
+   --         never abbreviated); the chip hides when it plus a minimum input
+   --         does not fit, or when Chip_Width is zero.
    --  @param Line_Height Text line height in pixels.
    --  @return Chip rectangle, with Visible reflecting whether it fits.
    function Filter_Scope_Chip_Region_Of
      (Toolbar     : Toolbar_Layout;
+      Chip_Width  : Natural;
       Line_Height : Positive := 20)
       return Scope_Chip_Region;
 
@@ -145,10 +149,12 @@ package Guikit.Layout is
    --  carved out of the toolbar's right section, matching the renderer's layout.
    --
    --  @param Toolbar Toolbar layout containing the right (filter) section.
+   --  @param Chip_Width Caller-measured chip width (see Filter_Scope_Chip_Region_Of).
    --  @param Line_Height Text line height in pixels.
    --  @return Filter input field width in pixels (never negative).
    function Filter_Input_Field_Width
      (Toolbar     : Toolbar_Layout;
+      Chip_Width  : Natural;
       Line_Height : Positive := 20)
       return Natural;
 
