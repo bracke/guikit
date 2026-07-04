@@ -14,6 +14,7 @@ with Project_Tools.Ada_Source;
 with Project_Tools.Files;
 with Project_Tools.Processes;
 with Project_Tools.Text;
+with Project_Tools.Tree_Checks;
 use Project_Tools.Text;
 
 --  Guikit project checks. This mirrors the files check_all helper, but only
@@ -1027,9 +1028,11 @@ procedure Check_All is
    function Has_Non_Ada_Tooling_Extension (Name : String) return Boolean is
       Lower_Name : constant String := Ada.Characters.Handling.To_Lower (Name);
    begin
+      --  Python (.py/.pyc/__pycache__) is owned by
+      --  Project_Tools.Tree_Checks.Check_No_Generated_Python; see
+      --  Check_Ada_Only_Tooling below.
       return
-        Ends_With (Lower_Name, ".py")
-        or else Ends_With (Lower_Name, ".sh")
+        Ends_With (Lower_Name, ".sh")
         or else Ends_With (Lower_Name, ".bash")
         or else Ends_With (Lower_Name, ".zsh")
         or else Ends_With (Lower_Name, ".fish")
@@ -1181,13 +1184,65 @@ procedure Check_All is
    end Check_Ada_Only_Tooling_At_Project_Root;
 
    procedure Check_Ada_Only_Tooling is
+      Python_Errors : Natural := 0;
    begin
       Check_Ada_Only_Tooling_At_Project_Root;
       Check_Ada_Only_Tooling_In_Tree (Root & "/config");
       Check_Ada_Only_Tooling_In_Tree (Root & "/src");
       Check_Ada_Only_Tooling_In_Tree (Root & "/tests");
       Check_Ada_Only_Tooling_In_Tree (Root & "/tools");
+
+      --  Reject generated Python artifacts (.py/.pyc/__pycache__) with the
+      --  shared Tree_Checks helper instead of a local reimplementation.
+      Project_Tools.Tree_Checks.Check_No_Generated_Python (Python_Errors, Root & "/config");
+      Project_Tools.Tree_Checks.Check_No_Generated_Python (Python_Errors, Root & "/src");
+      Project_Tools.Tree_Checks.Check_No_Generated_Python (Python_Errors, Root & "/tests");
+      Project_Tools.Tree_Checks.Check_No_Generated_Python (Python_Errors, Root & "/tools");
+      if Python_Errors > 0 then
+         raise Program_Error;
+      end if;
    end Check_Ada_Only_Tooling;
+
+   --  Internal layering gate. Each Guikit.* package may only `with` the
+   --  Guikit.* units listed in its allowlist; the shared helper raises when a
+   --  package imports a disallowed sibling. Allowlists are derived from the
+   --  current internal withs, so the gate passes as-is and locks the layering:
+   --    * Guikit.Draw / Frame_Analysis / Input / Utf8 are leaves (no deps).
+   --    * Guikit.Layout  -> Guikit.Utf8
+   --    * Guikit.Widgets -> Guikit.Draw
+   --    * Guikit.Vulkan  -> Guikit.Draw, Guikit.Frame_Analysis
+   procedure Check_Layering is
+      No_Deps : constant Project_Tools.Ada_Source.String_List (1 .. 0) :=
+        [others => <>];
+
+      procedure Require_Layer
+        (Stem    : String;
+         Allowed : Project_Tools.Ada_Source.String_List)
+      is
+         Spec : constant String := Root & "/src/" & Stem & ".ads";
+         Impl : constant String := Root & "/src/" & Stem & ".adb";
+      begin
+         if Project_Tools.Files.File_Exists (Spec) then
+            Project_Tools.Ada_Source.Require_Only_Allowed_With_Clauses
+              (Spec, "Guikit.", Allowed);
+         end if;
+         if Project_Tools.Files.File_Exists (Impl) then
+            Project_Tools.Ada_Source.Require_Only_Allowed_With_Clauses
+              (Impl, "Guikit.", Allowed);
+         end if;
+      end Require_Layer;
+   begin
+      Require_Layer ("guikit-draw", No_Deps);
+      Require_Layer ("guikit-frame_analysis", No_Deps);
+      Require_Layer ("guikit-input", No_Deps);
+      Require_Layer ("guikit-utf8", No_Deps);
+      Require_Layer ("guikit-layout", [1 => To_Unbounded_String ("Guikit.Utf8")]);
+      Require_Layer ("guikit-widgets", [1 => To_Unbounded_String ("Guikit.Draw")]);
+      Require_Layer
+        ("guikit-vulkan",
+         [To_Unbounded_String ("Guikit.Draw"),
+          To_Unbounded_String ("Guikit.Frame_Analysis")]);
+   end Check_Layering;
 
 begin
    if not Project_Tools.Files.File_Exists (Root & "/guikit.gpr") then
@@ -1207,6 +1262,7 @@ begin
    Check_Ada_Keyword_Identifiers;
    Check_AUnit_Test_Registration;
    Check_Ada_Only_Tooling;
+   Check_Layering;
    Run ("guikit build", Root, Alr, [1 => new String'("build")]);
    Run ("tests build", Root & "/tests", Alr, [1 => new String'("build")]);
    Run ("AUnit tests", Root & "/tests", "./bin/guikit_tests", []);
