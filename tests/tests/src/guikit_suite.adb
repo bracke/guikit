@@ -3,6 +3,7 @@ with Guikit_Suite.Layout;
 with Guikit_Suite.Utf8;
 with Guikit_Suite.Input;
 with Guikit_Suite.Frame_Analysis;
+with Guikit_Suite.Palette;
 
 package body Guikit_Suite is
 
@@ -14,6 +15,7 @@ package body Guikit_Suite is
       Result.Add_Test (Guikit_Suite.Utf8.Suite);
       Result.Add_Test (Guikit_Suite.Input.Suite);
       Result.Add_Test (Guikit_Suite.Frame_Analysis.Suite);
+      Result.Add_Test (Guikit_Suite.Palette.Suite);
       return Result;
    end Suite;
 

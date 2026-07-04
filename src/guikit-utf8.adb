@@ -157,4 +157,54 @@ package body Guikit.Utf8 is
       return Units;
    end Display_Units;
 
+   function Is_Whitespace_Separator_Codepoint
+     (Codepoint : Natural)
+      return Boolean is
+   begin
+      return Codepoint = Character'Pos (' ')
+        or else Codepoint = 9
+        or else Codepoint = 10
+        or else Codepoint = 11
+        or else Codepoint = 12
+        or else Codepoint = 13
+        or else Codepoint = 16#85#
+        or else Codepoint = 16#00A0#
+        or else Codepoint = 16#1680#
+        or else Codepoint in 16#2000# .. 16#200A#
+        or else Codepoint = 16#2028#
+        or else Codepoint = 16#2029#
+        or else Codepoint = 16#202F#
+        or else Codepoint = 16#205F#
+        or else Codepoint = 16#3000#;
+   end Is_Whitespace_Separator_Codepoint;
+
+   function Whitespace_Separator_Length
+     (Content  : String;
+      Position : Natural)
+      return Natural
+   is
+      Index     : constant Natural := Content'First + Position;
+      Next      : Integer := Index;
+      Codepoint : Natural := 0;
+   begin
+      if Position >= Content'Length then
+         return 0;
+      elsif Byte_At (Content, Index) = 16#85# then
+         --  A bare C1 next-line byte is not a valid UTF-8 start, so treat it as
+         --  a one-byte separator before attempting to decode.
+         return 1;
+      end if;
+
+      Decode_Next_Codepoint
+        (Content,
+         Next,
+         Codepoint,
+         Replacement_Codepoint => 16#110000#);
+      if Is_Whitespace_Separator_Codepoint (Codepoint) then
+         return Natural (Next - Index);
+      end if;
+
+      return 0;
+   end Whitespace_Separator_Length;
+
 end Guikit.Utf8;
