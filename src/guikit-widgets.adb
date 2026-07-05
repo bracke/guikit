@@ -482,6 +482,37 @@ package body Guikit.Widgets is
       end if;
    end Draw_Palette_Row;
 
+   procedure Draw_Toggle
+     (Rectangles   : in out Rectangle_Command_Vectors.Vector;
+      Clip_Width   : Natural;
+      Clip_Height  : Natural;
+      X            : Natural;
+      Y            : Natural;
+      Width        : Natural;
+      Height       : Natural;
+      Is_On        : Boolean;
+      On_Color     : Render_Color;
+      Off_Color    : Render_Color;
+      Border_Color : Render_Color;
+      Knob_Color   : Render_Color)
+   is
+      Knob_Pad  : constant Natural := Natural'Max (1, Height / 8);
+      Knob_Size : constant Natural :=
+        (if Height > 2 * Knob_Pad then Height - 2 * Knob_Pad else Height);
+      Knob_X    : constant Natural :=
+        (if Is_On and then Width > Knob_Pad + Knob_Size
+         then Saturating_Add (X, Width - Knob_Pad - Knob_Size)
+         else Saturating_Add (X, Knob_Pad));
+   begin
+      Add_Clipped_Rect
+        (Rectangles, Clip_Width, Clip_Height, X, Y, Width, Height,
+         (if Is_On then On_Color else Off_Color));
+      Add_Border (Rectangles, Clip_Width, Clip_Height, X, Y, Width, Height, Border_Color);
+      Add_Clipped_Rect
+        (Rectangles, Clip_Width, Clip_Height,
+         Knob_X, Saturating_Add (Y, Knob_Pad), Knob_Size, Knob_Size, Knob_Color);
+   end Draw_Toggle;
+
    procedure Draw_Tooltip
      (Rectangles      : in out Rectangle_Command_Vectors.Vector;
       Text            : in out Text_Command_Vectors.Vector;

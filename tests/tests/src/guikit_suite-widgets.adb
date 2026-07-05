@@ -42,6 +42,7 @@ package body Guikit_Suite.Widgets is
    procedure Test_Marquee (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Input_Field (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Palette_Row (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Toggle (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  Number of rectangle commands in a vector, as a plain Natural.
    function Count (V : Rectangle_Command_Vectors.Vector) return Natural is
@@ -83,6 +84,8 @@ package body Guikit_Suite.Widgets is
         (T, Test_Input_Field'Access, "Draw_Input_Field emits a fill and a border, nothing when empty");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Palette_Row'Access, "Draw_Palette_Row emits background, accent bar and label/shortcut/description");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Toggle'Access, "Draw_Toggle emits a track, border and a knob that shifts with the on/off state");
    end Register_Tests;
 
    procedure Test_Focus_Ring (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -323,6 +326,30 @@ package body Guikit_Suite.Widgets is
          Description_Color => Muted_Text_Color);
       Assert (Count (Rects) = 1 and then Count (Texts) = 1, "a bare row is only its background and label");
    end Test_Palette_Row;
+
+   procedure Test_Toggle (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      Rects : Rectangle_Command_Vectors.Vector;
+   begin
+      --  An "on" toggle: track (on colour) + four border edges + knob, with the
+      --  knob pushed toward the right of the track.
+      Draw_Toggle
+        (Rects, Big, Big, X => 100, Y => 40, Width => 40, Height => 20, Is_On => True,
+         On_Color => Selection_Color, Off_Color => Input_Color,
+         Border_Color => Border_Color, Knob_Color => Text_Color);
+      Assert (Count (Rects) = 6, "a toggle is a track, four border edges and a knob");
+      Assert (Rects (1).Color = Selection_Color, "the on track uses the on colour");
+      Assert (Rects (Rects.Last_Index).X > 120, "the on knob sits toward the right of the track");
+
+      --  An "off" toggle: track uses the off colour and the knob sits left.
+      Rects.Clear;
+      Draw_Toggle
+        (Rects, Big, Big, X => 100, Y => 40, Width => 40, Height => 20, Is_On => False,
+         On_Color => Selection_Color, Off_Color => Input_Color,
+         Border_Color => Border_Color, Knob_Color => Text_Color);
+      Assert (Rects (1).Color = Input_Color, "the off track uses the off colour");
+      Assert (Rects (Rects.Last_Index).X < 110, "the off knob sits toward the left of the track");
+   end Test_Toggle;
 
    procedure Test_Tooltip (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);

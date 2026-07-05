@@ -395,6 +395,38 @@ package Guikit.Widgets is
       Description_Truncated : Boolean;
       Description_Color     : Guikit.Draw.Render_Color);
 
+   --  Draw a boolean toggle switch: a filled track (On_Color when set, else
+   --  Off_Color) with a one-pixel border and a square knob pushed to the right
+   --  when On and to the left when Off. The caller owns the geometry, the
+   --  colours, and the hit / accessibility registration; the widget only emits
+   --  the rectangles.
+   --
+   --  @param Rectangles Rectangle command vector for the track, border and knob.
+   --  @param Clip_Width Drawable window width in pixels.
+   --  @param Clip_Height Drawable window height in pixels.
+   --  @param X Track left edge in pixels.
+   --  @param Y Track top edge in pixels.
+   --  @param Width Track width in pixels.
+   --  @param Height Track height in pixels.
+   --  @param Is_On Whether the toggle is set.
+   --  @param On_Color Track fill when Is_On.
+   --  @param Off_Color Track fill when not Is_On.
+   --  @param Border_Color Track border colour.
+   --  @param Knob_Color Knob fill colour.
+   procedure Draw_Toggle
+     (Rectangles   : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Clip_Width   : Natural;
+      Clip_Height  : Natural;
+      X            : Natural;
+      Y            : Natural;
+      Width        : Natural;
+      Height       : Natural;
+      Is_On        : Boolean;
+      On_Color     : Guikit.Draw.Render_Color;
+      Off_Color    : Guikit.Draw.Render_Color;
+      Border_Color : Guikit.Draw.Render_Color;
+      Knob_Color   : Guikit.Draw.Render_Color);
+
    --  Draw a floating hover tooltip: a filled box with a one-pixel border and a
    --  single padded text label. The rectangles are emitted as the fill followed
    --  by the top, left, bottom and right border edges in that order, then the
