@@ -325,6 +325,76 @@ package Guikit.Widgets is
       Label_Truncated : Boolean;
       Label_Color     : Guikit.Draw.Render_Color);
 
+   --  Draw one command-palette (searchable-list) result row: the row background,
+   --  a left selection accent bar when Selected, and up to three pre-fitted text
+   --  runs -- the label, an optional right-aligned shortcut sharing the label's
+   --  line (its top and height are Label_Y and Label_Height), and an optional
+   --  description on a second line at the label's left edge (Label_X). Each text
+   --  run is dropped when its box clips to nothing or its text is empty. The
+   --  caller owns the geometry, the state-to-colour choice, the label fitting,
+   --  and the hit / accessibility registration; the widget only emits the
+   --  rectangles and text.
+   --
+   --  @param Rectangles Rectangle command vector for the background and accent.
+   --  @param Text Text command vector for the label, shortcut and description.
+   --  @param Clip_Width Drawable window width in pixels.
+   --  @param Clip_Height Drawable window height in pixels.
+   --  @param Row_X Row left edge in pixels.
+   --  @param Row_Y Row top edge in pixels.
+   --  @param Row_Width Row width in pixels.
+   --  @param Row_Height Row height in pixels.
+   --  @param Background_Color Row background fill colour.
+   --  @param Selected When True, paint the left selection accent bar.
+   --  @param Accent_Color Selection accent bar colour.
+   --  @param Label_X Label box left edge (also the description's left edge).
+   --  @param Label_Y Label box top edge (also the shortcut's top edge).
+   --  @param Label_Width Label box width in pixels.
+   --  @param Label_Height Label box height (also the shortcut's height).
+   --  @param Label_Text Fitted label text; empty draws no label.
+   --  @param Label_Truncated Whether the caller's fitting shortened the label.
+   --  @param Label_Color Label text colour.
+   --  @param Shortcut_X Shortcut box left edge in pixels.
+   --  @param Shortcut_Width Shortcut box width; zero draws no shortcut.
+   --  @param Shortcut_Text Fitted shortcut text.
+   --  @param Shortcut_Truncated Whether the caller's fitting shortened it.
+   --  @param Shortcut_Color Shortcut text colour.
+   --  @param Description_Y Description box top edge in pixels.
+   --  @param Description_Width Description box width; zero draws no description.
+   --  @param Description_Height Description box height in pixels.
+   --  @param Description_Text Fitted description text.
+   --  @param Description_Truncated Whether the caller's fitting shortened it.
+   --  @param Description_Color Description text colour.
+   procedure Draw_Palette_Row
+     (Rectangles            : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text                  : in out Guikit.Draw.Text_Command_Vectors.Vector;
+      Clip_Width            : Natural;
+      Clip_Height           : Natural;
+      Row_X                 : Natural;
+      Row_Y                 : Natural;
+      Row_Width             : Natural;
+      Row_Height            : Natural;
+      Background_Color      : Guikit.Draw.Render_Color;
+      Selected              : Boolean;
+      Accent_Color          : Guikit.Draw.Render_Color;
+      Label_X               : Natural;
+      Label_Y               : Natural;
+      Label_Width           : Natural;
+      Label_Height          : Natural;
+      Label_Text            : Guikit.Draw.UString;
+      Label_Truncated       : Boolean;
+      Label_Color           : Guikit.Draw.Render_Color;
+      Shortcut_X            : Natural;
+      Shortcut_Width        : Natural;
+      Shortcut_Text         : Guikit.Draw.UString;
+      Shortcut_Truncated    : Boolean;
+      Shortcut_Color        : Guikit.Draw.Render_Color;
+      Description_Y         : Natural;
+      Description_Width     : Natural;
+      Description_Height    : Natural;
+      Description_Text      : Guikit.Draw.UString;
+      Description_Truncated : Boolean;
+      Description_Color     : Guikit.Draw.Render_Color);
+
    --  Draw a floating hover tooltip: a filled box with a one-pixel border and a
    --  single padded text label. The rectangles are emitted as the fill followed
    --  by the top, left, bottom and right border edges in that order, then the

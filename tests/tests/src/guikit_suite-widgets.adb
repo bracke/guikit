@@ -41,6 +41,7 @@ package body Guikit_Suite.Widgets is
    procedure Test_Caret (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Marquee (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Input_Field (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Palette_Row (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  Number of rectangle commands in a vector, as a plain Natural.
    function Count (V : Rectangle_Command_Vectors.Vector) return Natural is
@@ -80,6 +81,8 @@ package body Guikit_Suite.Widgets is
         (T, Test_Marquee'Access, "Draw_Marquee emits a fill and a border");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Input_Field'Access, "Draw_Input_Field emits a fill and a border, nothing when empty");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Palette_Row'Access, "Draw_Palette_Row emits background, accent bar and label/shortcut/description");
    end Register_Tests;
 
    procedure Test_Focus_Ring (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -279,6 +282,47 @@ package body Guikit_Suite.Widgets is
          Label_Text => U.To_Unbounded_String ("Open"), Label_Truncated => False, Label_Color => Text_Color);
       Assert (Count (Rects) = 0 and then Count (Texts) = 1, "an unhighlighted command row is only its label");
    end Test_Menu_Row;
+
+   procedure Test_Palette_Row (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      Rects : Rectangle_Command_Vectors.Vector;
+      Texts : Text_Command_Vectors.Vector;
+   begin
+      --  A selected row with a shortcut and a description: background + accent
+      --  bar rectangles, and label + shortcut + description text runs.
+      Draw_Palette_Row
+        (Rects, Texts, Big, Big,
+         Row_X => 10, Row_Y => 40, Row_Width => 200, Row_Height => 40,
+         Background_Color => Selection_Color, Selected => True, Accent_Color => Border_Color,
+         Label_X => 18, Label_Y => 44, Label_Width => 120, Label_Height => 20,
+         Label_Text => U.To_Unbounded_String ("Open"), Label_Truncated => False, Label_Color => Text_Color,
+         Shortcut_X => 160, Shortcut_Width => 40,
+         Shortcut_Text => U.To_Unbounded_String ("Ctrl+O"), Shortcut_Truncated => False,
+         Shortcut_Color => Muted_Text_Color,
+         Description_Y => 64, Description_Width => 170, Description_Height => 16,
+         Description_Text => U.To_Unbounded_String ("Open a file"), Description_Truncated => False,
+         Description_Color => Muted_Text_Color);
+      Assert (Count (Rects) = 2, "a selected row draws its background and a selection accent bar");
+      Assert (Count (Texts) = 3, "a full row draws the label, shortcut and description");
+      Assert (Rects (2).Width = 3, "the accent bar is three pixels wide");
+
+      --  An unselected row with no shortcut and no description: just the
+      --  background rectangle and the label.
+      Rects.Clear;
+      Texts.Clear;
+      Draw_Palette_Row
+        (Rects, Texts, Big, Big,
+         Row_X => 10, Row_Y => 40, Row_Width => 200, Row_Height => 20,
+         Background_Color => Pane_Color, Selected => False, Accent_Color => Border_Color,
+         Label_X => 18, Label_Y => 44, Label_Width => 170, Label_Height => 16,
+         Label_Text => U.To_Unbounded_String ("Save"), Label_Truncated => False, Label_Color => Text_Color,
+         Shortcut_X => 0, Shortcut_Width => 0,
+         Shortcut_Text => U.Null_Unbounded_String, Shortcut_Truncated => False, Shortcut_Color => Muted_Text_Color,
+         Description_Y => 0, Description_Width => 0, Description_Height => 0,
+         Description_Text => U.Null_Unbounded_String, Description_Truncated => False,
+         Description_Color => Muted_Text_Color);
+      Assert (Count (Rects) = 1 and then Count (Texts) = 1, "a bare row is only its background and label");
+   end Test_Palette_Row;
 
    procedure Test_Tooltip (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);

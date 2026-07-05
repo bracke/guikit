@@ -401,6 +401,87 @@ package body Guikit.Widgets is
       end if;
    end Draw_Menu_Row;
 
+   procedure Draw_Palette_Row
+     (Rectangles            : in out Rectangle_Command_Vectors.Vector;
+      Text                  : in out Text_Command_Vectors.Vector;
+      Clip_Width            : Natural;
+      Clip_Height           : Natural;
+      Row_X                 : Natural;
+      Row_Y                 : Natural;
+      Row_Width             : Natural;
+      Row_Height            : Natural;
+      Background_Color      : Render_Color;
+      Selected              : Boolean;
+      Accent_Color          : Render_Color;
+      Label_X               : Natural;
+      Label_Y               : Natural;
+      Label_Width           : Natural;
+      Label_Height          : Natural;
+      Label_Text            : UString;
+      Label_Truncated       : Boolean;
+      Label_Color           : Render_Color;
+      Shortcut_X            : Natural;
+      Shortcut_Width        : Natural;
+      Shortcut_Text         : UString;
+      Shortcut_Truncated    : Boolean;
+      Shortcut_Color        : Render_Color;
+      Description_Y         : Natural;
+      Description_Width     : Natural;
+      Description_Height    : Natural;
+      Description_Text      : UString;
+      Description_Truncated : Boolean;
+      Description_Color     : Render_Color)
+   is
+      procedure Emit_Text
+        (X         : Natural;
+         Y         : Natural;
+         W         : Natural;
+         H         : Natural;
+         Content   : UString;
+         Color     : Render_Color;
+         Truncated : Boolean)
+      is
+         Draw_W : constant Natural := Clipped_Size (X, W, Clip_Width);
+         Draw_H : constant Natural := Clipped_Size (Y, H, Clip_Height);
+      begin
+         if Draw_W > 0
+           and then Draw_H > 0
+           and then Ada.Strings.Unbounded.Length (Content) > 0
+         then
+            Text.Append
+              (Text_Command'
+                 (X            => X,
+                  Y            => Y,
+                  Width        => Draw_W,
+                  Height       => Draw_H,
+                  Text         => Content,
+                  Color        => Color,
+                  Truncated    => Truncated,
+                  Scale_To_Box => False,
+                  Italic       => False));
+         end if;
+      end Emit_Text;
+   begin
+      Add_Clipped_Rect
+        (Rectangles, Clip_Width, Clip_Height, Row_X, Row_Y, Row_Width, Row_Height, Background_Color);
+      if Selected then
+         Add_Clipped_Rect
+           (Rectangles, Clip_Width, Clip_Height,
+            Row_X, Row_Y, Natural'Min (3, Row_Width), Row_Height, Accent_Color);
+      end if;
+
+      Emit_Text (Label_X, Label_Y, Label_Width, Label_Height, Label_Text, Label_Color, Label_Truncated);
+      if Shortcut_Width > 0 then
+         Emit_Text
+           (Shortcut_X, Label_Y, Shortcut_Width, Label_Height, Shortcut_Text, Shortcut_Color, Shortcut_Truncated);
+      end if;
+      if Description_Width > 0 and then Description_Height > 0 then
+         Emit_Text
+           (Label_X, Description_Y, Description_Width, Description_Height,
+            Description_Text, Description_Color, Description_Truncated);
+      end if;
+   end Draw_Palette_Row;
+
    procedure Draw_Tooltip
      (Rectangles      : in out Rectangle_Command_Vectors.Vector;
       Text            : in out Text_Command_Vectors.Vector;
