@@ -566,6 +566,51 @@ package body Guikit.Widgets is
       Box (Up_X, Button_Width, Increment_Label);
    end Draw_Number_Stepper;
 
+   procedure Draw_Button
+     (Rectangles      : in out Rectangle_Command_Vectors.Vector;
+      Text            : in out Text_Command_Vectors.Vector;
+      Clip_Width      : Natural;
+      Clip_Height     : Natural;
+      X               : Natural;
+      Y               : Natural;
+      Width           : Natural;
+      Height          : Natural;
+      Fill_Color      : Render_Color;
+      Border_Color    : Render_Color;
+      Padding         : Natural;
+      Label_Text      : UString;
+      Label_Truncated : Boolean;
+      Label_Height    : Natural;
+      Label_Color     : Render_Color)
+   is
+      Inset   : constant Natural :=
+        (if Height > Label_Height then (Height - Label_Height) / 2 else 0);
+      Label_X : constant Natural := Saturating_Add (X, Padding);
+      Label_Y : constant Natural := Saturating_Add (Y, Inset);
+      Label_W : constant Natural := (if Width > 2 * Padding then Width - 2 * Padding else 0);
+      Draw_W  : constant Natural := Clipped_Size (Label_X, Label_W, Clip_Width);
+      Draw_H  : constant Natural := Clipped_Size (Label_Y, Label_Height, Clip_Height);
+   begin
+      Add_Clipped_Rect (Rectangles, Clip_Width, Clip_Height, X, Y, Width, Height, Fill_Color);
+      Add_Border (Rectangles, Clip_Width, Clip_Height, X, Y, Width, Height, Border_Color);
+      if Draw_W > 0
+        and then Draw_H > 0
+        and then Ada.Strings.Unbounded.Length (Label_Text) > 0
+      then
+         Text.Append
+           (Text_Command'
+              (X            => Label_X,
+               Y            => Label_Y,
+               Width        => Draw_W,
+               Height       => Draw_H,
+               Text         => Label_Text,
+               Color        => Label_Color,
+               Truncated    => Label_Truncated,
+               Scale_To_Box => False,
+               Italic       => False));
+      end if;
+   end Draw_Button;
+
    procedure Draw_Tooltip
      (Rectangles      : in out Rectangle_Command_Vectors.Vector;
       Text            : in out Text_Command_Vectors.Vector;

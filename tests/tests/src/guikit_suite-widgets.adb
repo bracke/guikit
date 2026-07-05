@@ -44,6 +44,7 @@ package body Guikit_Suite.Widgets is
    procedure Test_Palette_Row (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Toggle (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Number_Stepper (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Button (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  Number of rectangle commands in a vector, as a plain Natural.
    function Count (V : Rectangle_Command_Vectors.Vector) return Natural is
@@ -89,6 +90,8 @@ package body Guikit_Suite.Widgets is
         (T, Test_Toggle'Access, "Draw_Toggle emits a track, border and a knob that shifts with the on/off state");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Number_Stepper'Access, "Draw_Number_Stepper emits a value box and two flanking button boxes");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Button'Access, "Draw_Button emits a fill, border and a padded, vertically centred label");
    end Register_Tests;
 
    procedure Test_Focus_Ring (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -370,6 +373,22 @@ package body Guikit_Suite.Widgets is
       Assert (Count (Texts) = 3, "the value and the two stepper glyphs");
       Assert (Texts (1).X = 108, "the value label is inset by the padding");
    end Test_Number_Stepper;
+
+   procedure Test_Button (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      Rects : Rectangle_Command_Vectors.Vector;
+      Texts : Text_Command_Vectors.Vector;
+   begin
+      Draw_Button
+        (Rects, Texts, Big, Big, X => 50, Y => 100, Width => 80, Height => 28,
+         Fill_Color => Pane_Color, Border_Color => Border_Color, Padding => 8,
+         Label_Text => U.To_Unbounded_String ("Replace"), Label_Truncated => False,
+         Label_Height => 20, Label_Color => Text_Color);
+      Assert (Count (Rects) = 5, "a button is a fill and four border edges");
+      Assert (Count (Texts) = 1, "a button draws its label");
+      Assert (Texts (1).X = 58, "the label is inset by the padding");
+      Assert (Texts (1).Y = 104, "the label is vertically centred in the button");
+   end Test_Button;
 
    procedure Test_Tooltip (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);

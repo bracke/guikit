@@ -477,6 +477,46 @@ package Guikit.Widgets is
       Border_Color    : Guikit.Draw.Render_Color;
       Text_Color      : Guikit.Draw.Render_Color);
 
+   --  Draw a labelled button: a filled box with a one-pixel border and a single
+   --  pre-fitted label, horizontally inset by Padding and vertically centred
+   --  (the label box is Label_Height tall). The caller resolves the fill colour
+   --  for the button's state (idle/hover/press), fits and localises the label,
+   --  and owns the hit / accessibility registration; the widget only emits the
+   --  box and label. Nothing is drawn for the label when it clips to nothing or
+   --  is empty.
+   --
+   --  @param Rectangles Rectangle command vector for the fill and border.
+   --  @param Text Text command vector for the label.
+   --  @param Clip_Width Drawable window width in pixels.
+   --  @param Clip_Height Drawable window height in pixels.
+   --  @param X Button left edge in pixels.
+   --  @param Y Button top edge in pixels.
+   --  @param Width Button width in pixels.
+   --  @param Height Button height in pixels.
+   --  @param Fill_Color Button background colour for its current state.
+   --  @param Border_Color Button border colour.
+   --  @param Padding Horizontal inset of the label within the button.
+   --  @param Label_Text Fitted, localised label; empty draws no label.
+   --  @param Label_Truncated Whether the caller's fitting shortened the label.
+   --  @param Label_Height Height of the (vertically centred) label box.
+   --  @param Label_Color Label text colour.
+   procedure Draw_Button
+     (Rectangles      : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text            : in out Guikit.Draw.Text_Command_Vectors.Vector;
+      Clip_Width      : Natural;
+      Clip_Height     : Natural;
+      X               : Natural;
+      Y               : Natural;
+      Width           : Natural;
+      Height          : Natural;
+      Fill_Color      : Guikit.Draw.Render_Color;
+      Border_Color    : Guikit.Draw.Render_Color;
+      Padding         : Natural;
+      Label_Text      : Guikit.Draw.UString;
+      Label_Truncated : Boolean;
+      Label_Height    : Natural;
+      Label_Color     : Guikit.Draw.Render_Color);
+
    --  Draw a floating hover tooltip: a filled box with a one-pixel border and a
    --  single padded text label. The rectangles are emitted as the fill followed
    --  by the top, left, bottom and right border edges in that order, then the
