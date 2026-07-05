@@ -497,6 +497,35 @@ package body Guikit.Layout is
       return Result;
    end Calculate_Palette_Result_Rows;
 
+   function Scroll_Offset_For_Selection
+     (Selected       : Natural;
+      Result_Count   : Natural;
+      Visible_Rows   : Natural;
+      Current_Offset : Natural)
+      return Natural
+   is
+      Offset : Natural := Current_Offset;
+   begin
+      if Result_Count = 0 or else Selected = 0 then
+         return 0;
+      end if;
+
+      --  Clamp to the last full page, then pull the window onto the selection.
+      if Visible_Rows = 0 or else Result_Count <= Visible_Rows then
+         Offset := 0;
+      elsif Offset > Result_Count - Visible_Rows then
+         Offset := Result_Count - Visible_Rows;
+      end if;
+
+      if Selected <= Offset then
+         Offset := Selected - 1;
+      elsif Selected > Offset + Visible_Rows then
+         Offset := Selected - Visible_Rows;
+      end if;
+
+      return Offset;
+   end Scroll_Offset_For_Selection;
+
    function Palette_Result_At
      (Rows : Palette_Result_Row_Vectors.Vector;
       X    : Natural;

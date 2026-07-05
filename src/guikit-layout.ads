@@ -375,6 +375,24 @@ package Guikit.Layout is
       Offset   : Natural)
       return Palette_Result_Row_Vectors.Vector;
 
+   --  Compute the scroll offset that keeps the selected result visible within a
+   --  window of Visible_Rows rows, adjusting Current_Offset minimally: scroll up
+   --  when the selection is above the window, down when below, and clamp so the
+   --  last page stays full. A selection of zero (nothing highlighted) or no
+   --  results yields offset zero.
+   --
+   --  @param Selected One-based index of the selected result, or 0 for none.
+   --  @param Result_Count Total number of results.
+   --  @param Visible_Rows Number of result rows visible at once.
+   --  @param Current_Offset The current scroll offset (rows scrolled off the top).
+   --  @return The adjusted scroll offset.
+   function Scroll_Offset_For_Selection
+     (Selected       : Natural;
+      Result_Count   : Natural;
+      Visible_Rows   : Natural;
+      Current_Offset : Natural)
+      return Natural;
+
    --  Return the result index at a window coordinate.
    --
    --  @param Rows Laid-out result rows from Calculate_Palette_Result_Rows.

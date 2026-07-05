@@ -27,6 +27,7 @@ package body Guikit_Suite.Layout is
    procedure Test_Settings_Action_Buttons (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Settings_Entry_Buttons (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Settings_Pane (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Scroll_Offset_For_Selection (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    overriding function Name (T : Layout_Test_Case) return AUnit.Message_String is
       pragma Unreferenced (T);
@@ -56,6 +57,9 @@ package body Guikit_Suite.Layout is
         (T, Test_Settings_Entry_Buttons'Access, "Calculate_Settings_Entry_Button_Layout right-aligns two buttons");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Settings_Pane'Access, "Calculate_Settings_Pane_Layout centers the settings pane");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Scroll_Offset_For_Selection'Access,
+         "Scroll_Offset_For_Selection keeps the selection within the visible window");
    end Register_Tests;
 
    procedure Test_Within (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -219,6 +223,24 @@ package body Guikit_Suite.Layout is
       Assert (Pane.Text_Y = 147, "the inner text top is inset by the pane padding");
       Assert (Pane.Text_Width = 772, "the inner text column spans the pane less both paddings");
    end Test_Settings_Pane;
+
+   procedure Test_Scroll_Offset_For_Selection (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      function Offset_For (Selected, Count, Visible, Current : Natural) return Natural
+        renames Scroll_Offset_For_Selection;
+   begin
+      Assert (Offset_For (0, 0, 4, 0) = 0, "no results yields offset zero");
+      Assert (Offset_For (0, 10, 4, 3) = 0, "no selection yields offset zero");
+      Assert (Offset_For (3, 3, 4, 2) = 0, "when all results fit, the offset is zero");
+      Assert (Offset_For (5, 20, 4, 3) = 3,
+              "a selection already inside the window leaves the offset unchanged");
+      Assert (Offset_For (2, 20, 4, 5) = 1,
+              "a selection above the window scrolls up so it is the first row");
+      Assert (Offset_For (10, 20, 4, 2) = 6,
+              "a selection below the window scrolls down so it is the last row");
+      Assert (Offset_For (20, 20, 4, 100) = 16,
+              "an over-large offset is clamped to the last full page");
+   end Test_Scroll_Offset_For_Selection;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;
