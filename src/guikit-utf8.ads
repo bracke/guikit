@@ -31,4 +31,27 @@ package Guikit.Utf8 is
       Position : Natural)
       return Natural;
 
+   --  Decode the UTF-8 codepoint starting at Content (Index), advancing Index
+   --  past it. Invalid sequences yield Replacement_Codepoint and advance one
+   --  byte. Used by the text renderer to iterate a string's codepoints.
+   --
+   --  @param Content UTF-8 encoded byte string.
+   --  @param Index In: first byte of the codepoint; out: first byte after it.
+   --  @param Codepoint The decoded Unicode codepoint.
+   --  @param Replacement_Codepoint Value used for an invalid sequence.
+   procedure Decode_Next_Codepoint
+     (Content               : String;
+      Index                 : in out Integer;
+      Codepoint             : out Natural;
+      Replacement_Codepoint : Natural := 16#FFFD#);
+
+   --  Whether a codepoint is a required zero-width combining mark (so a text
+   --  renderer can count it as intentionally invisible rather than missing).
+   --
+   --  @param Codepoint A Unicode codepoint.
+   --  @return True for the required zero-width combining ranges.
+   function Is_Required_Zero_Width_Codepoint
+     (Codepoint : Natural)
+      return Boolean;
+
 end Guikit.Utf8;
