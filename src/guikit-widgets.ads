@@ -427,6 +427,56 @@ package Guikit.Widgets is
       Border_Color : Guikit.Draw.Render_Color;
       Knob_Color   : Guikit.Draw.Render_Color);
 
+   --  Draw a number stepper: a value box flanked by a decrement and an increment
+   --  button. Each is a filled box with a one-pixel border and a padded, single-
+   --  line label -- the current value, and the decrement/increment glyphs. All
+   --  three boxes share Box_Y/Box_Height and all three labels share Text_Y/
+   --  Text_Height (the label may sit lower than the box top). Labels are assumed
+   --  to fit their boxes; the caller owns the geometry, colours and the hit /
+   --  accessibility registration; the widget only emits the rectangles and text.
+   --
+   --  @param Rectangles Rectangle command vector for the three boxes.
+   --  @param Text Text command vector for the value and glyph labels.
+   --  @param Clip_Width Drawable window width in pixels.
+   --  @param Clip_Height Drawable window height in pixels.
+   --  @param Box_Y Top edge of all three boxes in pixels.
+   --  @param Box_Height Height of all three boxes in pixels.
+   --  @param Text_Y Top edge of the labels in pixels.
+   --  @param Text_Height Height of the label boxes in pixels.
+   --  @param Padding Horizontal inset of each label within its box.
+   --  @param Value_X Value box left edge in pixels.
+   --  @param Value_Width Value box width in pixels.
+   --  @param Value_Text Current value label.
+   --  @param Down_X Decrement button left edge in pixels.
+   --  @param Up_X Increment button left edge in pixels.
+   --  @param Button_Width Width of each stepper button in pixels.
+   --  @param Decrement_Label Decrement glyph (e.g. "-").
+   --  @param Increment_Label Increment glyph (e.g. "+").
+   --  @param Fill_Color Box background colour.
+   --  @param Border_Color Box border colour.
+   --  @param Text_Color Label text colour.
+   procedure Draw_Number_Stepper
+     (Rectangles      : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text            : in out Guikit.Draw.Text_Command_Vectors.Vector;
+      Clip_Width      : Natural;
+      Clip_Height     : Natural;
+      Box_Y           : Natural;
+      Box_Height      : Natural;
+      Text_Y          : Natural;
+      Text_Height     : Natural;
+      Padding         : Natural;
+      Value_X         : Natural;
+      Value_Width     : Natural;
+      Value_Text      : Guikit.Draw.UString;
+      Down_X          : Natural;
+      Up_X            : Natural;
+      Button_Width    : Natural;
+      Decrement_Label : Guikit.Draw.UString;
+      Increment_Label : Guikit.Draw.UString;
+      Fill_Color      : Guikit.Draw.Render_Color;
+      Border_Color    : Guikit.Draw.Render_Color;
+      Text_Color      : Guikit.Draw.Render_Color);
+
    --  Draw a floating hover tooltip: a filled box with a one-pixel border and a
    --  single padded text label. The rectangles are emitted as the fill followed
    --  by the top, left, bottom and right border edges in that order, then the

@@ -43,6 +43,7 @@ package body Guikit_Suite.Widgets is
    procedure Test_Input_Field (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Palette_Row (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Toggle (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Number_Stepper (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  Number of rectangle commands in a vector, as a plain Natural.
    function Count (V : Rectangle_Command_Vectors.Vector) return Natural is
@@ -86,6 +87,8 @@ package body Guikit_Suite.Widgets is
         (T, Test_Palette_Row'Access, "Draw_Palette_Row emits background, accent bar and label/shortcut/description");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Toggle'Access, "Draw_Toggle emits a track, border and a knob that shifts with the on/off state");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Number_Stepper'Access, "Draw_Number_Stepper emits a value box and two flanking button boxes");
    end Register_Tests;
 
    procedure Test_Focus_Ring (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -350,6 +353,23 @@ package body Guikit_Suite.Widgets is
       Assert (Rects (1).Color = Input_Color, "the off track uses the off colour");
       Assert (Rects (Rects.Last_Index).X < 110, "the off knob sits toward the left of the track");
    end Test_Toggle;
+
+   procedure Test_Number_Stepper (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      Rects : Rectangle_Command_Vectors.Vector;
+      Texts : Text_Command_Vectors.Vector;
+   begin
+      Draw_Number_Stepper
+        (Rects, Texts, Big, Big,
+         Box_Y => 40, Box_Height => 20, Text_Y => 42, Text_Height => 16, Padding => 8,
+         Value_X => 100, Value_Width => 48, Value_Text => U.To_Unbounded_String ("16"),
+         Down_X => 148, Up_X => 188, Button_Width => 40,
+         Decrement_Label => U.To_Unbounded_String ("-"), Increment_Label => U.To_Unbounded_String ("+"),
+         Fill_Color => Input_Color, Border_Color => Border_Color, Text_Color => Text_Color);
+      Assert (Count (Rects) = 15, "three boxes, each a fill and four border edges");
+      Assert (Count (Texts) = 3, "the value and the two stepper glyphs");
+      Assert (Texts (1).X = 108, "the value label is inset by the padding");
+   end Test_Number_Stepper;
 
    procedure Test_Tooltip (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);

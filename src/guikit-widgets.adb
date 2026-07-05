@@ -513,6 +513,59 @@ package body Guikit.Widgets is
          Knob_X, Saturating_Add (Y, Knob_Pad), Knob_Size, Knob_Size, Knob_Color);
    end Draw_Toggle;
 
+   procedure Draw_Number_Stepper
+     (Rectangles      : in out Rectangle_Command_Vectors.Vector;
+      Text            : in out Text_Command_Vectors.Vector;
+      Clip_Width      : Natural;
+      Clip_Height     : Natural;
+      Box_Y           : Natural;
+      Box_Height      : Natural;
+      Text_Y          : Natural;
+      Text_Height     : Natural;
+      Padding         : Natural;
+      Value_X         : Natural;
+      Value_Width     : Natural;
+      Value_Text      : UString;
+      Down_X          : Natural;
+      Up_X            : Natural;
+      Button_Width    : Natural;
+      Decrement_Label : UString;
+      Increment_Label : UString;
+      Fill_Color      : Render_Color;
+      Border_Color    : Render_Color;
+      Text_Color      : Render_Color)
+   is
+      procedure Box (X : Natural; Width : Natural; Label : UString) is
+         Text_X  : constant Natural := Saturating_Add (X, Padding);
+         Field_W : constant Natural := (if Width > 2 * Padding then Width - 2 * Padding else 0);
+         Draw_W  : constant Natural := Clipped_Size (Text_X, Field_W, Clip_Width);
+         Draw_H  : constant Natural := Clipped_Size (Text_Y, Text_Height, Clip_Height);
+      begin
+         Add_Clipped_Rect (Rectangles, Clip_Width, Clip_Height, X, Box_Y, Width, Box_Height, Fill_Color);
+         Add_Border (Rectangles, Clip_Width, Clip_Height, X, Box_Y, Width, Box_Height, Border_Color);
+         if Draw_W > 0
+           and then Draw_H > 0
+           and then Ada.Strings.Unbounded.Length (Label) > 0
+         then
+            Text.Append
+              (Text_Command'
+                 (X            => Text_X,
+                  Y            => Text_Y,
+                  Width        => Draw_W,
+                  Height       => Draw_H,
+                  Text         => Label,
+                  Color        => Text_Color,
+                  Truncated    => False,
+                  Scale_To_Box => False,
+                  Italic       => False));
+         end if;
+      end Box;
+   begin
+      Box (Value_X, Value_Width, Value_Text);
+      Box (Down_X, Button_Width, Decrement_Label);
+      Box (Up_X, Button_Width, Increment_Label);
+   end Draw_Number_Stepper;
+
    procedure Draw_Tooltip
      (Rectangles      : in out Rectangle_Command_Vectors.Vector;
       Text            : in out Text_Command_Vectors.Vector;
