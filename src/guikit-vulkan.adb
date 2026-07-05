@@ -3,6 +3,7 @@ with Ada.Strings.Unbounded;
 with Ada.Unchecked_Deallocation;
 
 with Interfaces.C;
+with Glfw.Windows.Hints;
 with Glfw.Windows.Vulkan;
 with System.Address_To_Access_Conversions;
 
@@ -36,6 +37,39 @@ package body Guikit.Vulkan is
    Infinite_Timeout : constant Interfaces.Unsigned_64 := Interfaces.Unsigned_64'Last;
    Format_R8G8B8A8_Unorm : constant Vk.Format_T := Vk.Format_T (37);
    Format_R8G8B8A8_Srgb  : constant Vk.Format_T := Vk.Format_T (43);
+
+   --  Raw GLFW bindings for window hints and the event pump.
+   GLFW_Client_API : constant Interfaces.C.int := 16#0002_2001#;
+   GLFW_No_API     : constant Interfaces.C.int := 0;
+
+   procedure Set_Raw_Window_Hint (Target : Interfaces.C.int; Hint : Interfaces.C.int)
+     with Import, Convention => C, External_Name => "glfwWindowHint";
+
+   procedure Raw_Poll_Events
+     with Import, Convention => C, External_Name => "glfwPollEvents";
+
+   procedure Raw_Wait_Events_Timeout (Timeout : Interfaces.C.double)
+     with Import, Convention => C, External_Name => "glfwWaitEventsTimeout";
+
+   procedure Configure_Window_Hints
+     (Resizable : Boolean := True;
+      Visible   : Boolean := False) is
+   begin
+      Glfw.Windows.Hints.Reset_To_Defaults;
+      Set_Raw_Window_Hint (GLFW_Client_API, GLFW_No_API);
+      Glfw.Windows.Hints.Set_Resizable (Resizable);
+      Glfw.Windows.Hints.Set_Visible (Visible);
+   end Configure_Window_Hints;
+
+   procedure Poll_Events is
+   begin
+      Raw_Poll_Events;
+   end Poll_Events;
+
+   procedure Wait_For_Events (Timeout : Duration) is
+   begin
+      Raw_Wait_Events_Timeout (Interfaces.C.double (Timeout));
+   end Wait_For_Events;
 
    function Saturating_Add
      (Left  : Natural;

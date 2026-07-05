@@ -211,6 +211,27 @@ package Guikit.Vulkan is
       Last_Status            : Vulkan_Status := Vulkan_Not_Initialized;
    end record;
 
+   --  Set the GLFW window-creation hints for a Vulkan window: request no client
+   --  API (GLFW_NO_API, since Vulkan owns the surface) and the given resizable /
+   --  initially-visible states. Call after Glfw.Init and before creating the
+   --  window. Centralizes the raw GLFW_CLIENT_API hint value so consumers need
+   --  not hard-code it.
+   --
+   --  @param Resizable Whether the created window may be resized.
+   --  @param Visible Whether the window is shown on creation.
+   procedure Configure_Window_Hints
+     (Resizable : Boolean := True;
+      Visible   : Boolean := False);
+
+   --  Process the pending window/input events without blocking (glfwPollEvents).
+   procedure Poll_Events;
+
+   --  Block until an event arrives or Timeout elapses (glfwWaitEventsTimeout),
+   --  so an idle app does not spin. A zero timeout returns immediately.
+   --
+   --  @param Timeout Maximum time to wait for an event.
+   procedure Wait_For_Events (Timeout : Duration);
+
    --  Initialize Vulkan instance and logical device state.
    --
    --  @param Renderer Renderer state to initialize.
