@@ -22,6 +22,7 @@ package body Guikit_Suite.Utf8 is
    procedure Test_Multibyte_Narrow (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Zero_Width (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Wide_And_Mixed (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Encode (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    type Byte_Values is array (Positive range <>) of Natural;
 
@@ -53,6 +54,8 @@ package body Guikit_Suite.Utf8 is
         (T, Test_Zero_Width'Access, "combining and zero-width codepoints count zero cells");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Wide_And_Mixed'Access, "wide codepoints count two cells; mixed runs sum");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Encode'Access, "codepoints encode to 1-4 UTF-8 bytes and round-trip through decode");
    end Register_Tests;
 
    procedure Test_Ascii_And_Empty (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -107,6 +110,34 @@ package body Guikit_Suite.Utf8 is
       Assert (Guikit.Utf8.Display_Units (Wide & Wide) = 4,
               "two wide codepoints measure four cells");
    end Test_Wide_And_Mixed;
+
+   procedure Test_Encode (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+   begin
+      Assert (Guikit.Utf8.Encode (Character'Pos ('A')) = "A",
+              "an ASCII codepoint encodes to one byte");
+      Assert (Guikit.Utf8.Encode (16#E9#) = Bytes ([16#C3#, 16#A9#]),
+              "U+00E9 encodes to two bytes");
+      Assert (Guikit.Utf8.Encode (16#20AC#) = Bytes ([16#E2#, 16#82#, 16#AC#]),
+              "U+20AC encodes to three bytes");
+      Assert (Guikit.Utf8.Encode (16#1F600#) = Bytes ([16#F0#, 16#9F#, 16#98#, 16#80#]),
+              "U+1F600 encodes to four bytes");
+      Assert (Guikit.Utf8.Encode (16#D800#) = "",
+              "a surrogate codepoint has no UTF-8 encoding");
+      Assert (Guikit.Utf8.Encode (16#11_0000#) = "",
+              "a codepoint above U+10FFFF has no UTF-8 encoding");
+
+      --  Encoding then decoding returns the original codepoint.
+      declare
+         Encoded : constant String := Guikit.Utf8.Encode (16#20AC#);
+         Index   : Integer := Encoded'First;
+         Decoded : Natural;
+      begin
+         Guikit.Utf8.Decode_Next_Codepoint (Encoded, Index, Decoded);
+         Assert (Decoded = 16#20AC# and then Index = Encoded'Last + 1,
+                 "encode then decode round-trips the codepoint");
+      end;
+   end Test_Encode;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

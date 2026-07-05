@@ -54,4 +54,12 @@ package Guikit.Utf8 is
      (Codepoint : Natural)
       return Boolean;
 
+   --  Encode a Unicode codepoint as its UTF-8 byte sequence (1-4 bytes). A
+   --  surrogate (U+D800..U+DFFF) or a value above U+10FFFF has no UTF-8 encoding
+   --  and yields the empty string. This is the inverse of Decode_Next_Codepoint.
+   --
+   --  @param Codepoint A Unicode codepoint.
+   --  @return The UTF-8 bytes, or "" when Codepoint is not encodable.
+   function Encode (Codepoint : Natural) return String;
+
 end Guikit.Utf8;

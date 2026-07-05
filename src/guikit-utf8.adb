@@ -207,4 +207,28 @@ package body Guikit.Utf8 is
       return 0;
    end Whitespace_Separator_Length;
 
+   function Encode (Codepoint : Natural) return String is
+      function Byte (Value : Natural) return Character is (Character'Val (Value));
+   begin
+      if (Codepoint >= 16#D800# and then Codepoint <= 16#DFFF#)
+        or else Codepoint > 16#10FFFF#
+      then
+         return "";
+      elsif Codepoint <= 16#7F# then
+         return String'(1 => Byte (Codepoint));
+      elsif Codepoint <= 16#7FF# then
+         return Byte (16#C0# + Codepoint / 16#40#)
+           & Byte (16#80# + Codepoint mod 16#40#);
+      elsif Codepoint <= 16#FFFF# then
+         return Byte (16#E0# + Codepoint / 16#1000#)
+           & Byte (16#80# + (Codepoint / 16#40#) mod 16#40#)
+           & Byte (16#80# + Codepoint mod 16#40#);
+      else
+         return Byte (16#F0# + Codepoint / 16#40000#)
+           & Byte (16#80# + (Codepoint / 16#1000#) mod 16#40#)
+           & Byte (16#80# + (Codepoint / 16#40#) mod 16#40#)
+           & Byte (16#80# + Codepoint mod 16#40#);
+      end if;
+   end Encode;
+
 end Guikit.Utf8;
