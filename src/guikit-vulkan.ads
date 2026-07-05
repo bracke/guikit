@@ -552,6 +552,39 @@ package Guikit.Vulkan is
       Batch    : Submission_Batch)
       return Vulkan_Status;
 
+   --  Bring the renderer up to a presentable state for a Width x Height window,
+   --  resize-aware and idempotent per frame. On first calls it initializes the
+   --  instance/device, then creates the window surface, then configures the
+   --  swapchain; on later calls it reconfigures the swapchain when the window
+   --  size changes. Init and surface creation are attempted once each and not
+   --  retried on failure. Call once per frame before building the submission.
+   --
+   --  @param Renderer Renderer state to bring up.
+   --  @param Window GLFW window to present into.
+   --  @param Width Current framebuffer width in pixels.
+   --  @param Height Current framebuffer height in pixels.
+   procedure Ensure_Ready
+     (Renderer : in out Vulkan_Renderer;
+      Window   : not null access Glfw.Windows.Window;
+      Width    : Natural;
+      Height   : Natural);
+
+   --  Present a submission, recovering from an out-of-date swapchain: when
+   --  Present reports the swapchain must be recreated, reconfigure it at
+   --  Width x Height and present once more.
+   --
+   --  @param Renderer Renderer state to present through.
+   --  @param Batch Prepared Vulkan submission batch.
+   --  @param Width Framebuffer width for a swapchain recreate.
+   --  @param Height Framebuffer height for a swapchain recreate.
+   --  @return Final presentation status.
+   function Present_Frame
+     (Renderer : in out Vulkan_Renderer;
+      Batch    : Submission_Batch;
+      Width    : Natural;
+      Height   : Natural)
+      return Vulkan_Status;
+
 private
    Max_Swapchain_Images : constant Positive := 8;
 
@@ -627,6 +660,8 @@ private
       Sync_Live             : Boolean := False;
       Swapchain_Configured  : Boolean := False;
       Swapchain_Pending     : Boolean := False;
+      Init_Attempted        : Boolean := False;
+      Surface_Attempted     : Boolean := False;
       Frame_Width_Value     : Natural := 0;
       Frame_Height_Value    : Natural := 0;
       Queue_Family_Index    : Interfaces.Unsigned_32 := 0;

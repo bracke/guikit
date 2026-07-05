@@ -3609,6 +3609,9 @@ package body Guikit.Vulkan is
       if Renderer.Last_Status = Vulkan_Ready then
          Renderer.Last_Status := Vulkan_Not_Initialized;
       end if;
+
+      Renderer.Init_Attempted := False;
+      Renderer.Surface_Attempted := False;
    end Shutdown;
 
    function Ready
@@ -4787,5 +4790,68 @@ package body Guikit.Vulkan is
          Renderer.Failed_Frames := Renderer.Failed_Frames + 1;
          return Renderer.Last_Status;
    end Present;
+
+   procedure Ensure_Ready
+     (Renderer : in out Vulkan_Renderer;
+      Window   : not null access Glfw.Windows.Window;
+      Width    : Natural;
+      Height   : Natural)
+   is
+   begin
+      if not Renderer.Init_Attempted then
+         declare
+            Status : constant Vulkan_Status := Initialize (Renderer);
+            pragma Unreferenced (Status);
+         begin
+            Renderer.Init_Attempted := True;
+         end;
+      end if;
+
+      if Renderer.Init_Attempted
+        and then not Renderer.Surface_Attempted
+        and then Ready (Renderer)
+      then
+         declare
+            Status : constant Vulkan_Status := Create_Surface (Renderer, Window);
+            pragma Unreferenced (Status);
+         begin
+            Renderer.Surface_Attempted := True;
+         end;
+      end if;
+
+      if Renderer.Surface_Attempted
+        and then Surface_Ready (Renderer)
+        and then
+          (not Swapchain_Ready (Renderer)
+           or else Renderer.Frame_Width_Value /= Width
+           or else Renderer.Frame_Height_Value /= Height)
+      then
+         Request_Swapchain_Recreate (Renderer, Width, Height);
+         declare
+            Status : constant Vulkan_Status := Configure_Swapchain (Renderer, Width, Height);
+            pragma Unreferenced (Status);
+         begin
+            null;
+         end;
+      end if;
+   end Ensure_Ready;
+
+   function Present_Frame
+     (Renderer : in out Vulkan_Renderer;
+      Batch    : Submission_Batch;
+      Width    : Natural;
+      Height   : Natural)
+      return Vulkan_Status
+   is
+      Status : Vulkan_Status := Present (Renderer, Batch);
+   begin
+      if Status = Vulkan_Swapchain_Recreate_Needed then
+         Status := Configure_Swapchain (Renderer, Width, Height);
+         if Status = Vulkan_Swapchain_Ready then
+            Status := Present (Renderer, Batch);
+         end if;
+      end if;
+      return Status;
+   end Present_Frame;
 
 end Guikit.Vulkan;
