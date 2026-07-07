@@ -20,6 +20,11 @@ package body Guikit.Command_Palette is
       Items  : Guikit.Palette.Item_Vectors.Vector;
       Result : Command_Vectors.Vector;
    begin
+      --  A pre-filtered host has already produced the results; the query is only
+      --  for display, so return the commands unchanged.
+      if P.Config.Pre_Filtered then
+         return P.Commands;
+      end if;
       for I in P.Commands.First_Index .. P.Commands.Last_Index loop
          declare
             C : constant Command := P.Commands.Element (I);
@@ -176,6 +181,17 @@ package body Guikit.Command_Palette is
    begin
       Move_Selection (P, (if Down then Step else -Step));
    end Page;
+
+   procedure Set_Selection (P : in out Palette; Index : Natural) is
+      Count : constant Natural := Natural (Filtered (P).Length);
+   begin
+      P.Selected := Natural'Min (Index, Count);
+   end Set_Selection;
+
+   procedure Set_Offset (P : in out Palette; Offset : Natural) is
+   begin
+      P.Offset := Offset;
+   end Set_Offset;
 
    function Click (P : in out Palette; X : Integer; Y : Integer) return Boolean is
    begin
@@ -402,13 +418,20 @@ package body Guikit.Command_Palette is
       end;
 
       --  Empty state.
-      if Count = 0 and then Length (P.Config.Empty_State) > 0 then
-         Text.Append
-           (Guikit.Draw.Text_Command'
-              (X => Layout.Results_X + Pad, Y => Layout.Results_Y + Row_Pad,
-               Width => (if Layout.Results_Width > 2 * Pad then Layout.Results_Width - 2 * Pad else 0),
-               Height => LH, Text => P.Config.Empty_State, Color => Guikit.Draw.Muted_Text_Color,
-               others => <>));
+      if Count = 0 then
+         if Length (P.Config.Empty_State) > 0 then
+            Text.Append
+              (Guikit.Draw.Text_Command'
+                 (X => Layout.Results_X + Pad, Y => Layout.Results_Y + Row_Pad,
+                  Width => (if Layout.Results_Width > 2 * Pad then Layout.Results_Width - 2 * Pad else 0),
+                  Height => LH, Text => P.Config.Empty_State, Color => Guikit.Draw.Muted_Text_Color,
+                  others => <>));
+         end if;
+         Accessibility.Append
+           (Guikit.Draw.Accessibility_Node'
+              (Role => Guikit.Draw.Role_Status, X => Layout.Results_X, Y => Layout.Results_Y,
+               Width => Layout.Results_Width, Height => Layout.Row_Height,
+               Name => P.Config.Empty_State, others => <>));
       end if;
 
       --  Scrollbar.
@@ -441,19 +464,27 @@ package body Guikit.Command_Palette is
          end if;
       end;
 
-      --  Overlay close button.
+      --  Overlay close button, at the panel's top-right (matching the common
+      --  panel-close geometry: inset = max(4, line/4), a line-height square).
       if P.Config.Overlay then
          declare
-            Btn : constant Natural := Natural'Min (LH, Layout.Height);
-            Bx  : constant Natural := Layout.X + Layout.Width - Btn - Pad;
+            Inset : constant Natural := Natural'Max (4, LH / 4);
+            Btn   : constant Natural := LH;
+            Bx    : constant Natural :=
+              (if Layout.Width > Inset + Btn then Layout.X + Layout.Width - Inset - Btn else Layout.X);
+            By    : constant Natural := Layout.Y + Inset;
          begin
             Guikit.Widgets.Draw_Close_Button
               (Rectangles => Rectangles, Text => Text, Clip_Width => Clip_Width, Clip_Height => Clip_Height,
-               Button_X => Bx, Button_Y => Layout.Y + Pad, Button_Width => Btn, Button_Height => Btn,
+               Button_X => Bx, Button_Y => By, Button_Width => Btn, Button_Height => Btn,
                Fill_Color => Guikit.Draw.Pane_Color, Border_Color => Guikit.Draw.Border_Color,
-               Glyph_X => Bx, Glyph_Y => Layout.Y + Pad, Glyph_Width => Btn, Glyph_Height => Btn,
+               Glyph_X => Bx, Glyph_Y => By, Glyph_Width => Btn, Glyph_Height => Btn,
                Glyph => To_Unbounded_String ("x"), Glyph_Color => Guikit.Draw.Muted_Text_Color,
                Show_Glyph => True);
+            Accessibility.Append
+              (Guikit.Draw.Accessibility_Node'
+                 (Role => Guikit.Draw.Role_Button, X => Bx, Y => By,
+                  Width => Btn, Height => Btn, Name => To_Unbounded_String ("Close"), others => <>));
          end;
       end if;
    end Build_Frame;
