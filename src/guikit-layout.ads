@@ -102,6 +102,17 @@ package Guikit.Layout is
       Min_Length      : Natural)
       return Scrollbar_Thumb;
 
+   --  The number of whole rows of Row_Height that fit in Available_Height (zero
+   --  when either is zero) — a list viewport's fully-visible row count.
+   --
+   --  @param Available_Height The viewport height in pixels.
+   --  @param Row_Height The height of one row in pixels.
+   --  @return The count of fully visible rows.
+   function Visible_Row_Count
+     (Available_Height : Natural;
+      Row_Height       : Natural)
+      return Natural;
+
    --  Return the pixel width of a label measured in display cells.
    --
    --  The text is measured in display units (grapheme-approximating cells) and

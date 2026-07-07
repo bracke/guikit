@@ -29,6 +29,7 @@ package body Guikit_Suite.Layout is
    procedure Test_Settings_Pane (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Scroll_Offset_For_Selection (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Scrollbar_Thumb (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Visible_Row_Count (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    overriding function Name (T : Layout_Test_Case) return AUnit.Message_String is
       pragma Unreferenced (T);
@@ -64,6 +65,8 @@ package body Guikit_Suite.Layout is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Scrollbar_Thumb'Access,
          "Calculate_Scrollbar_Thumb sizes and positions the thumb proportionally");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Visible_Row_Count'Access, "Visible_Row_Count counts whole rows and is zero-safe");
    end Register_Tests;
 
    procedure Test_Within (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -280,6 +283,15 @@ package body Guikit_Suite.Layout is
          Assert (Tiny.Length = 12, "a tiny visible fraction clamps to the minimum thumb length");
       end;
    end Test_Scrollbar_Thumb;
+
+   procedure Test_Visible_Row_Count (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+   begin
+      Assert (Visible_Row_Count (100, 20) = 5, "five whole rows fit in the height");
+      Assert (Visible_Row_Count (105, 20) = 5, "a partial trailing row is not counted");
+      Assert (Visible_Row_Count (0, 20) = 0, "zero height yields zero rows");
+      Assert (Visible_Row_Count (100, 0) = 0, "zero row height yields zero rows");
+   end Test_Visible_Row_Count;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

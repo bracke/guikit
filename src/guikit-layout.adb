@@ -98,6 +98,17 @@ package body Guikit.Layout is
             else 0));
    end Calculate_Scrollbar_Thumb;
 
+   function Visible_Row_Count
+     (Available_Height : Natural;
+      Row_Height       : Natural)
+      return Natural is
+   begin
+      if Available_Height = 0 or else Row_Height = 0 then
+         return 0;
+      end if;
+      return Available_Height / Row_Height;
+   end Visible_Row_Count;
+
    function Caret_Advance_Width
      (Line_Height : Positive := 20)
       return Positive is
@@ -516,8 +527,7 @@ package body Guikit.Layout is
       Result       : Palette_Result_Row_Vectors.Vector;
       Result_Count : constant Natural := Natural (Enabled.Length);
       Visible_Rows : constant Natural :=
-        (if Layout.Results_Height = 0 or else Layout.Row_Height = 0
-         then 0 else Layout.Results_Height / Layout.Row_Height);
+        Visible_Row_Count (Layout.Results_Height, Layout.Row_Height);
       Max_Offset   : constant Natural :=
         (if Visible_Rows = 0 or else Result_Count <= Visible_Rows
          then 0 else Result_Count - Visible_Rows);
