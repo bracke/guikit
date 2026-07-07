@@ -71,6 +71,37 @@ package Guikit.Layout is
       Right : Natural)
       return Natural;
 
+   --  Geometry of a scrollbar thumb within its track.
+   type Scrollbar_Thumb is record
+      Length : Natural := 0;  --  thumb extent along the track, in pixels
+      Offset : Natural := 0;  --  thumb start, in pixels from the track's near edge
+   end record;
+
+   --  Compute a scrollbar thumb's length and offset within a track. Pairs with
+   --  Guikit.Widgets.Draw_Scrollbar, which draws the resulting geometry.
+   --
+   --  The thumb length is proportional to the visible fraction of the content
+   --  (Visible_Amount / Total_Amount), clamped to [Min_Length, Track_Length]; the
+   --  offset is proportional to the scroll position. The amounts may be pixels or
+   --  item counts as long as they share a unit. A zero-length result means the
+   --  content fits and no scrollbar is needed.
+   --
+   --  @param Track_Length The scrollbar track extent in pixels.
+   --  @param Visible_Amount The amount of content currently visible.
+   --  @param Total_Amount The total amount of content.
+   --  @param Scroll_Position The current scroll position.
+   --  @param Max_Scroll The maximum scroll position.
+   --  @param Min_Length The minimum thumb length in pixels.
+   --  @return The thumb length and offset, both zero when the content fits.
+   function Calculate_Scrollbar_Thumb
+     (Track_Length    : Natural;
+      Visible_Amount  : Natural;
+      Total_Amount    : Natural;
+      Scroll_Position : Natural;
+      Max_Scroll      : Natural;
+      Min_Length      : Natural)
+      return Scrollbar_Thumb;
+
    --  Return the pixel width of a label measured in display cells.
    --
    --  The text is measured in display units (grapheme-approximating cells) and

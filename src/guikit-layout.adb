@@ -42,6 +42,62 @@ package body Guikit.Layout is
       end if;
    end Saturating_Multiply;
 
+   --  Compute Value * Factor / Denominator without overflowing, via a 64-bit
+   --  intermediate, saturating at Natural'Last.
+   function Bounded_Product_Divide
+     (Value       : Natural;
+      Factor      : Natural;
+      Denominator : Natural)
+      return Natural
+   is
+   begin
+      if Value = 0 or else Factor = 0 or else Denominator = 0 then
+         return 0;
+      end if;
+
+      declare
+         Product : constant Long_Long_Integer :=
+           Long_Long_Integer (Value) * Long_Long_Integer (Factor) / Long_Long_Integer (Denominator);
+      begin
+         if Product > Long_Long_Integer (Natural'Last) then
+            return Natural'Last;
+         end if;
+         return Natural (Product);
+      end;
+   end Bounded_Product_Divide;
+
+   function Calculate_Scrollbar_Thumb
+     (Track_Length    : Natural;
+      Visible_Amount  : Natural;
+      Total_Amount    : Natural;
+      Scroll_Position : Natural;
+      Max_Scroll      : Natural;
+      Min_Length      : Natural)
+      return Scrollbar_Thumb
+   is
+      Length : Natural;
+      Travel : Natural;
+   begin
+      if Track_Length = 0 or else Total_Amount = 0 or else Total_Amount <= Visible_Amount then
+         return (Length => 0, Offset => 0);
+      end if;
+
+      Length :=
+        Natural'Min
+          (Track_Length,
+           Natural'Max
+             (Min_Length,
+              Bounded_Product_Divide (Track_Length, Visible_Amount, Total_Amount)));
+      Travel := (if Track_Length > Length then Track_Length - Length else 0);
+
+      return
+        (Length => Length,
+         Offset =>
+           (if Max_Scroll > 0
+            then Bounded_Product_Divide (Travel, Scroll_Position, Max_Scroll)
+            else 0));
+   end Calculate_Scrollbar_Thumb;
+
    function Caret_Advance_Width
      (Line_Height : Positive := 20)
       return Positive is

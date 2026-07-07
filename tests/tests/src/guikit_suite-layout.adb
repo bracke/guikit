@@ -28,6 +28,7 @@ package body Guikit_Suite.Layout is
    procedure Test_Settings_Entry_Buttons (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Settings_Pane (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Scroll_Offset_For_Selection (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Scrollbar_Thumb (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    overriding function Name (T : Layout_Test_Case) return AUnit.Message_String is
       pragma Unreferenced (T);
@@ -60,6 +61,9 @@ package body Guikit_Suite.Layout is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Scroll_Offset_For_Selection'Access,
          "Scroll_Offset_For_Selection keeps the selection within the visible window");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Scrollbar_Thumb'Access,
+         "Calculate_Scrollbar_Thumb sizes and positions the thumb proportionally");
    end Register_Tests;
 
    procedure Test_Within (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -241,6 +245,41 @@ package body Guikit_Suite.Layout is
       Assert (Offset_For (20, 20, 4, 100) = 16,
               "an over-large offset is clamped to the last full page");
    end Test_Scroll_Offset_For_Selection;
+
+   procedure Test_Scrollbar_Thumb (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+   begin
+      declare
+         Fits : constant Scrollbar_Thumb :=
+           Calculate_Scrollbar_Thumb (100, 100, 100, 0, 0, 10);
+      begin
+         Assert (Fits.Length = 0 and then Fits.Offset = 0,
+                 "content that fits the track yields no thumb");
+      end;
+
+      declare
+         Top : constant Scrollbar_Thumb :=
+           Calculate_Scrollbar_Thumb (100, 50, 200, 0, 150, 10);
+      begin
+         Assert (Top.Length = 25, "the thumb length is proportional to the visible fraction");
+         Assert (Top.Offset = 0, "at scroll zero the thumb sits at the track top");
+      end;
+
+      declare
+         Bottom : constant Scrollbar_Thumb :=
+           Calculate_Scrollbar_Thumb (100, 50, 200, 150, 150, 10);
+      begin
+         Assert (Bottom.Length = 25, "scrolling does not change the thumb length");
+         Assert (Bottom.Offset = 75, "at max scroll the thumb sits at the track end (100 - 25)");
+      end;
+
+      declare
+         Tiny : constant Scrollbar_Thumb :=
+           Calculate_Scrollbar_Thumb (100, 1, 1000, 0, 0, 12);
+      begin
+         Assert (Tiny.Length = 12, "a tiny visible fraction clamps to the minimum thumb length");
+      end;
+   end Test_Scrollbar_Thumb;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;
