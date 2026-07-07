@@ -55,9 +55,22 @@ however it likes (e.g. overlay vs. base layer).
 
 ## Build
 
+This repository must be built and validated with Alire GNAT 15. The root, tests,
+and tools crates pin `gnat_native = "=15.2.1"`. Confirm with:
+
+```sh
+alr exec -- gnatls --version
+```
+
+Do not run plain system `gnat*`, `gnatmake`, `gnatls`, `gnatprove`, or
+`gprbuild` in this workspace. Use `alr exec -- ...` for compiler and builder
+commands so PATH cannot select a different GNAT installation.
+
 ```sh
 alr build          # compile the library (style is enforced at compile time)
 alr test           # run the AUnit suite in tests/
+alr exec -- gprbuild -P tools/guikit_check_all.gpr
+tools/bin/check_all
 ```
 
 Requires a sibling checkout of `../textrender` (pinned in `alire.toml`); the

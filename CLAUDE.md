@@ -9,9 +9,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & test
 
 Built with Alire (`alr`), which wraps GNAT and the `.gpr` files.
+Use Alire GNAT 15 only. The root, tests, and tools crates pin
+`gnat_native = "=15.2.1"`. Validate with `alr exec -- gnatls --version`.
+Do not run plain system `gnat*`, `gnatmake`, `gnatls`, `gnatprove`, or
+`gprbuild` in this workspace.
 
 - `alr build` — compile the library (`libGuikit.a`). Style is checked at compile time, so a clean build passes style.
 - `alr test` — run the AUnit suite. It lives in `tests/` as its **own crate** (`tests/alire.toml`, `tests/guikit_tests.gpr`, sources under `tests/tests/src/`), depending on `guikit` + `aunit`. Add a test by writing a `Guikit_Suite.*` child and registering it in `guikit_suite.adb`.
+- `alr exec -- gprbuild -P tools/guikit_check_all.gpr && tools/bin/check_all` — run the repository checks.
 
 ## The one rule that matters: caller owns policy
 

@@ -21,6 +21,9 @@ package Guikit.Text is
    type Renderer is limited private;
 
    --  Whether Initialize has loaded a primary font into R.
+   --
+   --  @param R Renderer to inspect.
+   --  @return True when R has a loaded primary font.
    function Loaded (R : Renderer) return Boolean;
 
    --  Load the monospace primary font and append the fallback chain into the

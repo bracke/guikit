@@ -10,6 +10,9 @@ website = "https://github.com/bracke/files"
 tags = ["gui", "vulkan", "glfw"]
 
 [[depends-on]]
+gnat_native = "=15.2.1"
+
+[[depends-on]]
 df_vulkan = "~0.1.0"
 
 [[depends-on]]
