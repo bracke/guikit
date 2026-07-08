@@ -1,5 +1,4 @@
 with Ada.Strings.Fixed;
-with Ada.Strings.Unbounded;
 
 with Guikit.Layout;
 with Guikit.Utf8;
@@ -60,6 +59,14 @@ package body Guikit.Settings_Panel is
          end loop;
       end if;
    end Set_Fields;
+
+   procedure Reset (P : in out Panel) is
+   begin
+      P.Focused := 0;
+      P.Offset  := 0;
+      P.Hits.Clear;
+      P.Pending := (Kind => No_Change, others => <>);
+   end Reset;
 
    --  ----- change plumbing ------------------------------------------------------
 

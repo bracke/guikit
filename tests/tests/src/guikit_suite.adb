@@ -6,6 +6,7 @@ with Guikit_Suite.Frame_Analysis;
 with Guikit_Suite.Palette;
 with Guikit_Suite.Command_Palette;
 with Guikit_Suite.Settings_Panel;
+with Guikit_Suite.Segmented;
 
 package body Guikit_Suite is
 
@@ -20,6 +21,7 @@ package body Guikit_Suite is
       Result.Add_Test (Guikit_Suite.Palette.Suite);
       Result.Add_Test (Guikit_Suite.Command_Palette.Suite);
       Result.Add_Test (Guikit_Suite.Settings_Panel.Suite);
+      Result.Add_Test (Guikit_Suite.Segmented.Suite);
       return Result;
    end Suite;
 
