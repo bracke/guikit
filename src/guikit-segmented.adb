@@ -1,5 +1,4 @@
 with Guikit.Layout;
-with Guikit.Widgets;
 
 package body Guikit.Segmented is
 
@@ -85,6 +84,14 @@ package body Guikit.Segmented is
       return 0;
    end Cell_At;
 
+   --  The visible extent of a span [Start, Start + Size) clamped to [0, Limit).
+   function Clip_Extent (Start, Size, Limit : Natural) return Natural is
+     (if Start >= Limit then 0
+      elsif Start + Size > Limit then Limit - Start
+      else Size);
+
+   Label_Padding : constant Natural := 4;
+
    procedure Build_Frame
      (Segments      : Segment_Vectors.Vector;
       Active        : Natural;
@@ -103,7 +110,22 @@ package body Guikit.Segmented is
       Accessibility : out Guikit.Draw.Accessibility_Node_Vectors.Vector)
    is
       Count : constant Natural := Natural (Segments.Length);
+
+      --  Append one rectangle clamped to the drawable clip rectangle.
+      procedure Add_Rect (X, Y, W, H : Natural; Color : Guikit.Draw.Render_Color) is
+         RW : constant Natural := Clip_Extent (X, W, Clip_Width);
+         RH : constant Natural := Clip_Extent (Y, H, Clip_Height);
+      begin
+         if RW > 0 and then RH > 0 then
+            Rectangles.Append (Guikit.Draw.Rectangle_Command'(X => X, Y => Y, Width => RW, Height => RH,
+                                                              Color => Color));
+         end if;
+      end Add_Rect;
+
+      Label_H : constant Natural := Natural'Min (Line_Height, Region_Height);
+      Inset   : constant Natural := (if Region_Height > Label_H then (Region_Height - Label_H) / 2 else 0);
    begin
+      --  Cell fills and labels.
       for Cell in 1 .. Count loop
          declare
             S      : constant Segment := Segments.Element (Cell);
@@ -118,24 +140,21 @@ package body Guikit.Segmented is
                  (if Cell = Active then Guikit.Draw.Selection_Color
                   elsif Hovered then Guikit.Draw.Hover_Color
                   else Guikit.Draw.Input_Color);
+               Label_X : constant Natural := CX + Label_Padding;
+               Label_Y : constant Natural := Region_Y + Inset;
+               Label_W : constant Natural := (if CW > 2 * Label_Padding then CW - 2 * Label_Padding else 0);
+               Draw_W  : constant Natural := Clip_Extent (Label_X, Label_W, Clip_Width);
+               Draw_H  : constant Natural := Clip_Extent (Label_Y, Label_H, Clip_Height);
             begin
-               Guikit.Widgets.Draw_Button
-                 (Rectangles      => Rectangles,
-                  Text            => Text,
-                  Clip_Width      => Clip_Width,
-                  Clip_Height     => Clip_Height,
-                  X               => CX,
-                  Y               => Region_Y,
-                  Width           => CW,
-                  Height          => Region_Height,
-                  Fill_Color      => Fill,
-                  Border_Color    => Guikit.Draw.Border_Color,
-                  Padding         => 4,
-                  Label_Text      => S.Label,
-                  Label_Truncated => False,
-                  Label_Height    => Natural'Min (Line_Height, Region_Height),
-                  Label_Color     =>
-                    (if S.Enabled then Guikit.Draw.Text_Color else Guikit.Draw.Muted_Text_Color));
+               Add_Rect (CX, Region_Y, CW, Region_Height, Fill);
+
+               if Draw_W > 0 and then Draw_H > 0 and then Length (S.Label) > 0 then
+                  Text.Append
+                    (Guikit.Draw.Text_Command'
+                       (X => Label_X, Y => Label_Y, Width => Draw_W, Height => Draw_H, Text => S.Label,
+                        Color => (if S.Enabled then Guikit.Draw.Text_Color else Guikit.Draw.Muted_Text_Color),
+                        Truncated => False, Scale_To_Box => False, Italic => False));
+               end if;
 
                if Length (S.Tooltip) > 0 then
                   Tooltips.Append
@@ -151,6 +170,25 @@ package body Guikit.Segmented is
             end;
          end;
       end loop;
+
+      --  A single one-pixel divider on each interior cell boundary, drawn over
+      --  the fills so adjacent cells share one line rather than abutting borders.
+      for Cell in 2 .. Count loop
+         declare
+            CX, CW : Natural;
+         begin
+            Cell_Bounds (Segments, Region_X, Region_Width, Line_Height, Cell, CX, CW);
+            Add_Rect (CX, Region_Y, 1, Region_Height, Guikit.Draw.Border_Color);
+         end;
+      end loop;
+
+      --  One outer border framing the whole control.
+      if Count > 0 and then Region_Width > 0 and then Region_Height > 0 then
+         Add_Rect (Region_X, Region_Y, Region_Width, 1, Guikit.Draw.Border_Color);
+         Add_Rect (Region_X, Region_Y + Region_Height - 1, Region_Width, 1, Guikit.Draw.Border_Color);
+         Add_Rect (Region_X, Region_Y, 1, Region_Height, Guikit.Draw.Border_Color);
+         Add_Rect (Region_X + Region_Width - 1, Region_Y, 1, Region_Height, Guikit.Draw.Border_Color);
+      end if;
    end Build_Frame;
 
 end Guikit.Segmented;

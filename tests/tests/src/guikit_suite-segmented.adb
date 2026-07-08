@@ -87,7 +87,10 @@ package body Guikit_Suite.Segmented is
                       Region_Height => 24, Clip_Width => 300, Clip_Height => 24, Line_Height => 20,
                       Hover_X => -1, Hover_Y => -1,
                       Rectangles => Rects, Text => Text, Tooltips => Tips, Accessibility => Nodes);
-      Assert (not Rects.Is_Empty, "Build_Frame emits rectangles (cell fills/borders)");
+      --  Connected control: three cell fills + two interior dividers + a single
+      --  four-edge outer border = 9 rectangles (per-cell borders would give 15).
+      Assert (Natural (Rects.Length) = 9,
+              "three cells emit three fills, two shared dividers, and one outer border");
       Assert (not Text.Is_Empty, "Build_Frame emits the cell labels");
       Assert (Natural (Tips.Length) = 1, "only the tooltip-bearing cell emits a tooltip");
       Assert (Natural (Nodes.Length) = 3, "each cell emits one accessibility node");
