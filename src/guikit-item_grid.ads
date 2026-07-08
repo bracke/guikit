@@ -10,6 +10,33 @@ with Ada.Containers.Vectors;
 --  hit-tests read, so a click always resolves to the item that was drawn.
 package Guikit.Item_Grid is
 
+   --  How the grid arranges items: a compact single-line icon+label row
+   --  (Icons_Small), a large centred icon over a wrapped label (Icons_Large),
+   --  or a multi-column table (Details).
+   type View_Kind is (Icons_Small, Icons_Large, Details);
+
+   --  The size of one item cell in a given view: the cell box, the icon box
+   --  inside it, and whether this is a "large" (icon-above-label) cell.
+   type Cell_Metrics is record
+      Width     : Natural := 0;
+      Height    : Natural := 0;
+      Icon_Size : Natural := 0;
+      Large     : Boolean := False;
+   end record;
+
+   --  The cell metrics for one view. In Details the cell spans the full main
+   --  width; the icon views use fixed multiples of the line height.
+   --
+   --  @param View The grid view.
+   --  @param Main_Width Available content width in pixels (used by Details).
+   --  @param Line_Height Text line height in pixels.
+   --  @return The cell metrics.
+   function Cell_Metrics_For
+     (View        : View_Kind;
+      Main_Width  : Natural;
+      Line_Height : Positive)
+      return Cell_Metrics;
+
    --  Per-item geometry for one visible row/cell: the cell rectangle, the icon
    --  box, the primary text box, and -- in a details view -- each column's x and
    --  width. Visible_Index is the one-based index into the consumer's visible

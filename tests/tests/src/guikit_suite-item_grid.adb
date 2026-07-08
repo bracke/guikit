@@ -18,6 +18,7 @@ package body Guikit_Suite.Item_Grid is
 
    procedure Test_Item_At (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Marquee (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Cell_Metrics (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  Three stacked 100x20 rows, plus a non-selectable header row (index 0).
    function Sample return IG.Item_Layout_Vectors.Vector is
@@ -42,6 +43,8 @@ package body Guikit_Suite.Item_Grid is
         (T, Test_Item_At'Access, "Item_At maps a point to its visible index and 0 off any item");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Marquee'Access, "Marquee_Rect normalises a drag; Items_In_Rect covers the overlapped rows");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Cell_Metrics'Access, "Cell_Metrics_For sizes the cell per view mode");
    end Register_Tests;
 
    procedure Test_Item_At (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -80,6 +83,18 @@ package body Guikit_Suite.Item_Grid is
          Assert (Hits.Is_Empty, "a zero-area marquee touches nothing");
       end;
    end Test_Marquee;
+
+   procedure Test_Cell_Metrics (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      Small   : constant IG.Cell_Metrics := IG.Cell_Metrics_For (IG.Icons_Small, 800, 20);
+      Large   : constant IG.Cell_Metrics := IG.Cell_Metrics_For (IG.Icons_Large, 800, 20);
+      Details : constant IG.Cell_Metrics := IG.Cell_Metrics_For (IG.Details, 800, 20);
+   begin
+      Assert (Small.Width = 216 and then not Small.Large, "small-icon cells are a fixed 216px single-line row");
+      Assert (Large.Width = 140 and then Large.Icon_Size = 60 and then Large.Large,
+              "large-icon cells are 7x wide with a 3x icon and centre the label");
+      Assert (Details.Width = 800 and then not Details.Large, "details rows span the full main width");
+   end Test_Cell_Metrics;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

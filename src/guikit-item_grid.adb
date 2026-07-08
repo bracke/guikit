@@ -2,6 +2,42 @@ with Guikit.Layout;
 
 package body Guikit.Item_Grid is
 
+   --  Cell padding constants (pixels), matching the file-manager grid metrics.
+   Item_Content_Padding : constant Natural := 4;
+   Details_Row_Padding  : constant Natural := 4;
+   Details_Row_Gap      : constant Natural := 0;
+
+   function Cell_Metrics_For
+     (View        : View_Kind;
+      Main_Width  : Natural;
+      Line_Height : Positive)
+      return Cell_Metrics
+   is
+      function Mul (Value, Factor : Natural) return Natural renames Guikit.Layout.Saturating_Multiply;
+      function Add (Left, Right : Natural) return Natural renames Guikit.Layout.Saturating_Add;
+   begin
+      case View is
+         when Icons_Small =>
+            return
+              (Width     => 216,
+               Height    => Add (Line_Height, Mul (Item_Content_Padding, 2)),
+               Icon_Size => Line_Height,
+               Large     => False);
+         when Icons_Large =>
+            return
+              (Width     => Mul (Line_Height, 7),
+               Height    => Mul (Line_Height, 5),
+               Icon_Size => Mul (Line_Height, 3),
+               Large     => True);
+         when Details =>
+            return
+              (Width     => Main_Width,
+               Height    => Add (Add (Line_Height, Mul (Details_Row_Padding, 2)), Details_Row_Gap),
+               Icon_Size => Line_Height,
+               Large     => False);
+      end case;
+   end Cell_Metrics_For;
+
    --  Whether point (Px, Py) lies inside the half-open rectangle
    --  [X, X + W) x [Y, Y + H).
    function Contains_Point (X, Y, W, H, Px, Py : Natural) return Boolean is
