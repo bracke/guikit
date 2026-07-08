@@ -20,11 +20,6 @@ package body Guikit.Command_Palette is
       Items  : Guikit.Palette.Item_Vectors.Vector;
       Result : Command_Vectors.Vector;
    begin
-      --  A pre-filtered host has already produced the results; the query is only
-      --  for display, so return the commands unchanged.
-      if P.Config.Pre_Filtered then
-         return P.Commands;
-      end if;
       for I in P.Commands.First_Index .. P.Commands.Last_Index loop
          declare
             C : constant Command := P.Commands.Element (I);
@@ -181,17 +176,6 @@ package body Guikit.Command_Palette is
    begin
       Move_Selection (P, (if Down then Step else -Step));
    end Page;
-
-   procedure Set_Selection (P : in out Palette; Index : Natural) is
-      Count : constant Natural := Natural (Filtered (P).Length);
-   begin
-      P.Selected := Natural'Min (Index, Count);
-   end Set_Selection;
-
-   procedure Set_Offset (P : in out Palette; Offset : Natural) is
-   begin
-      P.Offset := Offset;
-   end Set_Offset;
 
    function Click (P : in out Palette; X : Integer; Y : Integer) return Boolean is
    begin

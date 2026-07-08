@@ -53,8 +53,6 @@ package Guikit.Command_Palette is
       Show_Shortcuts : Boolean  := False;  --  draw a right-aligned shortcut column
       Overlay        : Boolean  := False;  --  drop shadow + close button (floating)
       Wrap_Selection : Boolean  := False;  --  navigation wraps at the ends
-      Pre_Filtered   : Boolean  := False;  --  Commands are already the results; the
-                                           --  query is display-only, not a filter
       Placeholder    : UString;            --  shown in the search box when empty
       Empty_State    : UString;            --  shown when no command matches
    end record;
@@ -90,13 +88,6 @@ package Guikit.Command_Palette is
 
    --  Move by a page (the last-rendered visible row count), clamped.
    procedure Page (P : in out Palette; Down : Boolean);
-
-   --  Set the highlighted result directly (clamped to the result range). For a
-   --  caller (e.g. a Pre_Filtered host) that computes the selection itself.
-   procedure Set_Selection (P : in out Palette; Index : Natural);
-
-   --  Set the scroll offset directly (rows scrolled off the top).
-   procedure Set_Offset (P : in out Palette; Offset : Natural);
 
    --  Select the result at a window coordinate, using the most recent layout.
    --
