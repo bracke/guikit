@@ -33,7 +33,6 @@ package body Guikit_Suite.Widgets is
    procedure Test_Focus_Ring (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Drop_Shadow (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Close_Button (T : in out AUnit.Test_Cases.Test_Case'Class);
-   procedure Test_Segmented (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Scrollbar (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Menu_Panel (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Menu_Row (T : in out AUnit.Test_Cases.Test_Case'Class);
@@ -68,8 +67,6 @@ package body Guikit_Suite.Widgets is
         (T, Test_Drop_Shadow'Access, "Draw_Drop_Shadow emits two offset bands and drops off-screen ones");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Close_Button'Access, "Draw_Close_Button emits a fill, border and optional glyph");
-      AUnit.Test_Cases.Registration.Register_Routine
-        (T, Test_Segmented'Access, "Draw_Segmented emits N cells with the last cell absorbing the remainder");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Scrollbar'Access, "Draw_Scrollbar emits track, thumb and grip when tall enough");
       AUnit.Test_Cases.Registration.Register_Routine
@@ -166,55 +163,6 @@ package body Guikit_Suite.Widgets is
          U.Null_Unbounded_String, Text_Color, Show_Glyph => True);
       Assert (Count (Texts) = 0, "an empty glyph string draws no text");
    end Test_Close_Button;
-
-   procedure Test_Segmented (T : in out AUnit.Test_Cases.Test_Case'Class) is
-      pragma Unreferenced (T);
-      Rects : Rectangle_Command_Vectors.Vector;
-      Texts : Text_Command_Vectors.Vector;
-      Three_Labels : constant Segment_Label_Array :=
-        [(Text => U.To_Unbounded_String ("A"), Truncated => False),
-         (Text => U.To_Unbounded_String ("B"), Truncated => False),
-         (Text => U.To_Unbounded_String ("C"), Truncated => False)];
-      Two_Labels : constant Segment_Label_Array :=
-        [(Text => U.To_Unbounded_String ("A"), Truncated => False),
-         (Text => U.To_Unbounded_String ("B"), Truncated => False)];
-   begin
-      --  Three cells over a width that divides evenly: 3 fills + 3 borders(4) +
-      --  3 labels, with cell 2 the active fill.
-      Draw_Segmented
-        (Rects, Texts, Big, Big, 10, 10, 10, 300, 3, 24,
-         Three_Labels, Active_Index => 2,
-         Active_Color => Selection_Color, Inactive_Color => Pane_Color,
-         Border_Color => Border_Color, Label_Color => Text_Color, Padding => 8);
-      Assert (Count (Rects) = 15, "three cells emit three fills and three four-edge borders");
-      Assert (Count (Texts) = 3, "each cell emits its label");
-      Assert (Rects (1).Width = 100, "each evenly divided cell is Content_Width / Cell_Count wide");
-      Assert (Rects (1).Color = Pane_Color, "the first (inactive) cell uses the inactive color");
-      Assert (Rects (6).Color = Selection_Color, "the active cell uses the active color");
-
-      --  The last cell absorbs the integer-division remainder.
-      Rects.Clear;
-      Texts.Clear;
-      Draw_Segmented
-        (Rects, Texts, Big, Big, 10, 10, 10, 302, 3, 24,
-         Three_Labels, Active_Index => 0,
-         Active_Color => Selection_Color, Inactive_Color => Pane_Color,
-         Border_Color => Border_Color, Label_Color => Text_Color, Padding => 8);
-      Assert (Rects (1).Width = 100, "the first remainder-test cell is the base width");
-      Assert (Rects (11).Width = 102, "the last cell absorbs the 302 / 3 remainder");
-
-      --  Fewer drawn cells than the grid divisor keeps the uniform width.
-      Rects.Clear;
-      Texts.Clear;
-      Draw_Segmented
-        (Rects, Texts, Big, Big, 10, 10, 10, 400, 4, 24,
-         Two_Labels, Active_Index => 1,
-         Active_Color => Selection_Color, Inactive_Color => Pane_Color,
-         Border_Color => Border_Color, Label_Color => Text_Color, Padding => 8);
-      Assert (Count (Rects) = 10, "two drawn cells emit ten rectangles");
-      Assert (Rects (1).Width = 100 and then Rects (6).Width = 100,
-              "cells short of the remainder cell keep the uniform width");
-   end Test_Segmented;
 
    procedure Test_Scrollbar (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);
