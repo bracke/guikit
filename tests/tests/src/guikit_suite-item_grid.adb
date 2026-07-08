@@ -1,3 +1,5 @@
+with Ada.Strings.Unbounded;
+
 with AUnit;
 with AUnit.Assertions;
 with AUnit.Test_Cases;
@@ -19,6 +21,7 @@ package body Guikit_Suite.Item_Grid is
    procedure Test_Item_At (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Marquee (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Cell_Metrics (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Calculate_Layout (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  Three stacked 100x20 rows, plus a non-selectable header row (index 0).
    function Sample return IG.Item_Layout_Vectors.Vector is
@@ -45,6 +48,8 @@ package body Guikit_Suite.Item_Grid is
         (T, Test_Marquee'Access, "Marquee_Rect normalises a drag; Items_In_Rect covers the overlapped rows");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Cell_Metrics'Access, "Cell_Metrics_For sizes the cell per view mode");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Calculate_Layout'Access, "Calculate_Layout stacks rows, scrolls, and keeps details columns");
    end Register_Tests;
 
    procedure Test_Item_At (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -95,6 +100,46 @@ package body Guikit_Suite.Item_Grid is
               "large-icon cells are 7x wide with a 3x icon and centre the label");
       Assert (Details.Width = 800 and then not Details.Large, "details rows span the full main width");
    end Test_Cell_Metrics;
+
+   procedure Test_Calculate_Layout (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Ada.Strings.Unbounded;
+
+      function Row (Index : Natural; Header : Boolean := False) return IG.Layout_Item is
+        (IG.Layout_Item'(Visible_Index => Index, Group_Header => Header,
+                         Label => To_Unbounded_String ("item")));
+
+      Items : IG.Layout_Item_Vectors.Vector;
+      Cols  : IG.Detail_Column_Bounds;
+   begin
+      Items.Append (Row (1));
+      Items.Append (Row (2));
+      Items.Append (Row (0, Header => True));
+      Items.Append (Row (3));
+
+      --  Details: rows stack under a header band, in order, full width. With no
+      --  scroll the first data row is visible; the group-header keeps index 0.
+      Cols (IG.Name_Column) := (X => 20, Width => 380);
+      declare
+         L : constant IG.Item_Layout_Vectors.Vector :=
+           IG.Calculate_Layout (Items, IG.Details, Content_X => 0, Content_Y => 0, Content_W => 400,
+                                Content_H => 400, Columns => Cols, Scroll_Pixels => 0, Line_Height => 20);
+      begin
+         Assert (Natural (L.Length) = 4, "every item gets a row");
+         Assert (L (1).Visible_Index = 1 and then L (1).Width = 400, "first data row spans the content width");
+         Assert (L (3).Visible_Index = 0, "the group-header row keeps visible index 0");
+         Assert (L (2).Y > L (1).Y, "rows stack downward");
+      end;
+
+      --  Small icons scrolled past the first row: row 1 clips to zero height.
+      declare
+         L : constant IG.Item_Layout_Vectors.Vector :=
+           IG.Calculate_Layout (Items, IG.Icons_Small, Content_X => 0, Content_Y => 0, Content_W => 240,
+                                Content_H => 400, Columns => Cols, Scroll_Pixels => 1000, Line_Height => 20);
+      begin
+         Assert (L (1).Height = 0, "a row scrolled fully above the viewport has zero height");
+      end;
+   end Test_Calculate_Layout;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

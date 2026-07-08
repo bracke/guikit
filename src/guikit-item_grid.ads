@@ -1,4 +1,5 @@
 with Ada.Containers.Vectors;
+with Ada.Strings.Unbounded;
 
 --  A reusable item grid: the file-listing surface shared by a file manager and
 --  similar list/grid views. This is the geometry and hit-testing foundation;
@@ -70,6 +71,58 @@ package Guikit.Item_Grid is
    package Item_Layout_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
       Element_Type => Item_Layout);
+
+   --  A neutral per-item input to layout: its one-based visible index (0 for a
+   --  non-selectable group-header row), whether it is a group header, and its
+   --  label (measured for large-icon text centring).
+   type Layout_Item is record
+      Visible_Index : Natural := 0;
+      Group_Header  : Boolean := False;
+      Label         : Ada.Strings.Unbounded.Unbounded_String;
+   end record;
+
+   package Layout_Item_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Layout_Item);
+
+   --  The details-view columns in their fixed logical order.
+   type Detail_Column is
+     (Name_Column, Modified_Column, Size_Column, Filetype_Column, Created_Column, Permissions_Column);
+
+   type Column_Bounds is record
+      X     : Natural := 0;
+      Width : Natural := 0;
+   end record;
+
+   type Detail_Column_Bounds is array (Detail_Column) of Column_Bounds;
+
+   --  Lay every item into its cell (icon views) or row (Details) rectangle,
+   --  offset by the scroll. The caller supplies the content rectangle, the
+   --  scroll offset in pixels, and -- for Details -- the precomputed column
+   --  bounds; the grid does the pure per-item geometry. Off-screen items get a
+   --  zero-height rectangle so callers skip them.
+   --
+   --  @param Items The visible items in order (including group-header rows).
+   --  @param View The grid view.
+   --  @param Content_X Content area left edge in pixels.
+   --  @param Content_Y Content area top edge in pixels.
+   --  @param Content_W Content area width in pixels.
+   --  @param Content_H Content area height in pixels.
+   --  @param Columns Details column bounds (ignored for the icon views).
+   --  @param Scroll_Pixels Vertical scroll offset in pixels.
+   --  @param Line_Height Text line height in pixels.
+   --  @return The per-item layout table.
+   function Calculate_Layout
+     (Items         : Layout_Item_Vectors.Vector;
+      View          : View_Kind;
+      Content_X     : Natural;
+      Content_Y     : Natural;
+      Content_W     : Natural;
+      Content_H     : Natural;
+      Columns       : Detail_Column_Bounds;
+      Scroll_Pixels : Natural;
+      Line_Height   : Positive := 20)
+      return Item_Layout_Vectors.Vector;
 
    --  One-based visible indices, used to carry hit-test results (e.g. the items
    --  a marquee rectangle covers) back to the consumer's selection logic.
