@@ -1,36 +1,73 @@
+with Guikit.Layout;
 with Guikit.Widgets;
 
 package body Guikit.Segmented is
 
    use Ada.Strings.Unbounded;
 
-   --  The left edge and width of one cell, dividing the region into Cell_Count
-   --  equal parts (the last cell absorbs any rounding remainder).
-   procedure Cell_Bounds
-     (Region_X, Region_Width, Cell_Count, Cell : Natural;
-      X : out Natural;
-      W : out Natural)
-   is
-      --  Boundary of the Nth cell as an offset from Region_X, computed in 64-bit
-      --  so a large region width cannot overflow the product.
-      function Split (N : Natural) return Natural is
-        (Natural
-           (Long_Long_Integer (N) * Long_Long_Integer (Region_Width)
-            / Long_Long_Integer (Cell_Count)));
+   --  Horizontal breathing room added to each side of a cell's measured label
+   --  when computing its desired (pre-scaling) width.
+   Segment_Padding : constant Natural := 8;
+
+   --  A cell's desired width before scaling to the region: its measured label
+   --  width plus padding, never narrower than one line height.
+   function Desired_Width (S : Segment; Line_Height : Positive) return Positive is
+      Cell_W : constant Natural := Guikit.Layout.Caret_Advance_Width (Line_Height);
+      Base   : constant Natural := Guikit.Layout.Label_Pixel_Width (To_String (S.Label), Cell_W);
    begin
-      if Cell_Count = 0 then
+      return Positive'Max (Line_Height, Base + 2 * Segment_Padding);
+   end Desired_Width;
+
+   --  Sum of the desired widths of the first Upto cells (0 .. length).
+   function Prefix_Width
+     (Segments : Segment_Vectors.Vector; Line_Height : Positive; Upto : Natural) return Natural
+   is
+      Sum : Natural := 0;
+   begin
+      for Cell in 1 .. Upto loop
+         Sum := Sum + Desired_Width (Segments.Element (Cell), Line_Height);
+      end loop;
+      return Sum;
+   end Prefix_Width;
+
+   procedure Cell_Bounds
+     (Segments     : Segment_Vectors.Vector;
+      Region_X     : Natural;
+      Region_Width : Natural;
+      Line_Height  : Positive;
+      Cell         : Positive;
+      X            : out Natural;
+      Width        : out Natural)
+   is
+      Count : constant Natural := Natural (Segments.Length);
+      Total : constant Natural := Prefix_Width (Segments, Line_Height, Count);
+
+      --  Desired-width offset scaled onto the region, in 64-bit so a large
+      --  region width cannot overflow the product.
+      function Scaled (Offset : Natural) return Natural is
+        (if Total = 0 then 0
+         else Natural (Long_Long_Integer (Offset) * Long_Long_Integer (Region_Width)
+                       / Long_Long_Integer (Total)));
+   begin
+      if Cell > Count then
          X := Region_X;
-         W := 0;
+         Width := 0;
          return;
       end if;
-      X := Region_X + Split (Cell - 1);
-      W := Split (Cell) - Split (Cell - 1);
+      declare
+         Left  : constant Natural := Scaled (Prefix_Width (Segments, Line_Height, Cell - 1));
+         Right : constant Natural := Scaled (Prefix_Width (Segments, Line_Height, Cell));
+      begin
+         X := Region_X + Left;
+         Width := Right - Left;
+      end;
    end Cell_Bounds;
 
    function Cell_At
-     (Region_X     : Natural;
+     (Segments     : Segment_Vectors.Vector;
+      Region_X     : Natural;
       Region_Width : Natural;
-      Cell_Count   : Natural;
+      Line_Height  : Positive;
       X            : Integer)
       return Natural
    is
@@ -39,8 +76,8 @@ package body Guikit.Segmented is
       if X < Region_X or else X >= Region_X + Region_Width then
          return 0;
       end if;
-      for Cell in 1 .. Cell_Count loop
-         Cell_Bounds (Region_X, Region_Width, Cell_Count, Cell, CX, CW);
+      for Cell in 1 .. Natural (Segments.Length) loop
+         Cell_Bounds (Segments, Region_X, Region_Width, Line_Height, Cell, CX, CW);
          if X >= CX and then X < CX + CW then
             return Cell;
          end if;
@@ -72,7 +109,7 @@ package body Guikit.Segmented is
             S      : constant Segment := Segments.Element (Cell);
             CX, CW : Natural;
          begin
-            Cell_Bounds (Region_X, Region_Width, Count, Cell, CX, CW);
+            Cell_Bounds (Segments, Region_X, Region_Width, Line_Height, Cell, CX, CW);
             declare
                Hovered : constant Boolean :=
                  Hover_X >= CX and then Hover_X < CX + CW

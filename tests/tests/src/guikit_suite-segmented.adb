@@ -50,14 +50,29 @@ package body Guikit_Suite.Segmented is
 
    procedure Test_Cell_At (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);
+      Segs : constant SG.Segment_Vectors.Vector := Sample;
+      SX1, SW1, SX3, SW3, CX, CW : Natural;
+      Covered : Natural := 0;
    begin
-      Assert (SG.Cell_At (0, 300, 3, 50) = 1, "the left third is cell 1");
-      Assert (SG.Cell_At (0, 300, 3, 150) = 2, "the middle third is cell 2");
-      Assert (SG.Cell_At (0, 300, 3, 250) = 3, "the right third is cell 3");
-      Assert (SG.Cell_At (0, 300, 3, 0) = 1, "the left edge is inclusive");
-      Assert (SG.Cell_At (0, 300, 3, 299) = 3, "the last pixel is cell 3");
-      Assert (SG.Cell_At (0, 300, 3, 300) = 0, "the right edge is exclusive");
-      Assert (SG.Cell_At (0, 300, 3, -1) = 0, "a coordinate left of the region is no cell");
+      --  Hit-testing walks the same variable layout the renderer draws.
+      Assert (SG.Cell_At (Segs, 0, 300, 20, 0) = 1, "the left edge is cell 1");
+      Assert (SG.Cell_At (Segs, 0, 300, 20, 299) = 3, "the last pixel is cell 3");
+      Assert (SG.Cell_At (Segs, 0, 300, 20, 300) = 0, "the right edge is exclusive");
+      Assert (SG.Cell_At (Segs, 0, 300, 20, -1) = 0, "a coordinate left of the region is no cell");
+
+      --  A round trip: the midpoint of each cell hit-tests back to that cell.
+      for Cell in 1 .. 3 loop
+         SG.Cell_Bounds (Segs, 0, 300, 20, Cell, CX, CW);
+         Assert (SG.Cell_At (Segs, 0, 300, 20, CX + CW / 2) = Cell, "a cell midpoint hit-tests to itself");
+         Covered := Covered + CW;
+      end loop;
+      Assert (Covered = 300, "the cells tile the region exactly");
+
+      --  Variable width: the longer label ("Details") gets a wider cell than
+      --  the shorter one ("Small").
+      SG.Cell_Bounds (Segs, 0, 300, 20, 1, SX1, SW1);
+      SG.Cell_Bounds (Segs, 0, 300, 20, 3, SX3, SW3);
+      Assert (SW3 > SW1, "the longer label gets the wider cell");
    end Test_Cell_At;
 
    procedure Test_Build_Frame (T : in out AUnit.Test_Cases.Test_Case'Class) is

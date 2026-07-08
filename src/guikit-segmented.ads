@@ -3,12 +3,15 @@ with Ada.Strings.Unbounded;
 
 with Guikit.Draw;
 
---  A stateless horizontal segmented control: a row of equal cells that pick one
---  of a small fixed set (e.g. a view-mode switcher). The caller supplies the
---  cells and which one is active; the component lays them out, renders them as a
---  button group (active cell highlighted, hover feedback), emits per-cell hover
---  tooltips and accessibility nodes, and hit-tests a click back to a cell index.
---  It owns no state -- the active selection lives in the caller's model.
+--  A stateless horizontal segmented control: a row of cells that pick one of a
+--  small fixed set (e.g. a view-mode switcher). The caller supplies the cells
+--  and which one is active; the component lays them out variable-width (each
+--  cell proportional to its label's measured pixel width, together filling the
+--  region), renders them as a button group (active cell highlighted, hover
+--  feedback), emits per-cell hover tooltips and accessibility nodes, and
+--  hit-tests a click back to a cell index. Labels are measured internally, so a
+--  click always lands on the cell that was drawn. It owns no state -- the active
+--  selection lives in the caller's model.
 package Guikit.Segmented is
 
    subtype UString is Ada.Strings.Unbounded.Unbounded_String;
@@ -23,18 +26,40 @@ package Guikit.Segmented is
      (Index_Type   => Positive,
       Element_Type => Segment);
 
+   --  The left edge and width of one cell within the control's region, using the
+   --  same variable-width layout Build_Frame draws. Cells outside 1 .. length
+   --  return width 0.
+   --
+   --  @param Segments The cells, left to right.
+   --  @param Region_X Left edge of the control in pixels.
+   --  @param Region_Width Control width in pixels.
+   --  @param Line_Height Row height in pixels (drives label measurement).
+   --  @param Cell One-based cell index.
+   --  @param X Out: the cell's left edge in pixels.
+   --  @param Width Out: the cell's width in pixels.
+   procedure Cell_Bounds
+     (Segments     : Segment_Vectors.Vector;
+      Region_X     : Natural;
+      Region_Width : Natural;
+      Line_Height  : Positive;
+      Cell         : Positive;
+      X            : out Natural;
+      Width        : out Natural);
+
    --  The one-based cell index at horizontal coordinate X within the control's
    --  region, or 0 when X is outside the region.
    --
+   --  @param Segments The cells, left to right.
    --  @param Region_X Left edge of the control in pixels.
    --  @param Region_Width Control width in pixels.
-   --  @param Cell_Count Number of cells.
+   --  @param Line_Height Row height in pixels (drives label measurement).
    --  @param X Pointer x coordinate in pixels.
    --  @return The one-based cell index, or 0.
    function Cell_At
-     (Region_X     : Natural;
+     (Segments     : Segment_Vectors.Vector;
+      Region_X     : Natural;
       Region_Width : Natural;
-      Cell_Count   : Natural;
+      Line_Height  : Positive;
       X            : Integer)
       return Natural;
 

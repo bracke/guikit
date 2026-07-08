@@ -1,6 +1,7 @@
 with Ada.Strings.Fixed;
 
 with Guikit.Layout;
+with Guikit.Segmented;
 with Guikit.Utf8;
 with Guikit.Widgets;
 
@@ -412,20 +413,39 @@ package body Guikit.Settings_Panel is
                         begin
                            if Count > 0 and then Ctrl_W > 0 then
                               declare
-                                 Labels  : Guikit.Widgets.Segment_Label_Array (1 .. Count);
-                                 Cell_W2 : constant Natural := Ctrl_W / Count;
-                                 SH      : constant Natural := (LH * 4) / 5;
-                                 SY      : constant Natural := Row_Y + (Row_H - SH) / 2;
+                                 SH    : constant Natural := (LH * 4) / 5;
+                                 SY    : constant Natural := Row_Y + (Row_H - SH) / 2;
+                                 Segs  : Guikit.Segmented.Segment_Vectors.Vector;
+                                 R     : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+                                 T     : Guikit.Draw.Text_Command_Vectors.Vector;
+                                 Tips  : Guikit.Draw.Tooltip_Command_Vectors.Vector;
+                                 Nodes : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+                                 CX, CW : Natural;
                               begin
                                  for J in 1 .. Count loop
-                                    Labels (J) := (Text => F.Option_Labels.Element (J), Truncated => False);
-                                    Add_Hit (Hit_Choice, I, J, Ctrl_X + (J - 1) * Cell_W2, SY, Cell_W2, SH);
+                                    Segs.Append
+                                      (Guikit.Segmented.Segment'
+                                         (Label => F.Option_Labels.Element (J), others => <>));
                                  end loop;
-                                 Guikit.Widgets.Draw_Segmented
-                                   (Rectangles, Text, Clip_Width, Clip_Height, Ctrl_X, SY,
-                                    SY + (SH - LH) / 2, Ctrl_W, Count, SH, Labels, Option_Index (F),
-                                    Guikit.Draw.Selection_Color, Guikit.Draw.Input_Color,
-                                    Guikit.Draw.Border_Color, Guikit.Draw.Text_Color, 4);
+                                 --  Render the variable-width segmented control; the field-level
+                                 --  accessibility node below covers it, so its per-cell nodes and
+                                 --  (empty) tooltips are dropped.
+                                 Guikit.Segmented.Build_Frame
+                                   (Segments => Segs, Active => Option_Index (F),
+                                    Region_X => Ctrl_X, Region_Y => SY, Region_Width => Ctrl_W,
+                                    Region_Height => SH, Clip_Width => Clip_Width, Clip_Height => Clip_Height,
+                                    Line_Height => LH, Hover_X => Hover_X, Hover_Y => Hover_Y,
+                                    Rectangles => R, Text => T, Tooltips => Tips, Accessibility => Nodes);
+                                 for C of R loop
+                                    Rectangles.Append (C);
+                                 end loop;
+                                 for C of T loop
+                                    Text.Append (C);
+                                 end loop;
+                                 for J in 1 .. Count loop
+                                    Guikit.Segmented.Cell_Bounds (Segs, Ctrl_X, Ctrl_W, LH, J, CX, CW);
+                                    Add_Hit (Hit_Choice, I, J, CX, SY, CW, SH);
+                                 end loop;
                               end;
                            end if;
                         end;

@@ -174,12 +174,8 @@ package body Guikit_Suite.Layout is
    begin
       Assert (Bar.View_Mode_X = 8, "the view-mode section starts after the content padding");
       Assert (Bar.View_Mode_Width = 126, "the view-mode section holds the three 42px buttons");
-      Assert (Bar.Small_Button_Width = 42, "the small-icons button is label + padding wide");
-      Assert (Bar.Large_Button_Width = 42, "the large-icons button matches");
-      Assert (Bar.Details_Button_Width = 42, "the details button matches");
-      Assert
-        (Bar.Small_Button_Width + Bar.Large_Button_Width + Bar.Details_Button_Width = Bar.View_Mode_Width,
-         "the three view buttons tile the view-mode section");
+      --  The section is split into cells by Guikit.Segmented, not by per-button
+      --  layout fields; only the section origin and width live in the layout.
       Assert (Bar.Sort_Button_Width = 46, "the sort button uses the input-field padding");
       Assert (Bar.Sort_Button_X = 134, "the sort button follows the view-mode section");
       Assert (Bar.Info_Pane_X = 750, "the info pane toggle is pushed to the right");
