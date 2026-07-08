@@ -206,12 +206,6 @@ package Guikit.Layout is
    type Bottom_Bar_Layout is record
       View_Mode_X          : Natural := 0;
       View_Mode_Width      : Natural := 0;
-      Small_Button_X       : Natural := 0;
-      Small_Button_Width   : Natural := 0;
-      Large_Button_X       : Natural := 0;
-      Large_Button_Width   : Natural := 0;
-      Details_Button_X     : Natural := 0;
-      Details_Button_Width : Natural := 0;
       Sort_Button_X        : Natural := 0;
       Sort_Button_Width    : Natural := 0;
       Info_X               : Natural := 0;

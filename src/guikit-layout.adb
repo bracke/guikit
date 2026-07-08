@@ -316,11 +316,6 @@ package body Guikit.Layout is
       Remaining      : constant Natural := After_View - Sort_W;
       Toggle_W       : constant Natural := Natural'Min (Remaining, Toggle_Wanted);
       Info_W         : constant Natural := Remaining - Toggle_W;
-      Small_W        : constant Natural := Natural'Min (Small_Needed, View_W);
-      Large_W        : constant Natural := Natural'Min (Large_Needed, View_W - Small_W);
-      Details_W      : constant Natural := View_W - Small_W - Large_W;
-      Large_X        : constant Natural := Content_X + Small_W;
-      Details_X      : constant Natural := Content_X + Small_W + Large_W;
       Sort_X         : constant Natural := Content_X + View_W;
       Info_X         : constant Natural := Content_X + View_W + Sort_W;
       Toggle_X       : constant Natural := Content_X + View_W + Sort_W + Info_W;
@@ -328,12 +323,6 @@ package body Guikit.Layout is
       return
         (View_Mode_X          => Content_X,
          View_Mode_Width      => View_W,
-         Small_Button_X       => Content_X,
-         Small_Button_Width   => Small_W,
-         Large_Button_X       => Large_X,
-         Large_Button_Width   => Large_W,
-         Details_Button_X     => Details_X,
-         Details_Button_Width => Details_W,
          Sort_Button_X        => Sort_X,
          Sort_Button_Width    => Sort_W,
          Info_X               => Info_X,

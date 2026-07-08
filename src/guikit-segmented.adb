@@ -9,15 +9,22 @@ package body Guikit.Segmented is
    procedure Cell_Bounds
      (Region_X, Region_Width, Cell_Count, Cell : Natural;
       X : out Natural;
-      W : out Natural) is
+      W : out Natural)
+   is
+      --  Boundary of the Nth cell as an offset from Region_X, computed in 64-bit
+      --  so a large region width cannot overflow the product.
+      function Split (N : Natural) return Natural is
+        (Natural
+           (Long_Long_Integer (N) * Long_Long_Integer (Region_Width)
+            / Long_Long_Integer (Cell_Count)));
    begin
       if Cell_Count = 0 then
          X := Region_X;
          W := 0;
          return;
       end if;
-      X := Region_X + ((Cell - 1) * Region_Width) / Cell_Count;
-      W := (Region_X + (Cell * Region_Width) / Cell_Count) - X;
+      X := Region_X + Split (Cell - 1);
+      W := Split (Cell) - Split (Cell - 1);
    end Cell_Bounds;
 
    function Cell_At
