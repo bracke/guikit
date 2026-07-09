@@ -26,6 +26,7 @@ package body Guikit_Suite.Settings_Panel is
    procedure Test_Edit_And_Emit (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Build_Frame (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Sections (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Shortcut_Capture (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function U (S : String) return Unbounded_String renames To_Unbounded_String;
 
@@ -79,6 +80,9 @@ package body Guikit_Suite.Settings_Panel is
         (T, Test_Build_Frame'Access, "Build_Frame emits draw commands and lays out clickable hit rects");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Sections'Access, "sections act as tabs: focus stays in the active section, a tab click switches");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Shortcut_Capture'Access,
+         "a Shortcut row arms press-to-capture; commit emits the chord, cancel and focus-move disarm");
    end Register_Tests;
 
    --  Two sections, one field each side, to exercise the section switcher.
@@ -179,6 +183,81 @@ package body Guikit_Suite.Settings_Panel is
       Assert (SP.Click (P, 370, 50), "a click in the switcher row lands");
       Assert (SP.Active_Section (P) = 2, "clicking the right tab switches to section 2");
    end Test_Sections;
+
+   --  A Toggle then a Shortcut field (no section), to exercise press-to-capture.
+   function Shortcut_Fields return SP.Field_Vectors.Vector is
+      V : SP.Field_Vectors.Vector;
+   begin
+      V.Append (SP.Field'(Key => U ("flag"), Label => U ("Flag"), Kind => SP.Toggle,
+                          Value => U ("false"), others => <>));
+      V.Append (SP.Field'(Key => U ("copy"), Label => U ("Copy"), Kind => SP.Shortcut,
+                          Value => U ("control+c"), others => <>));
+      return V;
+   end Shortcut_Fields;
+
+   procedure Test_Shortcut_Capture (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      P : SP.Panel;
+   begin
+      SP.Set_Fields (P, Shortcut_Fields);
+      Assert (not SP.Is_Capturing (P), "a freshly-supplied panel is not capturing");
+      Assert (SP.Capturing_Key (P) = "", "no armed field means an empty capturing key");
+
+      --  Arming only takes on a focused Shortcut field.
+      SP.Begin_Capture (P);
+      Assert (not SP.Is_Capturing (P), "arming does nothing while a non-Shortcut field is focused");
+
+      SP.Move_Focus (P, 1);
+      Assert (SP.Focused_Kind (P) = SP.Shortcut, "focus reaches the Shortcut field");
+      SP.Begin_Capture (P);
+      Assert (SP.Is_Capturing (P), "arming a focused Shortcut field enters capture");
+      Assert (SP.Capturing_Key (P) = "copy", "the armed field's key is reported");
+
+      --  Capture survives an every-frame re-supply of the same field list.
+      SP.Set_Fields (P, Shortcut_Fields);
+      Assert (SP.Is_Capturing (P) and then SP.Capturing_Key (P) = "copy",
+              "re-supplying the same fields keeps the capture armed");
+
+      --  Committing a captured chord sets the value, disarms, and emits the change.
+      SP.Set_Captured_Shortcut (P, "control+shift+k");
+      Assert (not SP.Is_Capturing (P), "committing a chord disarms the field");
+      declare
+         Ch : constant SP.Change := SP.Take_Change (P);
+      begin
+         Assert (Ch.Kind = SP.Value_Changed, "committing a chord emits a value change");
+         Assert (To_String (Ch.Key) = "copy" and then To_String (Ch.Value) = "control+shift+k",
+                 "the change carries the field key and the captured chord");
+      end;
+
+      --  Cancel disarms without emitting a change.
+      SP.Begin_Capture (P);
+      Assert (SP.Is_Capturing (P), "the Shortcut field re-arms");
+      SP.Cancel_Capture (P);
+      Assert (not SP.Is_Capturing (P), "cancel disarms the field");
+      Assert (SP.Take_Change (P).Kind = SP.No_Change, "cancel emits no change");
+
+      --  An empty commit records an unbind.
+      SP.Begin_Capture (P);
+      SP.Set_Captured_Shortcut (P, "");
+      Assert (To_String (SP.Take_Change (P).Value) = "", "an empty commit unbinds the shortcut");
+
+      --  Moving focus away cancels an in-progress capture.
+      SP.Begin_Capture (P);
+      Assert (SP.Is_Capturing (P), "re-arm before the focus-move check");
+      SP.Move_Focus (P, -1);
+      Assert (not SP.Is_Capturing (P), "moving focus cancels the capture");
+
+      --  A click on the panel lands (the row-level hit that arms a Shortcut row).
+      declare
+         Rects : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         Text  : Guikit.Draw.Text_Command_Vectors.Vector;
+         Nodes : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+      begin
+         SP.Build_Frame (P, 0, 0, 500, 400, 500, 400, True, -1, -1, Rects, Text, Nodes);
+         Assert (SP.Click (P, 250, 60) or else SP.Click (P, 250, 90),
+                 "a click inside the panel lands on a laid-out row");
+      end;
+   end Test_Shortcut_Capture;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

@@ -103,9 +103,10 @@ package body Guikit.Settings_Panel is
          P.Active := 1;
          return;
       end if;
-      P.Active  := Natural'Max (1, Natural'Min (Ordinal, Count));
-      P.Offset  := 0;
-      P.Focused := 0;
+      P.Active    := Natural'Max (1, Natural'Min (Ordinal, Count));
+      P.Offset    := 0;
+      P.Focused   := 0;
+      P.Capturing := 0;
       for I in P.Fields.First_Index .. P.Fields.Last_Index loop
          if Field_Is_Visible (P, I) and then Field_Section (P, I) = P.Active then
             P.Focused := I;
@@ -125,6 +126,15 @@ package body Guikit.Settings_Panel is
       Count : Natural;
    begin
       P.Fields := Fields;
+      --  Capture is deliberately preserved across a re-supply: the caller
+      --  rebuilds the field list every frame, and the armed field keeps its
+      --  index (the field list is stable while capturing). Capture is ended
+      --  explicitly instead -- on commit, cancel, focus move, or tab switch.
+      if P.Capturing > Natural (P.Fields.Length)
+        or else (P.Capturing > 0 and then P.Fields.Element (P.Capturing).Kind /= Shortcut)
+      then
+         P.Capturing := 0;
+      end if;
       Count := Section_Count (P);
       P.Active := (if Count = 0 then 1 else Natural'Max (1, Natural'Min (P.Active, Count)));
       if P.Focused > Natural (P.Fields.Length) then
@@ -145,9 +155,10 @@ package body Guikit.Settings_Panel is
 
    procedure Reset (P : in out Panel) is
    begin
-      P.Focused := 0;
-      P.Active  := 1;
-      P.Offset  := 0;
+      P.Focused   := 0;
+      P.Capturing := 0;
+      P.Active    := 1;
+      P.Offset    := 0;
       P.Hits.Clear;
       P.Pending := (Kind => No_Change, others => <>);
    end Reset;
@@ -222,7 +233,8 @@ package body Guikit.Settings_Panel is
          exit when I < 1 or else I > N;
       end loop;
       if I in 1 .. N and then Field_Is_Visible (P, I) then
-         P.Focused := I;
+         P.Focused   := I;
+         P.Capturing := 0;   --  moving focus cancels any in-progress capture
       end if;
    end Move_Focus;
 
@@ -296,6 +308,46 @@ package body Guikit.Settings_Panel is
       Emit_Value (P, F.Key, F.Value);
    end Set_Focused_Value;
 
+   procedure Begin_Capture (P : in out Panel) is
+      Ok : Boolean;
+      F  : constant Field := Focused_Field (P, Ok);
+   begin
+      if Ok and then F.Enabled and then F.Kind = Shortcut then
+         P.Capturing := P.Focused;
+      end if;
+   end Begin_Capture;
+
+   function Is_Capturing (P : Panel) return Boolean is
+     (P.Capturing in 1 .. Natural (P.Fields.Length));
+
+   function Capturing_Key (P : Panel) return String is
+   begin
+      if P.Capturing in 1 .. Natural (P.Fields.Length) then
+         return To_String (P.Fields.Element (P.Capturing).Key);
+      end if;
+      return "";
+   end Capturing_Key;
+
+   procedure Set_Captured_Shortcut (P : in out Panel; Text : String) is
+   begin
+      if P.Capturing not in 1 .. Natural (P.Fields.Length) then
+         return;
+      end if;
+      declare
+         F : Field := P.Fields.Element (P.Capturing);
+      begin
+         F.Value := To_Unbounded_String (Text);
+         P.Fields.Replace_Element (P.Capturing, F);
+         P.Capturing := 0;
+         Emit_Value (P, F.Key, F.Value);
+      end;
+   end Set_Captured_Shortcut;
+
+   procedure Cancel_Capture (P : in out Panel) is
+   begin
+      P.Capturing := 0;
+   end Cancel_Capture;
+
    procedure Scroll (P : in out Panel; Lines : Integer) is
       Max_Scroll : constant Natural :=
         (if Natural (P.Fields.Length) > P.Visible_Rows
@@ -317,9 +369,15 @@ package body Guikit.Settings_Panel is
                   F : Field := P.Fields.Element (H.Field_Index);
                begin
                   P.Focused := H.Field_Index;
+                  --  Any click disarms a pending capture; a click on a Shortcut
+                  --  row re-arms it below (the row-level Hit_Focus is the reliable
+                  --  hit, since it shadows any control-box hit within the row).
+                  P.Capturing := 0;
                   case H.Kind is
                      when Hit_Focus =>
-                        null;
+                        if F.Enabled and then F.Kind = Shortcut then
+                           P.Capturing := H.Field_Index;
+                        end if;
                      when Hit_Toggle =>
                         if F.Enabled then
                            F.Value := To_Unbounded_String (if Is_True (F.Value) then "false" else "true");
@@ -630,6 +688,33 @@ package body Guikit.Settings_Panel is
                                 (Rectangles, Clip_Width, Clip_Height,
                                  Ctrl_X + 4 + Guikit.Utf8.Display_Units (To_String (F.Value)) * Cell_W, VY,
                                  Natural'Max (1, Cell_W / 6), LH, Guikit.Draw.Text_Color);
+                           end if;
+                        end;
+
+                     when Shortcut =>
+                        --  A chord box like Text, but edited press-to-capture: a
+                        --  click on the row arms the field (handled in Click via the
+                        --  row-level Hit_Focus), and while armed it is drawn with the
+                        --  selection accent plus a caret so the user sees it is
+                        --  waiting for a chord.
+                        declare
+                           Armed : constant Boolean := I = P.Capturing;
+                           TH : constant Natural := (2 * LH) / 3;
+                           TY : constant Natural := Row_Y + (Row_H - TH) / 2;
+                           VY : constant Natural := Row_Y + (Row_H - LH) / 2;
+                        begin
+                           Guikit.Widgets.Draw_Input_Field
+                             (Rectangles, Clip_Width, Clip_Height, Ctrl_X, TY, Ctrl_W, TH,
+                              Guikit.Draw.Input_Color,
+                              (if Armed then Guikit.Draw.Selection_Color else Guikit.Draw.Border_Color));
+                           Add_Text (Ctrl_X + 4, VY, (if Ctrl_W > 8 then Ctrl_W - 8 else 0), F.Value,
+                                     (if F.Enabled then Guikit.Draw.Text_Color
+                                      else Guikit.Draw.Disabled_Text_Color));
+                           if Armed then
+                              Guikit.Widgets.Draw_Caret
+                                (Rectangles, Clip_Width, Clip_Height,
+                                 Ctrl_X + 4 + Guikit.Utf8.Display_Units (To_String (F.Value)) * Cell_W, VY,
+                                 Natural'Max (1, Cell_W / 6), LH, Guikit.Draw.Selection_Color);
                            end if;
                         end;
 

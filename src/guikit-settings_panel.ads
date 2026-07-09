@@ -32,6 +32,7 @@ package Guikit.Settings_Panel is
       Choice,    --  pick one of Option_Values; Value is the chosen token
       Number,    --  an integer clamped to [Min .. Max]; Value is the number text
       Text,      --  a free-text value; the caller edits the whole string
+      Shortcut,  --  a keyboard chord captured press-to-capture; Value is the chord text
       Buttons);  --  a row of buttons; Option_Values are ids, Option_Labels labels
 
    --  One row of the form. Key is opaque to the panel and echoed back on a
@@ -100,6 +101,32 @@ package Guikit.Settings_Panel is
    --  Replace the whole value of the focused Text field (the caller does the text
    --  editing). Emits Value_Changed. A no-op unless a Text field is focused.
    procedure Set_Focused_Value (P : in out Panel; Text : String);
+
+   --  Press-to-capture for Shortcut fields. Clicking a Shortcut row arms it; the
+   --  panel then reports Is_Capturing so the caller can route the next physical
+   --  chord to the panel instead of acting on it. The caller formats the chord to
+   --  text (the panel is domain-free) and commits it with Set_Captured_Shortcut,
+   --  or cancels with Cancel_Capture. Passing an empty Text records an unbind.
+
+   --  Arm the currently-focused field for capture when it is an enabled Shortcut
+   --  field (the keyboard-activation path, e.g. Enter on a focused Shortcut row;
+   --  clicking the row arms it too). A no-op otherwise.
+   procedure Begin_Capture (P : in out Panel);
+
+   --  Whether a Shortcut field is currently armed for capture.
+   function Is_Capturing (P : Panel) return Boolean;
+
+   --  The Key of the armed Shortcut field, or an empty string when none is armed.
+   function Capturing_Key (P : Panel) return String;
+
+   --  Commit a captured chord to the armed Shortcut field: set its Value to Text
+   --  (empty for an unbind), disarm, and emit Value_Changed. A no-op when no
+   --  field is armed.
+   procedure Set_Captured_Shortcut (P : in out Panel; Text : String);
+
+   --  Disarm capture without changing any field (e.g. on Escape). Produces no
+   --  change.
+   procedure Cancel_Capture (P : in out Panel);
 
    --  Scroll the content by whole rows (positive scrolls down).
    procedure Scroll (P : in out Panel; Lines : Integer);
@@ -192,6 +219,7 @@ private
       Config        : Configuration;
       Fields        : Field_Vectors.Vector;
       Focused       : Natural := 0;   --  1-based index into Fields, 0 = none
+      Capturing     : Natural := 0;   --  1-based Shortcut field armed for capture, 0 = none
       Active        : Natural := 1;   --  1-based active section (tab) ordinal
       Offset        : Natural := 0;   --  scroll offset in rows
       Content_Rows  : Natural := 0;   --  total rows from the last render
