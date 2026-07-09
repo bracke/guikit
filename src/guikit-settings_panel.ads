@@ -71,6 +71,23 @@ package Guikit.Settings_Panel is
    --  Replace the field list (keeping the focused row and scroll where possible).
    procedure Set_Fields (P : in out Panel; Fields : Field_Vectors.Vector);
 
+   --  Clear the focus, scroll and any pending change (e.g. when opening).
+   procedure Reset (P : in out Panel);
+
+   --  The Section fields act as tabs: the panel shows a segmented switcher of the
+   --  section labels and renders only the active section's fields (plus any
+   --  fields that precede the first Section, which stay always visible).
+
+   --  How many Section fields there are (the number of tabs).
+   function Section_Count (P : Panel) return Natural;
+
+   --  The one-based ordinal of the currently shown section.
+   function Active_Section (P : Panel) return Natural;
+
+   --  Show the Ordinal-th section (clamped to 1 .. Section_Count), moving focus
+   --  to its first focusable field and resetting the scroll.
+   procedure Set_Active_Section (P : in out Panel; Ordinal : Natural);
+
    --  Move keyboard focus by Delta_Rows over the focusable (non-Section) fields,
    --  clamped. Produces no change.
    procedure Move_Focus (P : in out Panel; Delta_Rows : Integer);
@@ -157,7 +174,8 @@ private
       Hit_Choice,       --  pick option Option of a Choice (Field_Index)
       Hit_Step_Down,    --  decrement a Number (Field_Index)
       Hit_Step_Up,      --  increment a Number (Field_Index)
-      Hit_Button);      --  press button Option of a Buttons row (Field_Index)
+      Hit_Button,       --  press button Option of a Buttons row (Field_Index)
+      Hit_Tab);         --  switch to section Option (the section-switcher cells)
 
    type Hit_Rect is record
       Kind        : Hit_Kind := Hit_Focus;
@@ -174,6 +192,7 @@ private
       Config        : Configuration;
       Fields        : Field_Vectors.Vector;
       Focused       : Natural := 0;   --  1-based index into Fields, 0 = none
+      Active        : Natural := 1;   --  1-based active section (tab) ordinal
       Offset        : Natural := 0;   --  scroll offset in rows
       Content_Rows  : Natural := 0;   --  total rows from the last render
       Visible_Rows  : Natural := 0;   --  visible rows from the last render

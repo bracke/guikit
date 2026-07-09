@@ -25,6 +25,7 @@ package body Guikit_Suite.Settings_Panel is
 
    procedure Test_Edit_And_Emit (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Build_Frame (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Sections (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function U (S : String) return Unbounded_String renames To_Unbounded_String;
 
@@ -76,7 +77,24 @@ package body Guikit_Suite.Settings_Panel is
         (T, Test_Edit_And_Emit'Access, "editing each field kind emits the right change; focus skips sections");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Build_Frame'Access, "Build_Frame emits draw commands and lays out clickable hit rects");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Sections'Access, "sections act as tabs: focus stays in the active section, a tab click switches");
    end Register_Tests;
+
+   --  Two sections, one field each side, to exercise the section switcher.
+   function Two_Sections return SP.Field_Vectors.Vector is
+      V : SP.Field_Vectors.Vector;
+   begin
+      V.Append (SP.Field'(Key => U ("sa"), Label => U ("Alpha"), Kind => SP.Section, others => <>));
+      V.Append (SP.Field'(Key => U ("a1"), Label => U ("A1"), Kind => SP.Toggle, Value => U ("false"),
+                          others => <>));
+      V.Append (SP.Field'(Key => U ("sb"), Label => U ("Beta"), Kind => SP.Section, others => <>));
+      V.Append (SP.Field'(Key => U ("b1"), Label => U ("B1"), Kind => SP.Toggle, Value => U ("false"),
+                          others => <>));
+      V.Append (SP.Field'(Key => U ("b2"), Label => U ("B2"), Kind => SP.Toggle, Value => U ("false"),
+                          others => <>));
+      return V;
+   end Two_Sections;
 
    procedure Test_Edit_And_Emit (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);
@@ -131,6 +149,36 @@ package body Guikit_Suite.Settings_Panel is
       --  A click on the toggle row hits a laid-out field.
       Assert (SP.Click (P, 250, 75), "a click inside the panel hits a laid-out field");
    end Test_Build_Frame;
+
+   procedure Test_Sections (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      P     : SP.Panel;
+      Rects : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text  : Guikit.Draw.Text_Command_Vectors.Vector;
+      Nodes : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+   begin
+      SP.Set_Fields (P, Two_Sections);
+      Assert (SP.Section_Count (P) = 2, "two Section fields make two tabs");
+      Assert (SP.Active_Section (P) = 1, "the first section is active initially");
+      Assert (SP.Focused_Key (P) = "a1", "focus lands on the active section's first field");
+
+      --  Focus stays inside the active section (b1/b2 are not reachable yet).
+      SP.Move_Focus (P, 1);
+      Assert (SP.Focused_Key (P) = "a1", "move-focus does not leave the active section");
+
+      --  Switch to section 2: focus moves there, and its fields become reachable.
+      SP.Set_Active_Section (P, 2);
+      Assert (SP.Active_Section (P) = 2 and then SP.Focused_Key (P) = "b1",
+              "switching section moves focus to its first field");
+      SP.Move_Focus (P, 1);
+      Assert (SP.Focused_Key (P) = "b2", "focus navigates within the newly active section");
+
+      --  A click on the far-right of the tab switcher selects the last tab.
+      SP.Set_Active_Section (P, 1);
+      SP.Build_Frame (P, 0, 0, 400, 400, 400, 400, True, -1, -1, Rects, Text, Nodes);
+      Assert (SP.Click (P, 370, 50), "a click in the switcher row lands");
+      Assert (SP.Active_Section (P) = 2, "clicking the right tab switches to section 2");
+   end Test_Sections;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

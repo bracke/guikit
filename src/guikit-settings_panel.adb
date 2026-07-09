@@ -37,6 +37,83 @@ package body Guikit.Settings_Panel is
 
    function Is_Focusable (F : Field) return Boolean is (F.Kind /= Section);
 
+   --  ----- sections (tabs) ------------------------------------------------------
+
+   function Section_Count (P : Panel) return Natural is
+      Count : Natural := 0;
+   begin
+      for F of P.Fields loop
+         if F.Kind = Section then
+            Count := Count + 1;
+         end if;
+      end loop;
+      return Count;
+   end Section_Count;
+
+   function Active_Section (P : Panel) return Natural is (P.Active);
+
+   --  The one-based section ordinal enclosing a field, or 0 for a field that
+   --  precedes the first Section (the always-visible preamble).
+   function Field_Section (P : Panel; Index : Positive) return Natural is
+      Ord : Natural := 0;
+   begin
+      for I in P.Fields.First_Index .. Index loop
+         if P.Fields.Element (I).Kind = Section then
+            Ord := Ord + 1;
+         end if;
+      end loop;
+      return Ord;
+   end Field_Section;
+
+   --  Whether a field is rendered as a row now: never a Section header (those are
+   --  the tabs), and only when it is in the preamble or the active section.
+   function Field_Is_Visible (P : Panel; Index : Positive) return Boolean is
+   begin
+      if Index not in 1 .. Natural (P.Fields.Length)
+        or else P.Fields.Element (Index).Kind = Section
+      then
+         return False;
+      end if;
+      declare
+         Ord : constant Natural := Field_Section (P, Index);
+      begin
+         return Ord = 0 or else Ord = P.Active;
+      end;
+   end Field_Is_Visible;
+
+   --  The label of the Ordinal-th Section field.
+   function Section_Label (P : Panel; Ordinal : Positive) return UString is
+      Count : Natural := 0;
+   begin
+      for F of P.Fields loop
+         if F.Kind = Section then
+            Count := Count + 1;
+            if Count = Ordinal then
+               return F.Label;
+            end if;
+         end if;
+      end loop;
+      return Null_Unbounded_String;
+   end Section_Label;
+
+   procedure Set_Active_Section (P : in out Panel; Ordinal : Natural) is
+      Count : constant Natural := Section_Count (P);
+   begin
+      if Count = 0 then
+         P.Active := 1;
+         return;
+      end if;
+      P.Active  := Natural'Max (1, Natural'Min (Ordinal, Count));
+      P.Offset  := 0;
+      P.Focused := 0;
+      for I in P.Fields.First_Index .. P.Fields.Last_Index loop
+         if Field_Is_Visible (P, I) and then Field_Section (P, I) = P.Active then
+            P.Focused := I;
+            exit;
+         end if;
+      end loop;
+   end Set_Active_Section;
+
    --  ----- configuration + fields ----------------------------------------------
 
    procedure Set_Configuration (P : in out Panel; Config : Configuration) is
@@ -45,15 +122,20 @@ package body Guikit.Settings_Panel is
    end Set_Configuration;
 
    procedure Set_Fields (P : in out Panel; Fields : Field_Vectors.Vector) is
+      Count : Natural;
    begin
       P.Fields := Fields;
+      Count := Section_Count (P);
+      P.Active := (if Count = 0 then 1 else Natural'Max (1, Natural'Min (P.Active, Count)));
       if P.Focused > Natural (P.Fields.Length) then
          P.Focused := 0;
       end if;
-      --  Land the focus on the first focusable field when none is set.
-      if P.Focused = 0 then
+      --  Keep focus on a still-visible field; otherwise land on the first field
+      --  visible in the active section (or preamble).
+      if P.Focused = 0 or else not Field_Is_Visible (P, P.Focused) then
+         P.Focused := 0;
          for I in P.Fields.First_Index .. P.Fields.Last_Index loop
-            if Is_Focusable (P.Fields.Element (I)) then
+            if Field_Is_Visible (P, I) then
                P.Focused := I;
                exit;
             end if;
@@ -64,6 +146,7 @@ package body Guikit.Settings_Panel is
    procedure Reset (P : in out Panel) is
    begin
       P.Focused := 0;
+      P.Active  := 1;
       P.Offset  := 0;
       P.Hits.Clear;
       P.Pending := (Kind => No_Change, others => <>);
@@ -134,11 +217,11 @@ package body Guikit.Settings_Panel is
          loop
             I := I + Step;
             exit when I < 1 or else I > N;
-            exit when Is_Focusable (P.Fields.Element (I));
+            exit when Field_Is_Visible (P, I);
          end loop;
          exit when I < 1 or else I > N;
       end loop;
-      if I in 1 .. N and then Is_Focusable (P.Fields.Element (I)) then
+      if I in 1 .. N and then Field_Is_Visible (P, I) then
          P.Focused := I;
       end if;
    end Move_Focus;
@@ -226,7 +309,10 @@ package body Guikit.Settings_Panel is
    begin
       for H of P.Hits loop
          if X >= H.X and then X < H.X + H.W and then Y >= H.Y and then Y < H.Y + H.H then
-            if H.Field_Index in 1 .. Natural (P.Fields.Length) then
+            if H.Kind = Hit_Tab then
+               Set_Active_Section (P, H.Option);
+               return True;
+            elsif H.Field_Index in 1 .. Natural (P.Fields.Length) then
                declare
                   F : Field := P.Fields.Element (H.Field_Index);
                begin
@@ -254,6 +340,8 @@ package body Guikit.Settings_Panel is
                         if H.Option in 1 .. Natural (F.Option_Values.Length) then
                            Emit_Button (P, F.Key, F.Option_Values.Element (H.Option));
                         end if;
+                     when Hit_Tab =>
+                        null;  --  handled above, before the field-index branch
                   end case;
                end;
             end if;
@@ -264,6 +352,8 @@ package body Guikit.Settings_Panel is
    end Click;
 
    --  ----- rendering ------------------------------------------------------------
+
+   type Index_Array is array (Positive range <>) of Natural;
 
    procedure Build_Frame
      (P             : in out Panel;
@@ -284,11 +374,17 @@ package body Guikit.Settings_Panel is
       Row_H     : constant Natural  := LH + Row_Gap;
       Cell_W    : constant Natural  := Guikit.Layout.Caret_Advance_Width (LH);
       N         : constant Natural  := Natural (P.Fields.Length);
+      Tab_Count : constant Natural  := Section_Count (P);
+      Switch_H  : constant Natural  := (if Tab_Count > 1 then Row_H else 0);
       Content_X : constant Natural  := Region_X + Pad;
       Content_W : constant Natural  :=
         (if Region_Width > 2 * Pad + Bar_W then Region_Width - 2 * Pad - Bar_W else 0);
       Title_Y   : constant Natural  := Region_Y + Pad;
-      Rows_Top  : constant Natural  := Title_Y + Row_H;
+      Switch_Y  : constant Natural  := Title_Y + Row_H;
+      Rows_Top  : constant Natural  := Title_Y + Row_H + Switch_H;
+      --  Field indices rendered as rows now (preamble + active section), compact.
+      Visible   : Index_Array (1 .. Natural'Max (1, N)) := (others => 0);
+      Vis_N     : Natural := 0;
       Has_Status : constant Boolean := Length (P.Config.Status) > 0;
       Foot_H    : constant Natural  := (if Has_Status then Row_H else 0);
       Rows_Bot  : constant Natural  :=
@@ -323,22 +419,34 @@ package body Guikit.Settings_Panel is
       end Add_Hit;
    begin
       P.Hits.Clear;
-      P.Content_Rows := N;
+      for I in P.Fields.First_Index .. P.Fields.Last_Index loop
+         if Field_Is_Visible (P, I) then
+            Vis_N := Vis_N + 1;
+            Visible (Vis_N) := I;
+         end if;
+      end loop;
+      P.Content_Rows := Vis_N;
       P.Visible_Rows := (if Row_H > 0 then Avail_H / Row_H else 0);
 
-      --  Clamp scroll and keep the focused row on screen.
+      --  Clamp scroll and keep the focused row on screen (rows are the compact
+      --  positions of the visible fields, not raw field indices).
       declare
-         Max_Scroll : constant Natural := (if N > P.Visible_Rows then N - P.Visible_Rows else 0);
-         R          : constant Natural := (if P.Focused > 0 then P.Focused - 1 else 0);
+         Max_Scroll : constant Natural := (if Vis_N > P.Visible_Rows then Vis_N - P.Visible_Rows else 0);
+         Focus_Row  : Natural := 0;
       begin
+         for VR in 1 .. Vis_N loop
+            if Visible (VR) = P.Focused then
+               Focus_Row := VR - 1;
+            end if;
+         end loop;
          if P.Offset > Max_Scroll then
             P.Offset := Max_Scroll;
          end if;
          if P.Focused > 0 then
-            if R < P.Offset then
-               P.Offset := R;
-            elsif P.Visible_Rows > 0 and then R >= P.Offset + P.Visible_Rows then
-               P.Offset := R - P.Visible_Rows + 1;
+            if Focus_Row < P.Offset then
+               P.Offset := Focus_Row;
+            elsif P.Visible_Rows > 0 and then Focus_Row >= P.Offset + P.Visible_Rows then
+               P.Offset := Focus_Row - P.Visible_Rows + 1;
             end if;
          end if;
       end;
@@ -357,11 +465,49 @@ package body Guikit.Settings_Panel is
             Width => Region_Width, Height => Region_Height, Name => P.Config.Title, others => <>));
       Add_Text (Content_X, Title_Y + (Row_H - LH) / 2, Content_W, P.Config.Title, Guikit.Draw.Text_Color);
 
-      --  Rows.
-      for I in P.Fields.First_Index .. P.Fields.Last_Index loop
+      --  Section switcher (the tabs): a segmented control of the section labels,
+      --  the active one highlighted, each cell clickable to switch section.
+      if Tab_Count > 1 then
          declare
+            Segs    : Guikit.Segmented.Segment_Vectors.Vector;
+            S_Rects : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+            S_Text  : Guikit.Draw.Text_Command_Vectors.Vector;
+            S_Tips  : Guikit.Draw.Tooltip_Command_Vectors.Vector;
+            S_Nodes : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+            CX, CW  : Natural;
+         begin
+            for Ord in 1 .. Tab_Count loop
+               Segs.Append
+                 (Guikit.Segmented.Segment'(Label => Section_Label (P, Ord), others => <>));
+            end loop;
+            Guikit.Segmented.Build_Frame
+              (Segments => Segs, Active => P.Active,
+               Region_X => Content_X, Region_Y => Switch_Y, Region_Width => Content_W,
+               Region_Height => LH, Clip_Width => Clip_Width, Clip_Height => Clip_Height,
+               Line_Height => LH, Hover_X => Hover_X, Hover_Y => Hover_Y,
+               Rectangles => S_Rects, Text => S_Text, Tooltips => S_Tips, Accessibility => S_Nodes);
+            for C of S_Rects loop
+               Rectangles.Append (C);
+            end loop;
+            for C of S_Text loop
+               Text.Append (C);
+            end loop;
+            for Node of S_Nodes loop
+               Accessibility.Append (Node);
+            end loop;
+            for Ord in 1 .. Tab_Count loop
+               Guikit.Segmented.Cell_Bounds (Segs, Content_X, Content_W, LH, Ord, CX, CW);
+               Add_Hit (Hit_Tab, 0, Ord, CX, Switch_Y, CW, Row_H);
+            end loop;
+         end;
+      end if;
+
+      --  Rows (the active section's fields, compact).
+      for VR in 1 .. Vis_N loop
+         declare
+            I   : constant Positive := Visible (VR);
             F   : constant Field := P.Fields.Element (I);
-            R   : constant Natural := I - 1;
+            R   : constant Natural := VR - 1;
             Vis : constant Boolean :=
               R >= P.Offset and then (P.Visible_Rows = 0 or else R < P.Offset + P.Visible_Rows);
             Row_Y : constant Natural := Rows_Top + (R - P.Offset) * Row_H;
@@ -540,12 +686,12 @@ package body Guikit.Settings_Panel is
 
       --  Scrollbar.
       declare
-         Max_Scroll : constant Natural := (if N > P.Visible_Rows then N - P.Visible_Rows else 0);
+         Max_Scroll : constant Natural := (if Vis_N > P.Visible_Rows then Vis_N - P.Visible_Rows else 0);
          Thumb : constant Guikit.Layout.Scrollbar_Thumb :=
            Guikit.Layout.Calculate_Scrollbar_Thumb
              (Track_Length    => Avail_H,
               Visible_Amount  => P.Visible_Rows,
-              Total_Amount    => N,
+              Total_Amount    => Vis_N,
               Scroll_Position => P.Offset,
               Max_Scroll      => Max_Scroll,
               Min_Length      => Row_H);
