@@ -264,6 +264,64 @@ package Guikit.Item_Grid is
       Dim_Color        : Guikit.Draw.Render_Color;
       Border_Color     : Guikit.Draw.Render_Color);
 
+   --  The horizontal extent (x and width) of a cell's editable name field. In
+   --  the large-icons view the field spans the inner cell width while renaming
+   --  (a long edited name will not fit the narrow centred label); otherwise it
+   --  is the cell's text box.
+   --
+   --  @param Cell The item cell geometry.
+   --  @param View The grid view.
+   --  @param Renaming Whether this cell is being renamed.
+   --  @param Field_X Out: field left edge in pixels.
+   --  @param Field_W Out: field width in pixels.
+   procedure Rename_Field_Extent
+     (Cell     : Item_Layout;
+      View     : View_Kind;
+      Renaming : Boolean;
+      Field_X  : out Natural;
+      Field_W  : out Natural);
+
+   --  Draw an item's name: the fitted label (Text is the edited value while
+   --  renaming, otherwise the name), dimmed and italic for a cut item, plus --
+   --  when renaming with the field focused -- a cell border, a focus ring, and a
+   --  text caret at the byte offset Cursor.
+   --
+   --  @param Rectangles Rectangle command vector.
+   --  @param Text_Commands Text command vector.
+   --  @param Clip_Width Drawable window width in pixels.
+   --  @param Clip_Height Drawable window height in pixels.
+   --  @param Cell The item cell geometry.
+   --  @param View The grid view.
+   --  @param Renaming Whether this cell is being renamed.
+   --  @param Focused Whether the rename field has keyboard focus.
+   --  @param Dim Whether the item is dimmed (cut): italic + Dim_Color.
+   --  @param Text The label text (edited value when renaming, else the name).
+   --  @param Cursor Caret byte offset into Text (used when renaming + focused).
+   --  @param Line_Height Text line height in pixels.
+   --  @param Text_Color Normal label colour.
+   --  @param Dim_Color Dimmed label colour.
+   --  @param Border_Color Rename field border colour.
+   --  @param Focus_Ring_Color Focus ring colour.
+   --  @param Caret_Color Caret colour.
+   procedure Draw_Name_Field
+     (Rectangles       : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text_Commands    : in out Guikit.Draw.Text_Command_Vectors.Vector;
+      Clip_Width       : Natural;
+      Clip_Height      : Natural;
+      Cell             : Item_Layout;
+      View             : View_Kind;
+      Renaming         : Boolean;
+      Focused          : Boolean;
+      Dim              : Boolean;
+      Text             : Ada.Strings.Unbounded.Unbounded_String;
+      Cursor           : Natural;
+      Line_Height      : Positive;
+      Text_Color       : Guikit.Draw.Render_Color;
+      Dim_Color        : Guikit.Draw.Render_Color;
+      Border_Color     : Guikit.Draw.Render_Color;
+      Focus_Ring_Color : Guikit.Draw.Render_Color;
+      Caret_Color      : Guikit.Draw.Render_Color);
+
    --  The visible index of the item whose cell rectangle contains (X, Y), or 0
    --  when the point is over no item (empty space or a group header).
    --

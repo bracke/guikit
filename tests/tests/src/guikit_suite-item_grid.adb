@@ -26,6 +26,7 @@ package body Guikit_Suite.Item_Grid is
    procedure Test_Background (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Group_Header (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Details_Row (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Name_Field (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  Three stacked 100x20 rows, plus a non-selectable header row (index 0).
    function Sample return IG.Item_Layout_Vectors.Vector is
@@ -60,6 +61,8 @@ package body Guikit_Suite.Item_Grid is
         (T, Test_Group_Header'Access, "Draw_Group_Header emits fill, caption, separator and a disabled node");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Details_Row'Access, "Draw_Details_Row emits the separator, visible columns and time tooltips");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Name_Field'Access, "Draw_Name_Field draws the label and, when renaming+focused, chrome and a caret");
    end Register_Tests;
 
    procedure Test_Item_At (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -226,6 +229,40 @@ package body Guikit_Suite.Item_Grid is
       Assert (Natural (Text.Length) = 2, "only the two non-zero-width columns emit text");
       Assert (Natural (Tips.Length) = 1, "only the modified column emits a tooltip");
    end Test_Details_Row;
+
+   procedure Test_Name_Field (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Ada.Strings.Unbounded;
+      Cell : constant IG.Item_Layout :=
+        (Visible_Index => 1, X => 0, Y => 0, Width => 216, Height => 24, Text_X => 30, Text_Y => 4,
+         Text_Width => 180, others => 0);
+      FX, FW, WX, WW : Natural;
+
+      function Text_Count (Renaming, Focused : Boolean) return Natural is
+         R : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         Tx : Guikit.Draw.Text_Command_Vectors.Vector;
+      begin
+         IG.Draw_Name_Field (R, Tx, 400, 400, Cell, IG.Icons_Small, Renaming, Focused, Dim => False,
+                             Text => To_Unbounded_String ("readme.txt"), Cursor => 4, Line_Height => 20,
+                             Text_Color => Guikit.Draw.Text_Color, Dim_Color => Guikit.Draw.Muted_Text_Color,
+                             Border_Color => Guikit.Draw.Border_Color, Focus_Ring_Color => Guikit.Draw.Selection_Color,
+                             Caret_Color => Guikit.Draw.Text_Color);
+         return Natural (Tx.Length) * 1000 + Natural (R.Length);
+      end Text_Count;
+   begin
+      --  Small-icons uses the cell's text box; renaming large-icons widens it.
+      IG.Rename_Field_Extent (Cell, IG.Icons_Small, Renaming => True, Field_X => FX, Field_W => FW);
+      IG.Rename_Field_Extent (Cell, IG.Icons_Large, Renaming => True, Field_X => WX, Field_W => WW);
+      Assert (FX = 30 and then FW = 180, "small-icons rename edits the label box");
+      Assert (WX < FX and then WW > FW, "large-icons rename widens the field across the inner cell");
+
+      --  A plain label is one text command, no chrome; renaming+focused adds the
+      --  border, focus ring and caret rectangles on top of the label.
+      Assert (Text_Count (Renaming => False, Focused => False) = 1000,
+              "a non-renaming item draws just its label");
+      Assert (Text_Count (Renaming => True, Focused => True) > 1000,
+              "renaming with focus adds chrome and a caret");
+   end Test_Name_Field;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

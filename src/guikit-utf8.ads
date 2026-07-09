@@ -74,4 +74,16 @@ package Guikit.Utf8 is
       Max_Units : Natural)
       return String;
 
+   --  The display width, in columns, of the first Cursor bytes of Content
+   --  (clamped to Content's length). Used to place a text caret at a byte
+   --  offset.
+   --
+   --  @param Content UTF-8 text.
+   --  @param Cursor Byte offset into Content.
+   --  @return Display columns before the cursor.
+   function Display_Units_Before
+     (Content : String;
+      Cursor  : Natural)
+      return Natural;
+
 end Guikit.Utf8;

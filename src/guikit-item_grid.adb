@@ -1,5 +1,6 @@
 with Guikit.Layout;
 with Guikit.Utf8;
+with Guikit.Widgets;
 
 package body Guikit.Item_Grid is
 
@@ -247,6 +248,111 @@ package body Guikit.Item_Grid is
                                                            Color => Color));
       end if;
    end Emit_Rect;
+
+   --  Append a one-pixel border (four clipped edges) around a box.
+   procedure Emit_Border
+     (Rectangles  : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Clip_Width  : Natural;
+      Clip_Height : Natural;
+      X, Y, W, H  : Natural;
+      Color       : Guikit.Draw.Render_Color) is
+   begin
+      if W = 0 or else H = 0 then
+         return;
+      end if;
+      Emit_Rect (Rectangles, Clip_Width, Clip_Height, X, Y, W, 1, Color);
+      Emit_Rect (Rectangles, Clip_Width, Clip_Height, X, Y, 1, H, Color);
+      Emit_Rect (Rectangles, Clip_Width, Clip_Height, X, Guikit.Layout.Saturating_Add (Y, H - 1), W, 1, Color);
+      Emit_Rect (Rectangles, Clip_Width, Clip_Height, Guikit.Layout.Saturating_Add (X, W - 1), Y, 1, H, Color);
+   end Emit_Border;
+
+   procedure Rename_Field_Extent
+     (Cell     : Item_Layout;
+      View     : View_Kind;
+      Renaming : Boolean;
+      Field_X  : out Natural;
+      Field_W  : out Natural)
+   is
+      function Add (L, R : Natural) return Natural renames Guikit.Layout.Saturating_Add;
+      function Mul (V, F : Natural) return Natural renames Guikit.Layout.Saturating_Multiply;
+      Wide : constant Boolean := Renaming and then View = Icons_Large;
+      Pad  : constant Natural := Natural'Min (Item_Content_Padding, Cell.Width / 2);
+   begin
+      Field_X := (if Wide then Add (Cell.X, Pad) else Cell.Text_X);
+      Field_W :=
+        (if Wide
+         then (if Cell.Width > Mul (Pad, 2) then Cell.Width - Mul (Pad, 2) else Cell.Width)
+         else Cell.Text_Width);
+   end Rename_Field_Extent;
+
+   procedure Draw_Name_Field
+     (Rectangles       : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text_Commands    : in out Guikit.Draw.Text_Command_Vectors.Vector;
+      Clip_Width       : Natural;
+      Clip_Height      : Natural;
+      Cell             : Item_Layout;
+      View             : View_Kind;
+      Renaming         : Boolean;
+      Focused          : Boolean;
+      Dim              : Boolean;
+      Text             : Unbounded_String;
+      Cursor           : Natural;
+      Line_Height      : Positive;
+      Text_Color       : Guikit.Draw.Render_Color;
+      Dim_Color        : Guikit.Draw.Render_Color;
+      Border_Color     : Guikit.Draw.Render_Color;
+      Focus_Ring_Color : Guikit.Draw.Render_Color;
+      Caret_Color      : Guikit.Draw.Render_Color)
+   is
+      function Add (L, R : Natural) return Natural renames Guikit.Layout.Saturating_Add;
+      function Mul (V, F : Natural) return Natural renames Guikit.Layout.Saturating_Multiply;
+      Pad_F   : constant Natural := Guikit.Layout.Input_Field_Padding;
+      Field_X : Natural;
+      Field_W : Natural;
+      Field_Y : constant Natural := Cell.Text_Y;
+      Label_H : constant Natural :=
+        (if Add (Cell.Y, Cell.Height) > Field_Y then Add (Cell.Y, Cell.Height) - Field_Y else 0);
+      Wide    : constant Boolean := Renaming and then View = Icons_Large;
+      Field_H : constant Natural :=
+        (if Wide then Natural'Min (Add (Line_Height, Mul (Pad_F, 2)), Label_H) else Cell.Height);
+   begin
+      Rename_Field_Extent (Cell, View, Renaming, Field_X, Field_W);
+      Draw_Fitted_Text
+        (Text_Commands, Clip_Width, Clip_Height, Field_X, Field_Y, Field_W,
+         Natural'Min (Line_Height, Cell.Height), Text, (if Dim then Dim_Color else Text_Color),
+         Line_Height, Fit => True, Italic => Dim);
+
+      if Renaming and then Focused then
+         Emit_Border (Rectangles, Clip_Width, Clip_Height, Cell.X, Cell.Y, Cell.Width, Cell.Height, Border_Color);
+         Guikit.Widgets.Draw_Focus_Ring
+           (Rectangles, Clip_Width, Clip_Height, Cell.X, Cell.Y, Cell.Width, Cell.Height, Focus_Ring_Color);
+         declare
+            Base    : constant Natural := (if Field_X > Pad_F then Field_X - Pad_F else 0);
+            Inset   : constant Natural := Field_X - Base;
+            Total_W : constant Natural := Add (Field_W, Inset);
+            Char_W  : constant Positive := Guikit.Layout.Caret_Advance_Width (Line_Height);
+            Raw     : constant String := To_String (Text);
+            Raw_X   : constant Natural :=
+              Add (Add (Base, Pad_F), Mul (Guikit.Utf8.Display_Units_Before (Raw, Cursor), Char_W));
+            Max_X   : constant Natural := (if Total_W > 2 then Add (Base, Total_W - 2) else Base);
+            Caret_H : constant Natural :=
+              Natural'Min ((if Field_H > 2 then Field_H - 2 else Field_H),
+                           Positive'Max (1, Mul (Line_Height, 4) / 5));
+            Bias    : constant Natural := Line_Height / 8;
+            Caret_Y : constant Natural :=
+              Natural'Min
+                (Add (Field_Y, Add ((if Field_H > Caret_H then (Field_H - Caret_H) / 2 else 0), Bias)),
+                 (if Field_H > Caret_H then Add (Field_Y, Field_H - Caret_H) else Field_Y));
+            Caret_W : constant Natural := Natural'Min (2, Total_W);
+         begin
+            if Total_W > 0 and then Caret_H > 4 then
+               Guikit.Widgets.Draw_Caret
+                 (Rectangles, Clip_Width, Clip_Height, Natural'Min (Raw_X, Max_X), Caret_Y, Caret_W, Caret_H,
+                  Caret_Color);
+            end if;
+         end;
+      end if;
+   end Draw_Name_Field;
 
    --  U+2026 HORIZONTAL ELLIPSIS, the truncation affordance.
    Ellipsis : constant String := Guikit.Utf8.Encode (16#2026#);
