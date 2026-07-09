@@ -27,6 +27,7 @@ package body Guikit_Suite.Item_Grid is
    procedure Test_Group_Header (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Details_Row (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Name_Field (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Indicators (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  Three stacked 100x20 rows, plus a non-selectable header row (index 0).
    function Sample return IG.Item_Layout_Vectors.Vector is
@@ -63,6 +64,8 @@ package body Guikit_Suite.Item_Grid is
         (T, Test_Details_Row'Access, "Draw_Details_Row emits the separator, visible columns and time tooltips");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Name_Field'Access, "Draw_Name_Field draws the label and, when renaming+focused, chrome and a caret");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Indicators'Access, "Draw_Item_Indicators draws the favorite star and color-label dot per flag");
    end Register_Tests;
 
    procedure Test_Item_At (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -263,6 +266,29 @@ package body Guikit_Suite.Item_Grid is
       Assert (Text_Count (Renaming => True, Focused => True) > 1000,
               "renaming with focus adds chrome and a caret");
    end Test_Name_Field;
+
+   procedure Test_Indicators (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Ada.Strings.Unbounded;
+      Cell : constant IG.Item_Layout :=
+        (Visible_Index => 1, X => 0, Y => 0, Width => 60, Height => 60,
+         Icon_X => 6, Icon_Y => 6, Icon_Size => 48, others => 0);
+
+      --  Returns text-count * 1000 + rect-count.
+      function Drawn (Favorite, Has_Label : Boolean) return Natural is
+         R  : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         Tx : Guikit.Draw.Text_Command_Vectors.Vector;
+      begin
+         IG.Draw_Item_Indicators (R, Tx, 400, 400, Cell, 20, Favorite, To_Unbounded_String ("*"),
+                                 Guikit.Draw.Selection_Color, Has_Label, Guikit.Draw.Selection_Color);
+         return Natural (Tx.Length) * 1000 + Natural (R.Length);
+      end Drawn;
+   begin
+      Assert (Drawn (False, False) = 0, "no indicators when neither flag is set");
+      Assert (Drawn (True, False) = 1000, "the favorite star is a glyph, no rect");
+      Assert (Drawn (False, True) = 1, "the color-label dot is a rect, no glyph");
+      Assert (Drawn (True, True) = 1001, "both indicators draw together");
+   end Test_Indicators;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

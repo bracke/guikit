@@ -322,6 +322,34 @@ package Guikit.Item_Grid is
       Focus_Ring_Color : Guikit.Draw.Render_Color;
       Caret_Color      : Guikit.Draw.Render_Color);
 
+   --  Draw an item's corner indicators over its icon: a favorite star glyph in
+   --  the top-left corner and a filled color-label dot in the bottom-right. Each
+   --  is drawn only when its flag is set and the cell has an icon.
+   --
+   --  @param Rectangles Rectangle command vector.
+   --  @param Text_Commands Text command vector.
+   --  @param Clip_Width Drawable window width in pixels.
+   --  @param Clip_Height Drawable window height in pixels.
+   --  @param Cell The item cell geometry (icon box is used).
+   --  @param Line_Height Text line height in pixels.
+   --  @param Favorite Whether to draw the favorite star.
+   --  @param Star_Glyph The star glyph text.
+   --  @param Star_Color The star colour.
+   --  @param Has_Label Whether to draw the color-label dot.
+   --  @param Label_Color The label dot colour.
+   procedure Draw_Item_Indicators
+     (Rectangles    : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text_Commands : in out Guikit.Draw.Text_Command_Vectors.Vector;
+      Clip_Width    : Natural;
+      Clip_Height   : Natural;
+      Cell          : Item_Layout;
+      Line_Height   : Positive;
+      Favorite      : Boolean;
+      Star_Glyph    : Ada.Strings.Unbounded.Unbounded_String;
+      Star_Color    : Guikit.Draw.Render_Color;
+      Has_Label     : Boolean;
+      Label_Color   : Guikit.Draw.Render_Color);
+
    --  The visible index of the item whose cell rectangle contains (X, Y), or 0
    --  when the point is over no item (empty space or a group header).
    --

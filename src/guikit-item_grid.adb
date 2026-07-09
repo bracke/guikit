@@ -551,6 +551,44 @@ package body Guikit.Item_Grid is
       end case;
    end Draw_Item_Background;
 
+   procedure Draw_Item_Indicators
+     (Rectangles    : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text_Commands : in out Guikit.Draw.Text_Command_Vectors.Vector;
+      Clip_Width    : Natural;
+      Clip_Height   : Natural;
+      Cell          : Item_Layout;
+      Line_Height   : Positive;
+      Favorite      : Boolean;
+      Star_Glyph    : Unbounded_String;
+      Star_Color    : Guikit.Draw.Render_Color;
+      Has_Label     : Boolean;
+      Label_Color   : Guikit.Draw.Render_Color)
+   is
+      function Add (L, R : Natural) return Natural renames Guikit.Layout.Saturating_Add;
+   begin
+      if Favorite and then Cell.Icon_Size > 0 then
+         declare
+            Star_Box : constant Natural :=
+              Natural'Max (Guikit.Layout.Caret_Advance_Width (Line_Height), Cell.Icon_Size / 2);
+         begin
+            Draw_Fitted_Text (Text_Commands, Clip_Width, Clip_Height, Cell.Icon_X, Cell.Icon_Y,
+                              Star_Box, Star_Box, Star_Glyph, Star_Color, Line_Height, Fit => False);
+         end;
+      end if;
+
+      if Has_Label and then Cell.Icon_Size > 0 then
+         declare
+            Dot   : constant Natural := Natural'Max (4, Cell.Icon_Size / 4);
+            Right : constant Natural := Add (Cell.Icon_X, Cell.Icon_Size);
+            Bot   : constant Natural := Add (Cell.Icon_Y, Cell.Icon_Size);
+            Dot_X : constant Natural := (if Right > Dot then Right - Dot else Cell.Icon_X);
+            Dot_Y : constant Natural := (if Bot > Dot then Bot - Dot else Cell.Icon_Y);
+         begin
+            Emit_Rect (Rectangles, Clip_Width, Clip_Height, Dot_X, Dot_Y, Dot, Dot, Label_Color);
+         end;
+      end if;
+   end Draw_Item_Indicators;
+
    --  Whether point (Px, Py) lies inside the half-open rectangle
    --  [X, X + W) x [Y, Y + H).
    function Contains_Point (X, Y, W, H, Px, Py : Natural) return Boolean is
