@@ -68,6 +68,10 @@ package Guikit.Input is
       Key_End,
       Key_Page_Up,
       Key_Page_Down,
-      Key_Space);
+      Key_Space,
+      Key_5, Key_6, Key_7, Key_8, Key_9,
+      Key_E, Key_G, Key_H, Key_J, Key_K, Key_M, Key_O, Key_Q, Key_T, Key_U, Key_W, Key_Y,
+      Key_F1, Key_F3, Key_F4, Key_F6, Key_F7, Key_F8, Key_F9, Key_F10, Key_F11, Key_F12,
+      Key_Tab, Key_Insert);
 
 end Guikit.Input;
