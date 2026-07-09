@@ -426,10 +426,15 @@ package body Guikit.Layout is
    is
       Wanted_W : constant Natural := Natural'Max (440, Scaled_Down (Width, 4, 5));
       Pane_W : constant Natural := Natural'Min (Width, Wanted_W);
+      --  Height for a typical settings section's rows plus the title, tab
+      --  switcher, and footer chrome. A section is one tab's worth of fields, not
+      --  the whole form, so this stays compact; a section taller than this (or the
+      --  Height / 3 floor below) scrolls inside the pane rather than growing it.
+      Section_Rows : constant := 15;
       Content_H : constant Natural :=
         Saturating_Add
-          (Saturating_Multiply (Line_Height, 22),
-           Saturating_Multiply (Settings_Row_Gap, 21));
+          (Saturating_Multiply (Line_Height, Section_Rows),
+           Saturating_Multiply (Settings_Row_Gap, Section_Rows - 1));
       Wanted_H : constant Natural :=
         Natural'Max
           (Saturating_Add (Content_H, Saturating_Multiply (Settings_Pane_Padding, 2)),

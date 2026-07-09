@@ -221,7 +221,7 @@ package body Guikit_Suite.Layout is
       Assert (Pane.Width = 800, "the pane is four fifths of a wide window");
       Assert (Pane.X = 100, "the pane is horizontally centered");
       Assert (Pane.Y = 133, "the pane starts below a proportional top margin");
-      Assert (Pane.Height = 636, "the pane is tall enough for its content rows");
+      Assert (Pane.Height = 440, "the pane is tall enough for a section's content rows");
       Assert (Pane.Text_X = 114, "the inner text column is inset by the pane padding");
       Assert (Pane.Text_Y = 147, "the inner text top is inset by the pane padding");
       Assert (Pane.Text_Width = 772, "the inner text column spans the pane less both paddings");
