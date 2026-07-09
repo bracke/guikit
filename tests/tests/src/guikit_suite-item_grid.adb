@@ -24,6 +24,7 @@ package body Guikit_Suite.Item_Grid is
    procedure Test_Cell_Metrics (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Calculate_Layout (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Background (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Group_Header (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  Three stacked 100x20 rows, plus a non-selectable header row (index 0).
    function Sample return IG.Item_Layout_Vectors.Vector is
@@ -54,6 +55,8 @@ package body Guikit_Suite.Item_Grid is
         (T, Test_Calculate_Layout'Access, "Calculate_Layout stacks rows, scrolls, and keeps details columns");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Background'Access, "Draw_Item_Background paints per state and nothing when bare");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Group_Header'Access, "Draw_Group_Header emits fill, caption, separator and a disabled node");
    end Register_Tests;
 
    procedure Test_Item_At (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -167,6 +170,33 @@ package body Guikit_Suite.Item_Grid is
       Assert (Painted (IG.Selected) = 6, "selection adds a left accent stripe over the fill+border");
       Assert (Painted (IG.Drop_Target) = 6, "a drop target is fill, border, and an accent stripe");
    end Test_Background;
+
+   procedure Test_Group_Header (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Ada.Strings.Unbounded;
+      Cell : constant IG.Item_Layout :=
+        (Visible_Index => 0, X => 0, Y => 0, Width => 200, Height => 24,
+         Text_X => 4, Text_Y => 4, Text_Width => 190, others => 0);
+      Rects : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text  : Guikit.Draw.Text_Command_Vectors.Vector;
+      Nodes : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+
+      --  A too-narrow box truncates a long caption with an ellipsis.
+      Fitted : Guikit.Draw.Text_Command_Vectors.Vector;
+   begin
+      IG.Draw_Group_Header (Rects, Text, Nodes, 400, 400, Cell, To_Unbounded_String ("Images"),
+                            20, Guikit.Draw.Pane_Color, Guikit.Draw.Muted_Text_Color, Guikit.Draw.Border_Color);
+      Assert (Natural (Rects.Length) = 2, "a header draws its fill and a bottom separator");
+      Assert (Natural (Text.Length) = 1, "a header draws its caption");
+      Assert (Natural (Nodes.Length) = 1 and then not Nodes.First_Element.Enabled,
+              "a header emits one non-selectable accessibility node");
+
+      IG.Draw_Fitted_Text (Fitted, 400, 400, X => 0, Y => 0, Width => 30, Height => 20,
+                           Text => To_Unbounded_String ("a-very-long-file-name.txt"),
+                           Color => Guikit.Draw.Text_Color, Line_Height => 20, Fit => True);
+      Assert (Natural (Fitted.Length) = 1 and then Fitted.First_Element.Truncated,
+              "text wider than its box is fitted and marked truncated");
+   end Test_Group_Header;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

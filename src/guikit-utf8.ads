@@ -62,4 +62,16 @@ package Guikit.Utf8 is
    --  @return The UTF-8 bytes, or "" when Codepoint is not encodable.
    function Encode (Codepoint : Natural) return String;
 
+   --  The longest prefix of Content whose display width does not exceed
+   --  Max_Units display columns, cut on a codepoint boundary. Empty when
+   --  Max_Units is 0 or Content is empty.
+   --
+   --  @param Content UTF-8 text.
+   --  @param Max_Units Maximum display columns.
+   --  @return The fitting prefix of Content.
+   function Prefix_By_Units
+     (Content   : String;
+      Max_Units : Natural)
+      return String;
+
 end Guikit.Utf8;

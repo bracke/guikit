@@ -231,6 +231,114 @@ package body Guikit.Item_Grid is
       elsif Start + Size > Limit then Limit - Start
       else Size);
 
+   --  Append one rectangle clamped to the drawable clip rectangle.
+   procedure Emit_Rect
+     (Rectangles  : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Clip_Width  : Natural;
+      Clip_Height : Natural;
+      X, Y, W, H  : Natural;
+      Color       : Guikit.Draw.Render_Color)
+   is
+      RW : constant Natural := Clip_Extent (X, W, Clip_Width);
+      RH : constant Natural := Clip_Extent (Y, H, Clip_Height);
+   begin
+      if RW > 0 and then RH > 0 then
+         Rectangles.Append (Guikit.Draw.Rectangle_Command'(X => X, Y => Y, Width => RW, Height => RH,
+                                                           Color => Color));
+      end if;
+   end Emit_Rect;
+
+   --  U+2026 HORIZONTAL ELLIPSIS, the truncation affordance.
+   Ellipsis : constant String := Guikit.Utf8.Encode (16#2026#);
+
+   --  The text truncated to Capacity display columns with a trailing ellipsis,
+   --  trimming a dangling '.' or ' ' before the ellipsis. Short of two columns
+   --  it hard-cuts without an ellipsis.
+   function Fitted_Text (Text : Unbounded_String; Capacity : Natural) return Unbounded_String is
+      Raw : constant String := To_String (Text);
+   begin
+      if Capacity = 0 then
+         return Null_Unbounded_String;
+      elsif Guikit.Utf8.Display_Units (Raw) <= Capacity then
+         return Text;
+      elsif Capacity < 2 then
+         return To_Unbounded_String (Guikit.Utf8.Prefix_By_Units (Raw, Capacity));
+      else
+         declare
+            Prefix  : constant String := Guikit.Utf8.Prefix_By_Units (Raw, Capacity - 1);
+            Trimmed : constant String :=
+              (if Prefix'Length > 0
+                 and then (Prefix (Prefix'Last) = '.' or else Prefix (Prefix'Last) = ' ')
+               then Prefix (Prefix'First .. Prefix'Last - 1)
+               else Prefix);
+         begin
+            if Trimmed = "" then
+               return To_Unbounded_String (Guikit.Utf8.Prefix_By_Units (Raw, Capacity));
+            else
+               return To_Unbounded_String (Trimmed & Ellipsis);
+            end if;
+         end;
+      end if;
+   end Fitted_Text;
+
+   procedure Draw_Fitted_Text
+     (Text_Commands : in out Guikit.Draw.Text_Command_Vectors.Vector;
+      Clip_Width    : Natural;
+      Clip_Height   : Natural;
+      X             : Natural;
+      Y             : Natural;
+      Width         : Natural;
+      Height        : Natural;
+      Text          : Unbounded_String;
+      Color         : Guikit.Draw.Render_Color;
+      Line_Height   : Positive;
+      Fit           : Boolean := True;
+      Italic        : Boolean := False)
+   is
+      Draw_W   : constant Natural := Clip_Extent (X, Width, Clip_Width);
+      Draw_H   : constant Natural := Clip_Extent (Y, Height, Clip_Height);
+      Cell_W   : constant Positive := Positive'Max (1, Guikit.Layout.Saturating_Multiply (Line_Height, 12) / 20);
+      Capacity : constant Natural := Draw_W / Cell_W;
+      Raw      : constant String := To_String (Text);
+      Result   : constant Unbounded_String := (if Fit then Fitted_Text (Text, Capacity) else Text);
+      Truncated : constant Boolean := Fit and then To_String (Result) /= Raw;
+   begin
+      if Draw_W > 0 and then Draw_H > 0 and then Length (Result) > 0 then
+         Text_Commands.Append
+           (Guikit.Draw.Text_Command'
+              (X => X, Y => Y, Width => Draw_W, Height => Draw_H, Text => Result, Color => Color,
+               Truncated => Truncated, Scale_To_Box => False, Italic => Italic));
+      end if;
+   end Draw_Fitted_Text;
+
+   procedure Draw_Group_Header
+     (Rectangles       : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text_Commands    : in out Guikit.Draw.Text_Command_Vectors.Vector;
+      Accessibility    : in out Guikit.Draw.Accessibility_Node_Vectors.Vector;
+      Clip_Width       : Natural;
+      Clip_Height      : Natural;
+      Cell             : Item_Layout;
+      Label            : Unbounded_String;
+      Line_Height      : Positive;
+      Background_Color  : Guikit.Draw.Render_Color;
+      Label_Color      : Guikit.Draw.Render_Color;
+      Border_Color     : Guikit.Draw.Render_Color) is
+   begin
+      Emit_Rect (Rectangles, Clip_Width, Clip_Height, Cell.X, Cell.Y, Cell.Width, Cell.Height, Background_Color);
+      Draw_Fitted_Text
+        (Text_Commands, Clip_Width, Clip_Height, Cell.Text_X, Cell.Text_Y, Cell.Text_Width,
+         Natural'Min (Line_Height, Cell.Height), Label, Label_Color, Line_Height, Fit => True);
+      if Cell.Height > 0 then
+         Emit_Rect (Rectangles, Clip_Width, Clip_Height, Cell.X, Cell.Y + Cell.Height - 1, Cell.Width, 1,
+                    Border_Color);
+      end if;
+      Accessibility.Append
+        (Guikit.Draw.Accessibility_Node'
+           (Role => Guikit.Draw.Role_Table_Row, X => Cell.X, Y => Cell.Y, Width => Cell.Width,
+            Height => Cell.Height, Name => Label, Description => Label,
+            Enabled => False, Selected => False, Focused => False));
+   end Draw_Group_Header;
+
    procedure Draw_Item_Background
      (Rectangles      : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
       Clip_Width      : Natural;

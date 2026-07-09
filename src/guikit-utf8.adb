@@ -157,6 +157,47 @@ package body Guikit.Utf8 is
       return Units;
    end Display_Units;
 
+   function Prefix_By_Units
+     (Content   : String;
+      Max_Units : Natural)
+      return String
+   is
+      Index     : Integer := Content'First;
+      Last      : Integer := Content'First - 1;
+      Units     : Natural := 0;
+      Codepoint : Natural := 0;
+      Width     : Natural := 0;
+   begin
+      if Max_Units = 0 or else Content'Length = 0 then
+         return "";
+      end if;
+
+      while Index <= Content'Last loop
+         declare
+            Start : constant Integer := Index;
+         begin
+            Decode_Next_Codepoint (Content, Index, Codepoint);
+            Width := Codepoint_Display_Units (Codepoint);
+            exit when Saturating_Add (Units, Width) > Max_Units;
+
+            Units := Saturating_Add (Units, Width);
+            Last := Index - 1;
+         exception
+            when Constraint_Error =>
+               Index := Start + 1;
+               exit when Saturating_Add (Units, 1) > Max_Units;
+               Units := Saturating_Add (Units, 1);
+               Last := Start;
+         end;
+      end loop;
+
+      if Last < Content'First then
+         return "";
+      end if;
+
+      return Content (Content'First .. Last);
+   end Prefix_By_Units;
+
    function Is_Whitespace_Separator_Codepoint
      (Codepoint : Natural)
       return Boolean is

@@ -161,6 +161,65 @@ package Guikit.Item_Grid is
       Border_Color    : Guikit.Draw.Render_Color;
       Alternate_Color : Guikit.Draw.Render_Color);
 
+   --  Emit a text command fitted to a box: measured against the box width in
+   --  display columns and, when Fit, truncated on a codepoint boundary with a
+   --  trailing ellipsis. The box is clipped to the drawable rectangle; an empty
+   --  result emits nothing.
+   --
+   --  @param Text_Commands Text command vector to append to.
+   --  @param Clip_Width Drawable window width in pixels.
+   --  @param Clip_Height Drawable window height in pixels.
+   --  @param X Text box left edge in pixels.
+   --  @param Y Text box top edge in pixels.
+   --  @param Width Text box width in pixels.
+   --  @param Height Text box height in pixels.
+   --  @param Text The text to draw.
+   --  @param Color Text colour.
+   --  @param Line_Height Text line height in pixels (drives column width).
+   --  @param Fit Whether to truncate to the box width with an ellipsis.
+   --  @param Italic Whether to render italic.
+   procedure Draw_Fitted_Text
+     (Text_Commands : in out Guikit.Draw.Text_Command_Vectors.Vector;
+      Clip_Width    : Natural;
+      Clip_Height   : Natural;
+      X             : Natural;
+      Y             : Natural;
+      Width         : Natural;
+      Height        : Natural;
+      Text          : Ada.Strings.Unbounded.Unbounded_String;
+      Color         : Guikit.Draw.Render_Color;
+      Line_Height   : Positive;
+      Fit           : Boolean := True;
+      Italic        : Boolean := False);
+
+   --  Draw a grouping band-header row: a subdued fill, a muted fitted caption at
+   --  the cell's text box, a one-pixel bottom separator, and a non-selectable
+   --  accessibility node.
+   --
+   --  @param Rectangles Rectangle command vector.
+   --  @param Text_Commands Text command vector.
+   --  @param Accessibility Accessibility node vector.
+   --  @param Clip_Width Drawable window width in pixels.
+   --  @param Clip_Height Drawable window height in pixels.
+   --  @param Cell The group-header row geometry.
+   --  @param Label The band caption.
+   --  @param Line_Height Text line height in pixels.
+   --  @param Background_Color Subdued row fill colour.
+   --  @param Label_Color Muted caption colour.
+   --  @param Border_Color Bottom separator colour.
+   procedure Draw_Group_Header
+     (Rectangles       : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text_Commands    : in out Guikit.Draw.Text_Command_Vectors.Vector;
+      Accessibility    : in out Guikit.Draw.Accessibility_Node_Vectors.Vector;
+      Clip_Width       : Natural;
+      Clip_Height      : Natural;
+      Cell             : Item_Layout;
+      Label            : Ada.Strings.Unbounded.Unbounded_String;
+      Line_Height      : Positive;
+      Background_Color : Guikit.Draw.Render_Color;
+      Label_Color      : Guikit.Draw.Render_Color;
+      Border_Color     : Guikit.Draw.Render_Color);
+
    --  The visible index of the item whose cell rectangle contains (X, Y), or 0
    --  when the point is over no item (empty space or a group header).
    --
