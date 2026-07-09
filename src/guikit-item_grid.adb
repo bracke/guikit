@@ -507,24 +507,13 @@ package body Guikit.Item_Grid is
       Alternate_Color : Guikit.Draw.Render_Color)
    is
       procedure Add_Rect (X, Y, W, H : Natural; Color : Guikit.Draw.Render_Color) is
-         RW : constant Natural := Clip_Extent (X, W, Clip_Width);
-         RH : constant Natural := Clip_Extent (Y, H, Clip_Height);
       begin
-         if RW > 0 and then RH > 0 then
-            Rectangles.Append (Guikit.Draw.Rectangle_Command'(X => X, Y => Y, Width => RW, Height => RH,
-                                                              Color => Color));
-         end if;
+         Emit_Rect (Rectangles, Clip_Width, Clip_Height, X, Y, W, H, Color);
       end Add_Rect;
 
       procedure Add_Border (X, Y, W, H : Natural; Color : Guikit.Draw.Render_Color) is
       begin
-         if W = 0 or else H = 0 then
-            return;
-         end if;
-         Add_Rect (X, Y, W, 1, Color);
-         Add_Rect (X, Y, 1, H, Color);
-         Add_Rect (X, Guikit.Layout.Saturating_Add (Y, H - 1), W, 1, Color);
-         Add_Rect (Guikit.Layout.Saturating_Add (X, W - 1), Y, 1, H, Color);
+         Emit_Border (Rectangles, Clip_Width, Clip_Height, X, Y, W, H, Color);
       end Add_Border;
 
       CX : constant Natural := Cell.X;
