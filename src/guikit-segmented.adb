@@ -14,17 +14,18 @@ package body Guikit.Segmented is
       Cell_W : constant Natural := Guikit.Layout.Caret_Advance_Width (Line_Height);
       Base   : constant Natural := Guikit.Layout.Label_Pixel_Width (To_String (S.Label), Cell_W);
    begin
-      return Positive'Max (Line_Height, Base + 2 * Segment_Padding);
+      return Positive'Max (Line_Height, Guikit.Layout.Saturating_Add (Base, 2 * Segment_Padding));
    end Desired_Width;
 
-   --  Sum of the desired widths of the first Upto cells (0 .. length).
+   --  Sum of the desired widths of the first Upto cells (0 .. length), saturating
+   --  so an extreme line height cannot overflow the running total.
    function Prefix_Width
      (Segments : Segment_Vectors.Vector; Line_Height : Positive; Upto : Natural) return Natural
    is
       Sum : Natural := 0;
    begin
       for Cell in 1 .. Upto loop
-         Sum := Sum + Desired_Width (Segments.Element (Cell), Line_Height);
+         Sum := Guikit.Layout.Saturating_Add (Sum, Desired_Width (Segments.Element (Cell), Line_Height));
       end loop;
       return Sum;
    end Prefix_Width;
@@ -57,7 +58,7 @@ package body Guikit.Segmented is
          Left  : constant Natural := Scaled (Prefix_Width (Segments, Line_Height, Cell - 1));
          Right : constant Natural := Scaled (Prefix_Width (Segments, Line_Height, Cell));
       begin
-         X := Region_X + Left;
+         X := Guikit.Layout.Saturating_Add (Region_X, Left);
          Width := Right - Left;
       end;
    end Cell_Bounds;
