@@ -225,6 +225,68 @@ package body Guikit.Item_Grid is
       return Result;
    end Calculate_Layout;
 
+   --  The visible extent of a span [Start, Start + Size) clamped to [0, Limit).
+   function Clip_Extent (Start, Size, Limit : Natural) return Natural is
+     (if Start >= Limit then 0
+      elsif Start + Size > Limit then Limit - Start
+      else Size);
+
+   procedure Draw_Item_Background
+     (Rectangles      : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Clip_Width      : Natural;
+      Clip_Height     : Natural;
+      Cell            : Item_Layout;
+      Kind            : Background_Kind;
+      Selection_Color : Guikit.Draw.Render_Color;
+      Hover_Color     : Guikit.Draw.Render_Color;
+      Border_Color    : Guikit.Draw.Render_Color;
+      Alternate_Color : Guikit.Draw.Render_Color)
+   is
+      procedure Add_Rect (X, Y, W, H : Natural; Color : Guikit.Draw.Render_Color) is
+         RW : constant Natural := Clip_Extent (X, W, Clip_Width);
+         RH : constant Natural := Clip_Extent (Y, H, Clip_Height);
+      begin
+         if RW > 0 and then RH > 0 then
+            Rectangles.Append (Guikit.Draw.Rectangle_Command'(X => X, Y => Y, Width => RW, Height => RH,
+                                                              Color => Color));
+         end if;
+      end Add_Rect;
+
+      procedure Add_Border (X, Y, W, H : Natural; Color : Guikit.Draw.Render_Color) is
+      begin
+         if W = 0 or else H = 0 then
+            return;
+         end if;
+         Add_Rect (X, Y, W, 1, Color);
+         Add_Rect (X, Y, 1, H, Color);
+         Add_Rect (X, Guikit.Layout.Saturating_Add (Y, H - 1), W, 1, Color);
+         Add_Rect (Guikit.Layout.Saturating_Add (X, W - 1), Y, 1, H, Color);
+      end Add_Border;
+
+      CX : constant Natural := Cell.X;
+      CY : constant Natural := Cell.Y;
+      CW : constant Natural := Cell.Width;
+      CH : constant Natural := Cell.Height;
+   begin
+      case Kind is
+         when No_Background =>
+            null;
+         when Alternate =>
+            Add_Rect (CX, CY, CW, CH, Alternate_Color);
+         when Hovered =>
+            Add_Rect (CX, CY, CW, CH, Hover_Color);
+            Add_Border (CX, CY, CW, CH, Hover_Color);
+         when Selected =>
+            Add_Rect (CX, CY, CW, CH, Selection_Color);
+            Add_Border (CX, CY, CW, CH, Selection_Color);
+            Add_Rect (CX, CY, Natural'Min (3, CW), CH, Border_Color);
+         when Drop_Target =>
+            Add_Rect (CX, CY, CW, CH, Hover_Color);
+            Add_Border (CX, CY, CW, CH, Selection_Color);
+            Add_Rect (CX, CY, Natural'Min (4, CW), CH, Selection_Color);
+      end case;
+   end Draw_Item_Background;
+
    --  Whether point (Px, Py) lies inside the half-open rectangle
    --  [X, X + W) x [Y, Y + H).
    function Contains_Point (X, Y, W, H, Px, Py : Natural) return Boolean is

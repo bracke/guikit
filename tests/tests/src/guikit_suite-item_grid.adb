@@ -5,6 +5,7 @@ with AUnit.Assertions;
 with AUnit.Test_Cases;
 
 with Guikit.Item_Grid;
+with Guikit.Draw;
 
 --  Exercises the item-grid geometry: pointer-to-item hit-testing, marquee
 --  rectangle normalisation, and the items a marquee rectangle covers.
@@ -22,6 +23,7 @@ package body Guikit_Suite.Item_Grid is
    procedure Test_Marquee (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Cell_Metrics (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Calculate_Layout (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Background (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  Three stacked 100x20 rows, plus a non-selectable header row (index 0).
    function Sample return IG.Item_Layout_Vectors.Vector is
@@ -50,6 +52,8 @@ package body Guikit_Suite.Item_Grid is
         (T, Test_Cell_Metrics'Access, "Cell_Metrics_For sizes the cell per view mode");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Calculate_Layout'Access, "Calculate_Layout stacks rows, scrolls, and keeps details columns");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Background'Access, "Draw_Item_Background paints per state and nothing when bare");
    end Register_Tests;
 
    procedure Test_Item_At (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -140,6 +144,29 @@ package body Guikit_Suite.Item_Grid is
          Assert (L (1).Height = 0, "a row scrolled fully above the viewport has zero height");
       end;
    end Test_Calculate_Layout;
+
+   procedure Test_Background (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      Cell : constant IG.Item_Layout :=
+        (Visible_Index => 1, X => 0, Y => 0, Width => 100, Height => 20, others => 0);
+      Sel  : constant Guikit.Draw.Render_Color := Guikit.Draw.Selection_Color;
+      Hov  : constant Guikit.Draw.Render_Color := Guikit.Draw.Hover_Color;
+      Bor  : constant Guikit.Draw.Render_Color := Guikit.Draw.Border_Color;
+      Alt  : constant Guikit.Draw.Render_Color := Guikit.Draw.Pane_Color;
+
+      function Painted (Kind : IG.Background_Kind) return Natural is
+         R : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      begin
+         IG.Draw_Item_Background (R, 200, 200, Cell, Kind, Sel, Hov, Bor, Alt);
+         return Natural (R.Length);
+      end Painted;
+   begin
+      Assert (Painted (IG.No_Background) = 0, "a bare cell paints nothing");
+      Assert (Painted (IG.Alternate) = 1, "an alternate row is a single fill");
+      Assert (Painted (IG.Hovered) = 5, "hover is a fill plus a four-edge border");
+      Assert (Painted (IG.Selected) = 6, "selection adds a left accent stripe over the fill+border");
+      Assert (Painted (IG.Drop_Target) = 6, "a drop target is fill, border, and an accent stripe");
+   end Test_Background;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

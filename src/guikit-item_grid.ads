@@ -1,6 +1,8 @@
 with Ada.Containers.Vectors;
 with Ada.Strings.Unbounded;
 
+with Guikit.Draw;
+
 --  A reusable item grid: the file-listing surface shared by a file manager and
 --  similar list/grid views. This is the geometry and hit-testing foundation;
 --  rendering and rename-field editing are layered on in later revisions.
@@ -129,6 +131,35 @@ package Guikit.Item_Grid is
    package Visible_Index_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
       Element_Type => Positive);
+
+   --  Which background an item cell shows. In the caller's priority order a cell
+   --  is at most one of these; No_Background leaves the cell bare.
+   type Background_Kind is (No_Background, Alternate, Hovered, Selected, Drop_Target);
+
+   --  Paint one item cell's background into Rectangles: the fill and border plus
+   --  a left accent stripe for the selected and drop-target states, the plain
+   --  fill+border for hover, or the striped alternate-row fill. Everything is
+   --  clipped to the drawable rectangle.
+   --
+   --  @param Rectangles Rectangle command vector to append to.
+   --  @param Clip_Width Drawable window width in pixels.
+   --  @param Clip_Height Drawable window height in pixels.
+   --  @param Cell The cell geometry (X/Y/Width/Height are used).
+   --  @param Kind Which background to paint.
+   --  @param Selection_Color Selected fill / drop-target accent colour.
+   --  @param Hover_Color Hover and drop-target fill colour.
+   --  @param Border_Color Selected left-stripe colour.
+   --  @param Alternate_Color Striped alternate-row fill colour.
+   procedure Draw_Item_Background
+     (Rectangles      : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Clip_Width      : Natural;
+      Clip_Height     : Natural;
+      Cell            : Item_Layout;
+      Kind            : Background_Kind;
+      Selection_Color : Guikit.Draw.Render_Color;
+      Hover_Color     : Guikit.Draw.Render_Color;
+      Border_Color    : Guikit.Draw.Render_Color;
+      Alternate_Color : Guikit.Draw.Render_Color);
 
    --  The visible index of the item whose cell rectangle contains (X, Y), or 0
    --  when the point is over no item (empty space or a group header).
