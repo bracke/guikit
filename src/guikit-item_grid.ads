@@ -220,6 +220,50 @@ package Guikit.Item_Grid is
       Label_Color      : Guikit.Draw.Render_Color;
       Border_Color     : Guikit.Draw.Render_Color);
 
+   --  Draw a details-view data row: a one-pixel bottom separator and the five
+   --  optional columns, each fitted to its padded column box and dimmed+italic
+   --  when Dim, with a hover tooltip on the time columns when their tooltip text
+   --  is non-empty. A column of zero width is skipped. The caller supplies the
+   --  already-formatted column strings.
+   --
+   --  @param Rectangles Rectangle command vector.
+   --  @param Text_Commands Text command vector.
+   --  @param Tooltips Tooltip command vector.
+   --  @param Clip_Width Drawable window width in pixels.
+   --  @param Clip_Height Drawable window height in pixels.
+   --  @param Cell The row geometry (column x/width fields are used).
+   --  @param Line_Height Text line height in pixels.
+   --  @param Modified Formatted modified-time column value.
+   --  @param Size Formatted size column value.
+   --  @param Filetype Formatted filetype column value.
+   --  @param Created Formatted created-time column value.
+   --  @param Permissions Formatted permissions column value.
+   --  @param Modified_Tooltip Hover tooltip for the modified column, or empty.
+   --  @param Created_Tooltip Hover tooltip for the created column, or empty.
+   --  @param Dim Whether the row is dimmed (e.g. a cut item): italic + Dim_Color.
+   --  @param Value_Color Normal column text colour.
+   --  @param Dim_Color Dimmed column text colour.
+   --  @param Border_Color Bottom separator colour.
+   procedure Draw_Details_Row
+     (Rectangles       : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text_Commands    : in out Guikit.Draw.Text_Command_Vectors.Vector;
+      Tooltips         : in out Guikit.Draw.Tooltip_Command_Vectors.Vector;
+      Clip_Width       : Natural;
+      Clip_Height      : Natural;
+      Cell             : Item_Layout;
+      Line_Height      : Positive;
+      Modified         : Ada.Strings.Unbounded.Unbounded_String;
+      Size             : Ada.Strings.Unbounded.Unbounded_String;
+      Filetype         : Ada.Strings.Unbounded.Unbounded_String;
+      Created          : Ada.Strings.Unbounded.Unbounded_String;
+      Permissions      : Ada.Strings.Unbounded.Unbounded_String;
+      Modified_Tooltip : Ada.Strings.Unbounded.Unbounded_String;
+      Created_Tooltip  : Ada.Strings.Unbounded.Unbounded_String;
+      Dim              : Boolean;
+      Value_Color      : Guikit.Draw.Render_Color;
+      Dim_Color        : Guikit.Draw.Render_Color;
+      Border_Color     : Guikit.Draw.Render_Color);
+
    --  The visible index of the item whose cell rectangle contains (X, Y), or 0
    --  when the point is over no item (empty space or a group header).
    --

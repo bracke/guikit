@@ -339,6 +339,56 @@ package body Guikit.Item_Grid is
             Enabled => False, Selected => False, Focused => False));
    end Draw_Group_Header;
 
+   procedure Draw_Details_Row
+     (Rectangles       : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text_Commands    : in out Guikit.Draw.Text_Command_Vectors.Vector;
+      Tooltips         : in out Guikit.Draw.Tooltip_Command_Vectors.Vector;
+      Clip_Width       : Natural;
+      Clip_Height      : Natural;
+      Cell             : Item_Layout;
+      Line_Height      : Positive;
+      Modified         : Unbounded_String;
+      Size             : Unbounded_String;
+      Filetype         : Unbounded_String;
+      Created          : Unbounded_String;
+      Permissions      : Unbounded_String;
+      Modified_Tooltip : Unbounded_String;
+      Created_Tooltip  : Unbounded_String;
+      Dim              : Boolean;
+      Value_Color      : Guikit.Draw.Render_Color;
+      Dim_Color        : Guikit.Draw.Render_Color;
+      Border_Color     : Guikit.Draw.Render_Color)
+   is
+      Row_H : constant Natural := Natural'Min (Line_Height, Cell.Height);
+
+      procedure Column (Col_X, Col_W : Natural; Value, Tooltip : Unbounded_String) is
+         CX : constant Natural := Col_X + Details_Column_Padding;
+         CW : constant Natural := (if Col_W > Details_Column_Padding then Col_W - Details_Column_Padding else 0);
+      begin
+         if Col_W = 0 then
+            return;
+         end if;
+         Draw_Fitted_Text
+           (Text_Commands, Clip_Width, Clip_Height, CX, Cell.Text_Y, CW, Row_H, Value,
+            (if Dim then Dim_Color else Value_Color), Line_Height, Fit => True, Italic => Dim);
+         if Length (Tooltip) > 0 and then CW > 0 then
+            Tooltips.Append
+              (Guikit.Draw.Tooltip_Command'
+                 (X => CX, Y => Cell.Text_Y, Width => CW, Height => Row_H, Text => Tooltip));
+         end if;
+      end Column;
+   begin
+      if Cell.Height > 0 then
+         Emit_Rect (Rectangles, Clip_Width, Clip_Height, Cell.X, Cell.Y + Cell.Height - 1, Cell.Width, 1,
+                    Border_Color);
+      end if;
+      Column (Cell.Modified_X, Cell.Modified_Width, Modified, Modified_Tooltip);
+      Column (Cell.Size_X, Cell.Size_Width, Size, Null_Unbounded_String);
+      Column (Cell.Filetype_X, Cell.Filetype_Width, Filetype, Null_Unbounded_String);
+      Column (Cell.Created_X, Cell.Created_Width, Created, Created_Tooltip);
+      Column (Cell.Permissions_X, Cell.Permissions_Width, Permissions, Null_Unbounded_String);
+   end Draw_Details_Row;
+
    procedure Draw_Item_Background
      (Rectangles      : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
       Clip_Width      : Natural;

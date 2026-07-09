@@ -25,6 +25,7 @@ package body Guikit_Suite.Item_Grid is
    procedure Test_Calculate_Layout (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Background (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Group_Header (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Details_Row (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  Three stacked 100x20 rows, plus a non-selectable header row (index 0).
    function Sample return IG.Item_Layout_Vectors.Vector is
@@ -57,6 +58,8 @@ package body Guikit_Suite.Item_Grid is
         (T, Test_Background'Access, "Draw_Item_Background paints per state and nothing when bare");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Group_Header'Access, "Draw_Group_Header emits fill, caption, separator and a disabled node");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Details_Row'Access, "Draw_Details_Row emits the separator, visible columns and time tooltips");
    end Register_Tests;
 
    procedure Test_Item_At (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -197,6 +200,32 @@ package body Guikit_Suite.Item_Grid is
       Assert (Natural (Fitted.Length) = 1 and then Fitted.First_Element.Truncated,
               "text wider than its box is fitted and marked truncated");
    end Test_Group_Header;
+
+   procedure Test_Details_Row (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Ada.Strings.Unbounded;
+      --  Two visible columns: Modified (with a tooltip) and Size (no tooltip);
+      --  the other three columns have zero width and are skipped.
+      Cell : constant IG.Item_Layout :=
+        (Visible_Index => 1, X => 0, Y => 0, Width => 400, Height => 20, Text_Y => 4,
+         Modified_X => 40, Modified_Width => 120, Size_X => 160, Size_Width => 80, others => 0);
+      Rects : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text  : Guikit.Draw.Text_Command_Vectors.Vector;
+      Tips  : Guikit.Draw.Tooltip_Command_Vectors.Vector;
+
+      function U (S : String) return Unbounded_String renames To_Unbounded_String;
+   begin
+      IG.Draw_Details_Row
+        (Rects, Text, Tips, 800, 800, Cell, 20,
+         Modified => U ("2 days ago"), Size => U ("1.4 MB"), Filetype => U (""),
+         Created => U (""), Permissions => U (""),
+         Modified_Tooltip => U ("Mon 7 Jul 2026 10:00"), Created_Tooltip => U (""),
+         Dim => False, Value_Color => Guikit.Draw.Muted_Text_Color,
+         Dim_Color => Guikit.Draw.Muted_Text_Color, Border_Color => Guikit.Draw.Border_Color);
+      Assert (Natural (Rects.Length) = 1, "the row draws one bottom separator");
+      Assert (Natural (Text.Length) = 2, "only the two non-zero-width columns emit text");
+      Assert (Natural (Tips.Length) = 1, "only the modified column emits a tooltip");
+   end Test_Details_Row;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;
