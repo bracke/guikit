@@ -4392,38 +4392,44 @@ package body Guikit.Vulkan is
                end if;
             end loop;
 
+            --  Main-layer icons only. Overlay icons keep their atlas slot in the
+            --  index sequence (so every icon's UV still matches its atlas tile)
+            --  but are emitted later, in the overlay pass, so they sit on top of
+            --  an opaque overlay panel.
             for Icon of Icons loop
                if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
-                  declare
-                     Before : constant Natural := Natural (Result.Vertices.Length);
-                     U0     : constant Float :=
-                       (if Icon_Count = 0
-                        then 0.0
-                        else Float (Source_Icon_Index) / Float (Icon_Count));
-                     U1     : constant Float :=
-                       (if Icon_Count = 0
-                        then 0.0
-                        else Float (Source_Icon_Index + 1) / Float (Icon_Count));
-                  begin
-                     Append_Quad
-                       (X        => Float (Icon.X),
-                        Y        => Float (Icon.Y),
-                        Width    => Float (Icon.Size),
-                        Height   => Float (Icon.Size),
-                        U0       => U0,
-                        V0       => 0.0,
-                        U1       => U1,
-                        V1       => 1.0,
-                        Color    => Guikit.Draw.Icon_File_Color,
-                        Textured => True,
-                        Texture  => Texture_Icon_Atlas);
-                     Result.Icon_Vertex_Count :=
-                       Result.Icon_Vertex_Count + Natural (Result.Vertices.Length) - Before;
-                     if Natural (Result.Vertices.Length) > Before then
-                        Result.Icon_Quad_Count := Result.Icon_Quad_Count + 1;
-                     end if;
-                     Source_Icon_Index := Source_Icon_Index + 1;
-                  end;
+                  if not Icon.Overlay then
+                     declare
+                        Before : constant Natural := Natural (Result.Vertices.Length);
+                        U0     : constant Float :=
+                          (if Icon_Count = 0
+                           then 0.0
+                           else Float (Source_Icon_Index) / Float (Icon_Count));
+                        U1     : constant Float :=
+                          (if Icon_Count = 0
+                           then 0.0
+                           else Float (Source_Icon_Index + 1) / Float (Icon_Count));
+                     begin
+                        Append_Quad
+                          (X        => Float (Icon.X),
+                           Y        => Float (Icon.Y),
+                           Width    => Float (Icon.Size),
+                           Height   => Float (Icon.Size),
+                           U0       => U0,
+                           V0       => 0.0,
+                           U1       => U1,
+                           V1       => 1.0,
+                           Color    => Guikit.Draw.Icon_File_Color,
+                           Textured => True,
+                           Texture  => Texture_Icon_Atlas);
+                        Result.Icon_Vertex_Count :=
+                          Result.Icon_Vertex_Count + Natural (Result.Vertices.Length) - Before;
+                        if Natural (Result.Vertices.Length) > Before then
+                           Result.Icon_Quad_Count := Result.Icon_Quad_Count + 1;
+                        end if;
+                     end;
+                  end if;
+                  Source_Icon_Index := Source_Icon_Index + 1;
                end if;
             end loop;
          end;
@@ -4471,6 +4477,56 @@ package body Guikit.Vulkan is
                  Result.Overlay_Vertex_Count + Natural (Result.Vertices.Length) - Before;
             end;
          end loop;
+
+         --  Overlay-layer icons (e.g. the Quick Look image preview): emitted
+         --  after the overlay rectangles so they sit on top of the opaque panel,
+         --  using the same atlas index sequence as the main icon pass.
+         if Result.Icon_Atlas_Dirty then
+            declare
+               Source_Icon_Index : Natural := 0;
+               Icon_Count : Natural := 0;
+            begin
+               for Icon of Icons loop
+                  if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
+                     Icon_Count := Icon_Count + 1;
+                  end if;
+               end loop;
+
+               for Icon of Icons loop
+                  if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
+                     if Icon.Overlay then
+                        declare
+                           Before : constant Natural := Natural (Result.Vertices.Length);
+                           U0     : constant Float :=
+                             (if Icon_Count = 0
+                              then 0.0
+                              else Float (Source_Icon_Index) / Float (Icon_Count));
+                           U1     : constant Float :=
+                             (if Icon_Count = 0
+                              then 0.0
+                              else Float (Source_Icon_Index + 1) / Float (Icon_Count));
+                        begin
+                           Append_Quad
+                             (X        => Float (Icon.X),
+                              Y        => Float (Icon.Y),
+                              Width    => Float (Icon.Size),
+                              Height   => Float (Icon.Size),
+                              U0       => U0,
+                              V0       => 0.0,
+                              U1       => U1,
+                              V1       => 1.0,
+                              Color    => Guikit.Draw.Icon_File_Color,
+                              Textured => True,
+                              Texture  => Texture_Icon_Atlas);
+                           Result.Overlay_Vertex_Count :=
+                             Result.Overlay_Vertex_Count + Natural (Result.Vertices.Length) - Before;
+                        end;
+                     end if;
+                     Source_Icon_Index := Source_Icon_Index + 1;
+                  end if;
+               end loop;
+            end;
+         end if;
 
          for Glyph of Text.Overlay_Glyphs loop
             declare

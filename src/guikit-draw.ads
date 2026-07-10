@@ -187,6 +187,10 @@ package Guikit.Draw is
       Thumbnail_Width  : Natural := 0;
       Thumbnail_Height : Natural := 0;
       Thumbnail_Pixels : Byte_Vectors.Vector;
+      --  When True, the icon is composited in the overlay layer (after the main
+      --  grid's icons and text), so it sits on top of an opaque overlay panel
+      --  such as Quick Look rather than under the grid content.
+      Overlay          : Boolean := False;
    end record;
 
    package Icon_Command_Vectors is new Ada.Containers.Vectors
