@@ -319,10 +319,13 @@ package body Guikit.Layout is
       Sort_W         : constant Natural := (if After_View >= Preferred_Sort then Preferred_Sort else 0);
       Remaining      : constant Natural := After_View - Sort_W;
       Toggle_W       : constant Natural := Natural'Min (Remaining, Toggle_Wanted);
-      Info_W         : constant Natural := Remaining - Toggle_W;
       Sort_X         : constant Natural := Content_X + View_W;
       Info_X         : constant Natural := Content_X + View_W + Sort_W;
-      Toggle_X       : constant Natural := Content_X + View_W + Sort_W + Info_W;
+      --  Flush the info-pane toggle to the right window edge (dropping the trailing
+      --  content padding), and stretch the status region to fill up to it, so no
+      --  gap sits between the toggle and the window edge.
+      Toggle_X       : constant Natural := (if Width > Toggle_W then Width - Toggle_W else 0);
+      Info_W         : constant Natural := (if Toggle_X > Info_X then Toggle_X - Info_X else 0);
    begin
       return
         (View_Mode_X          => Content_X,

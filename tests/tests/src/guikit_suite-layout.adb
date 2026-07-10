@@ -181,7 +181,9 @@ package body Guikit_Suite.Layout is
       --  The info-pane toggle hugs its label (two paddings), here floored at the
       --  button minimum since the 30px label is short.
       Assert (Bar.Info_Pane_Width = 40, "the info-pane toggle is no wider than its label needs");
-      Assert (Bar.Info_Pane_X = 752, "the info pane toggle is pushed to the right");
+      Assert (Bar.Info_Pane_X + Bar.Info_Pane_Width = 800,
+              "the info-pane toggle is flush against the right window edge");
+      Assert (Bar.Info_Pane_X = 760, "the info pane toggle is right-aligned to the window edge");
 
       --  A longer info label is sized to label + two paddings, not the wider
       --  three-padding button spacing (which would give 60).
