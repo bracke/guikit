@@ -28,6 +28,7 @@ package body Guikit_Suite.Settings_Panel is
    procedure Test_Sections (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Shortcut_Capture (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Switch_Tooltip (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Field_Help (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function U (S : String) return Unbounded_String renames To_Unbounded_String;
 
@@ -87,6 +88,9 @@ package body Guikit_Suite.Settings_Panel is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Switch_Tooltip'Access,
          "hovering the tab switcher draws the configured tooltip; hovering elsewhere does not");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Field_Help'Access,
+         "the focused field's help renders in the footer, not only in the accessibility node");
    end Register_Tests;
 
    --  Two sections, one field each side, to exercise the section switcher.
@@ -292,6 +296,33 @@ package body Guikit_Suite.Settings_Panel is
                  "hovering a field row (not the switcher) draws no tooltip");
       end;
    end Test_Switch_Tooltip;
+
+   procedure Test_Field_Help (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      P     : SP.Panel;
+      Fields : SP.Field_Vectors.Vector;
+      Rects : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text  : Guikit.Draw.Text_Command_Vectors.Vector;
+      Nodes : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+
+      function Has_Text (S : String) return Boolean is
+      begin
+         for C of Text loop
+            if To_String (C.Text) = S then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Has_Text;
+   begin
+      Fields.Append
+        (SP.Field'(Key => U ("flag"), Label => U ("Flag"), Kind => SP.Toggle, Value => U ("false"),
+                   Help => U ("Toggle this to change behaviour."), others => <>));
+      SP.Set_Fields (P, Fields);
+      SP.Build_Frame (P, 0, 0, 500, 400, 500, 400, True, -1, -1, Rects, Text, Nodes);
+      Assert (Has_Text ("Toggle this to change behaviour."),
+              "the focused field's help is drawn as footer text");
+   end Test_Field_Help;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

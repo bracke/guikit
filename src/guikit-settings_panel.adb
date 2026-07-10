@@ -443,8 +443,15 @@ package body Guikit.Settings_Panel is
       --  Field indices rendered as rows now (preamble + active section), compact.
       Visible   : Index_Array (1 .. Natural'Max (1, N)) := (others => 0);
       Vis_N     : Natural := 0;
+      --  Footer content: a status/validation line takes precedence; otherwise the
+      --  focused field's help is shown, so per-field descriptions are visible and
+      --  not merely exposed to assistive tech.
+      Focused_Help : constant UString :=
+        (if P.Focused in 1 .. Natural (P.Fields.Length)
+         then P.Fields.Element (P.Focused).Help else Null_Unbounded_String);
       Has_Status : constant Boolean := Length (P.Config.Status) > 0;
-      Foot_H    : constant Natural  := (if Has_Status then Row_H else 0);
+      Has_Help   : constant Boolean := (not Has_Status) and then Length (Focused_Help) > 0;
+      Foot_H    : constant Natural  := (if Has_Status or else Has_Help then Row_H else 0);
       Rows_Bot  : constant Natural  :=
         (if Region_Height > Pad + Foot_H then Region_Y + Region_Height - Pad - Foot_H else Region_Y);
       Avail_H   : constant Natural  := (if Rows_Bot > Rows_Top then Rows_Bot - Rows_Top else 0);
@@ -766,6 +773,8 @@ package body Guikit.Settings_Panel is
             Add_Text (Content_X, Foot_Y, Content_W, P.Config.Status,
                       (if P.Config.Status_Is_Error then Guikit.Draw.Error_Text_Color
                        else Guikit.Draw.Muted_Text_Color));
+         elsif Has_Help then
+            Add_Text (Content_X, Foot_Y, Content_W, Focused_Help, Guikit.Draw.Muted_Text_Color);
          end if;
       end;
 
@@ -824,7 +833,7 @@ package body Guikit.Settings_Panel is
       --  enough because the switcher sits near the top of the pane.
       if Tab_Count > 1 and then Length (P.Config.Switch_Tooltip) > 0
         and then Hover_X >= Content_X and then Hover_X < Content_X + Content_W
-        and then Hover_Y >= Switch_Y and then Hover_Y < Switch_Y + LH
+        and then Hover_Y >= Switch_Y and then Hover_Y < Switch_Y + Row_H
       then
          declare
             Tip_Pad : constant Natural := 6;
