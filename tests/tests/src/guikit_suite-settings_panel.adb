@@ -27,6 +27,7 @@ package body Guikit_Suite.Settings_Panel is
    procedure Test_Build_Frame (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Sections (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Shortcut_Capture (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Switch_Tooltip (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function U (S : String) return Unbounded_String renames To_Unbounded_String;
 
@@ -83,6 +84,9 @@ package body Guikit_Suite.Settings_Panel is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Shortcut_Capture'Access,
          "a Shortcut row arms press-to-capture; commit emits the chord, cancel and focus-move disarm");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Switch_Tooltip'Access,
+         "hovering the tab switcher draws the configured tooltip; hovering elsewhere does not");
    end Register_Tests;
 
    --  Two sections, one field each side, to exercise the section switcher.
@@ -258,6 +262,36 @@ package body Guikit_Suite.Settings_Panel is
                  "a click inside the panel lands on a laid-out row");
       end;
    end Test_Shortcut_Capture;
+
+   procedure Test_Switch_Tooltip (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      P     : SP.Panel;
+      Cfg   : SP.Configuration;
+
+      function Rect_Count (Hover_X, Hover_Y : Integer) return Natural is
+         Rects : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         Text  : Guikit.Draw.Text_Command_Vectors.Vector;
+         Nodes : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+      begin
+         SP.Build_Frame (P, 0, 0, 500, 400, 500, 400, True, Hover_X, Hover_Y, Rects, Text, Nodes);
+         return Natural (Rects.Length);
+      end Rect_Count;
+   begin
+      Cfg.Switch_Tooltip := U ("Ctrl+Tab switches sections");
+      SP.Set_Configuration (P, Cfg);
+      SP.Set_Fields (P, Two_Sections);   --  two sections => the switcher is shown
+
+      --  The switcher row sits just below the title; a hover there adds the
+      --  tooltip's box/border rectangles over the off-window baseline.
+      declare
+         Off  : constant Natural := Rect_Count (-1, -1);
+         Over : constant Natural := Rect_Count (100, 50);
+      begin
+         Assert (Over > Off, "hovering the tab switcher draws the tooltip (extra rectangles)");
+         Assert (Rect_Count (100, 300) = Off,
+                 "hovering a field row (not the switcher) draws no tooltip");
+      end;
+   end Test_Switch_Tooltip;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

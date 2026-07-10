@@ -62,6 +62,9 @@ package Guikit.Settings_Panel is
       Title           : UString;             --  panel heading
       Status          : UString;             --  a status/validation line at the foot
       Status_Is_Error : Boolean := False;    --  colour the status line as an error
+      --  Hover tooltip shown over the section-tab switcher (empty for none). The
+      --  caller supplies the localized text; the panel keeps no domain wording.
+      Switch_Tooltip  : UString;
    end record;
 
    type Panel is private;
