@@ -309,11 +309,11 @@ package body Guikit.Layout is
         Saturating_Add (Small_Needed, Saturating_Add (Large_Needed, Details_Needed));
       Preferred_Sort : constant Natural := Sort_Needed;
       Toggle_Wanted  : constant Natural := Info_Needed;
-      Content_X      : constant Natural := (if Width > Saturating_Multiply (Bottom_Bar_Padding, 2)
-                                            then Bottom_Bar_Padding * 2 else 0);
-      Content_W      : constant Natural :=
-        (if Width > Saturating_Multiply (Content_X, 2) then Width - Saturating_Multiply (Content_X, 2)
-         else Width);
+      --  The bottom-bar content runs edge to edge: the view-mode chooser sits
+      --  flush against the left window edge and the info-pane toggle flush against
+      --  the right, with no trailing padding beside either.
+      Content_X      : constant Natural := 0;
+      Content_W      : constant Natural := Width;
       View_W         : constant Natural := Natural'Min (Content_W, Preferred_View);
       After_View     : constant Natural := Content_W - View_W;
       Sort_W         : constant Natural := (if After_View >= Preferred_Sort then Preferred_Sort else 0);

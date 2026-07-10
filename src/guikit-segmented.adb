@@ -157,7 +157,8 @@ package body Guikit.Segmented is
                Text_W   : constant Natural := Guikit.Layout.Label_Pixel_Width (To_String (S.Label), Cell_Adv);
                Centred  : constant Boolean := Text_W + 2 * Label_Padding <= CW;
                Label_X : constant Natural :=
-                 (if Centred then CX + (CW - Text_W) / 2 else CX + Label_Padding);
+                 (if Centred then Guikit.Layout.Saturating_Add (CX, (CW - Text_W) / 2)
+                  else Guikit.Layout.Saturating_Add (CX, Label_Padding));
                Label_Y : constant Natural := Region_Y + Inset;
                Label_W : constant Natural :=
                  (if Centred then Text_W
