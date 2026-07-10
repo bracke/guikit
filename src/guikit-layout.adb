@@ -299,8 +299,12 @@ package body Guikit.Layout is
            Saturating_Add
              (Sort_Label_Width,
               Saturating_Multiply (Input_Field_Padding, 2)));
+      --  The info-pane toggle hugs its label: two paddings (matching the
+      --  renderer's per-side text inset), not the wider three-padding button
+      --  spacing, so it is no wider than the "Info" text needs.
       Info_Needed    : constant Natural :=
-        Natural'Max (Minimum_Button, Saturating_Add (Info_Label_Width, Button_Padding));
+        Natural'Max
+          (Minimum_Button, Saturating_Add (Info_Label_Width, Saturating_Multiply (Bottom_Bar_Padding, 2)));
       Preferred_View : constant Natural :=
         Saturating_Add (Small_Needed, Saturating_Add (Large_Needed, Details_Needed));
       Preferred_Sort : constant Natural := Sort_Needed;

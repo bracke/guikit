@@ -178,7 +178,26 @@ package body Guikit_Suite.Layout is
       --  layout fields; only the section origin and width live in the layout.
       Assert (Bar.Sort_Button_Width = 46, "the sort button uses the input-field padding");
       Assert (Bar.Sort_Button_X = 134, "the sort button follows the view-mode section");
-      Assert (Bar.Info_Pane_X = 750, "the info pane toggle is pushed to the right");
+      --  The info-pane toggle hugs its label (two paddings), here floored at the
+      --  button minimum since the 30px label is short.
+      Assert (Bar.Info_Pane_Width = 40, "the info-pane toggle is no wider than its label needs");
+      Assert (Bar.Info_Pane_X = 752, "the info pane toggle is pushed to the right");
+
+      --  A longer info label is sized to label + two paddings, not the wider
+      --  three-padding button spacing (which would give 60).
+      declare
+         Wide : constant Bottom_Bar_Layout :=
+           Calculate_Bottom_Bar_Layout
+             (Width               => 800,
+              Small_Label_Width   => 30,
+              Large_Label_Width   => 30,
+              Details_Label_Width => 30,
+              Sort_Label_Width    => 30,
+              Info_Label_Width    => 48,
+              Line_Height         => 20);
+      begin
+         Assert (Wide.Info_Pane_Width = 56, "the info-pane toggle is label + two paddings, not more");
+      end;
    end Test_Bottom_Bar;
 
    procedure Test_Settings_Action_Buttons (T : in out AUnit.Test_Cases.Test_Case'Class) is
