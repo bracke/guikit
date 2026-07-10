@@ -100,6 +100,22 @@ package body Guikit_Suite.Segmented is
          end if;
       end loop;
       Assert (Selected_Count = 1, "exactly the active cell is marked selected");
+
+      --  The label is centred within its (stretched) cell: equal gaps on each
+      --  side, and inset further than the old fixed left padding.
+      declare
+         CX, CW : Natural;
+         L      : constant Guikit.Draw.Text_Command := Text.Element (1);
+      begin
+         SG.Cell_Bounds (Sample, 0, 300, 20, 1, CX, CW);
+         declare
+            LG : constant Integer := Integer (L.X) - Integer (CX);
+            RG : constant Integer := Integer (CX + CW) - Integer (L.X + L.Width);
+         begin
+            Assert (LG > 4, "the label is inset past the old left padding (it is centred)");
+            Assert (abs (LG - RG) <= 1, "the label sits horizontally centred in its cell");
+         end;
+      end;
    end Test_Build_Frame;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is

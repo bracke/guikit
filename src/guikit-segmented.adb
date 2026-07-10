@@ -141,9 +141,19 @@ package body Guikit.Segmented is
                  (if Cell = Active then Guikit.Draw.Selection_Color
                   elsif Hovered then Guikit.Draw.Hover_Color
                   else Guikit.Draw.Input_Color);
-               Label_X : constant Natural := CX + Label_Padding;
+               --  Centre the label within its cell (cells are stretched to fill
+               --  the region, so they are wider than the text). When the label is
+               --  too wide to fit centred it falls back to the left inset and
+               --  clips, exactly as before.
+               Cell_Adv : constant Natural := Guikit.Layout.Caret_Advance_Width (Line_Height);
+               Text_W   : constant Natural := Guikit.Layout.Label_Pixel_Width (To_String (S.Label), Cell_Adv);
+               Centred  : constant Boolean := Text_W + 2 * Label_Padding <= CW;
+               Label_X : constant Natural :=
+                 (if Centred then CX + (CW - Text_W) / 2 else CX + Label_Padding);
                Label_Y : constant Natural := Region_Y + Inset;
-               Label_W : constant Natural := (if CW > 2 * Label_Padding then CW - 2 * Label_Padding else 0);
+               Label_W : constant Natural :=
+                 (if Centred then Text_W
+                  elsif CW > 2 * Label_Padding then CW - 2 * Label_Padding else 0);
                Draw_W  : constant Natural := Clip_Extent (Label_X, Label_W, Clip_Width);
                Draw_H  : constant Natural := Clip_Extent (Label_Y, Label_H, Clip_Height);
             begin
