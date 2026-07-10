@@ -86,9 +86,12 @@ package body Guikit.Segmented is
    end Cell_At;
 
    --  The visible extent of a span [Start, Start + Size) clamped to [0, Limit).
+   --  Compares as Size > Limit - Start rather than Start + Size > Limit so an
+   --  extreme Start + Size cannot overflow (Start < Limit here, so Limit - Start
+   --  is safe).
    function Clip_Extent (Start, Size, Limit : Natural) return Natural is
      (if Start >= Limit then 0
-      elsif Start + Size > Limit then Limit - Start
+      elsif Size > Limit - Start then Limit - Start
       else Size);
 
    Label_Padding : constant Natural := 4;
@@ -105,6 +108,7 @@ package body Guikit.Segmented is
       Line_Height   : Positive;
       Hover_X       : Integer;
       Hover_Y       : Integer;
+      Label_Inset   : Integer := -1;
       Rectangles    : out Guikit.Draw.Rectangle_Command_Vectors.Vector;
       Text          : out Guikit.Draw.Text_Command_Vectors.Vector;
       Tooltips      : out Guikit.Draw.Tooltip_Command_Vectors.Vector;
@@ -124,7 +128,11 @@ package body Guikit.Segmented is
       end Add_Rect;
 
       Label_H : constant Natural := Natural'Min (Line_Height, Region_Height);
-      Inset   : constant Natural := (if Region_Height > Label_H then (Region_Height - Label_H) / 2 else 0);
+      --  Centre the labels in the region by default, or honour a caller-supplied
+      --  inset (e.g. to sit them on an external baseline while cells fill the bar).
+      Inset   : constant Natural :=
+        (if Label_Inset >= 0 then Natural (Label_Inset)
+         elsif Region_Height > Label_H then (Region_Height - Label_H) / 2 else 0);
    begin
       --  Cell fills and labels.
       for Cell in 1 .. Count loop

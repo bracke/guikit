@@ -78,6 +78,9 @@ package Guikit.Segmented is
    --  @param Line_Height Row height in pixels (for label vertical centring).
    --  @param Hover_X Cursor x in pixels (negative when off-window).
    --  @param Hover_Y Cursor y in pixels.
+   --  @param Label_Inset Vertical offset of the labels from the region top, in
+   --    pixels; negative (the default) centres them in the region. Use it to sit
+   --    labels on an external baseline while the cells still fill the region.
    --  @param Rectangles Out: rectangle commands.
    --  @param Text Out: text commands.
    --  @param Tooltips Out: hover tooltip commands.
@@ -94,6 +97,7 @@ package Guikit.Segmented is
       Line_Height   : Positive;
       Hover_X       : Integer;
       Hover_Y       : Integer;
+      Label_Inset   : Integer := -1;
       Rectangles    : out Guikit.Draw.Rectangle_Command_Vectors.Vector;
       Text          : out Guikit.Draw.Text_Command_Vectors.Vector;
       Tooltips      : out Guikit.Draw.Tooltip_Command_Vectors.Vector;

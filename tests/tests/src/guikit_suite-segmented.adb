@@ -116,6 +116,21 @@ package body Guikit_Suite.Segmented is
             Assert (abs (LG - RG) <= 1, "the label sits horizontally centred in its cell");
          end;
       end;
+
+      --  Label_Inset overrides the vertical centring: labels sit at Region_Y plus
+      --  the inset while the cells still fill the region height.
+      declare
+         R2 : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         T2 : Guikit.Draw.Text_Command_Vectors.Vector;
+         P2 : Guikit.Draw.Tooltip_Command_Vectors.Vector;
+         N2 : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+      begin
+         SG.Build_Frame (Sample, Active => 3, Region_X => 0, Region_Y => 100, Region_Width => 300,
+                         Region_Height => 40, Clip_Width => 300, Clip_Height => 400, Line_Height => 20,
+                         Hover_X => -1, Hover_Y => -1, Label_Inset => 3,
+                         Rectangles => R2, Text => T2, Tooltips => P2, Accessibility => N2);
+         Assert (T2.Element (1).Y = 103, "Label_Inset places the label at Region_Y plus the inset");
+      end;
    end Test_Build_Frame;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
