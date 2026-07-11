@@ -140,16 +140,26 @@ package body Guikit.Settings_Panel is
       if P.Focused > Natural (P.Fields.Length) then
          P.Focused := 0;
       end if;
-      --  Keep focus on a still-visible field; otherwise land on the first field
-      --  visible in the active section (or preamble).
+      --  Keep focus on a still-visible field; otherwise land on the first field of
+      --  the active section, so opening the panel focuses a setting rather than the
+      --  preamble action buttons. Fall back to the first visible field (the
+      --  preamble) only when the active section has none.
       if P.Focused = 0 or else not Field_Is_Visible (P, P.Focused) then
          P.Focused := 0;
          for I in P.Fields.First_Index .. P.Fields.Last_Index loop
-            if Field_Is_Visible (P, I) then
+            if Field_Is_Visible (P, I) and then Field_Section (P, I) = P.Active then
                P.Focused := I;
                exit;
             end if;
          end loop;
+         if P.Focused = 0 then
+            for I in P.Fields.First_Index .. P.Fields.Last_Index loop
+               if Field_Is_Visible (P, I) then
+                  P.Focused := I;
+                  exit;
+               end if;
+            end loop;
+         end if;
       end if;
    end Set_Fields;
 

@@ -1,4 +1,5 @@
 with Ada.Strings.Unbounded;
+with Guikit.Layout;
 
 package body Guikit.Widgets is
 
@@ -515,11 +516,23 @@ package body Guikit.Widgets is
       Label_Height    : Natural;
       Label_Color     : Render_Color)
    is
+      Cell_Adv : constant Natural := Guikit.Layout.Caret_Advance_Width (Positive'Max (1, Label_Height));
+      Text_W   : constant Natural :=
+        Guikit.Layout.Label_Pixel_Width (Ada.Strings.Unbounded.To_String (Label_Text), Cell_Adv);
+      --  Centre the label in the button both ways. Vertically, raise it by a small
+      --  baseline compensation: glyphs are baseline-placed and sit low in their line
+      --  box, so centring the box alone leaves the ink below centre. Horizontally,
+      --  centre when the label fits, else fall back to the left inset so an over-wide
+      --  label still clips on the right rather than both sides.
       Inset   : constant Natural :=
-        (if Height > Label_Height then (Height - Label_Height) / 2 else 0);
-      Label_X : constant Natural := Saturating_Add (X, Padding);
+        (if Height > Label_Height
+         then Natural'Max (0, (Height - Label_Height) / 2 - Label_Height / 6) else 0);
+      Centred : constant Boolean := Text_W + 2 * Padding <= Width;
+      Label_X : constant Natural :=
+        (if Centred then Saturating_Add (X, (Width - Text_W) / 2) else Saturating_Add (X, Padding));
       Label_Y : constant Natural := Saturating_Add (Y, Inset);
-      Label_W : constant Natural := (if Width > 2 * Padding then Width - 2 * Padding else 0);
+      Label_W : constant Natural :=
+        (if Centred then Text_W elsif Width > 2 * Padding then Width - 2 * Padding else 0);
       Draw_W  : constant Natural := Clipped_Size (Label_X, Label_W, Clip_Width);
       Draw_H  : constant Natural := Clipped_Size (Label_Y, Label_Height, Clip_Height);
    begin
