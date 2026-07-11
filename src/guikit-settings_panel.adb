@@ -484,11 +484,12 @@ package body Guikit.Settings_Panel is
       Label_W   : constant Natural  := Content_W * 45 / 100;
       Ctrl_X    : constant Natural  := Content_X + Label_W + Pad;
       Ctrl_W    : constant Natural  := (if Content_W > Label_W + Pad then Content_W - Label_W - Pad else 0);
-      --  Row highlight spans the content, not the full panel width: from the accent
-      --  bar to the content's right edge, so it stays clear of the scrollbar.
-      Hl_X      : constant Natural  := Region_X + 3;
-      Hl_W      : constant Natural  :=
-        (if Content_X + Content_W > Hl_X then Content_X + Content_W - Hl_X else 0);
+      --  Row highlight aligns with the content: the fill spans exactly the content
+      --  columns (no left padding, clear of the scrollbar) and the accent bar hugs
+      --  the content's left edge.
+      Hl_X      : constant Natural  := Content_X;
+      Hl_W      : constant Natural  := Content_W;
+      Accent_X  : constant Natural  := (if Content_X >= 3 then Content_X - 3 else Content_X);
       --  Extra vertical breathing room separating the preamble (the action buttons)
       --  from the active section's fields below it.
       Group_Gap : constant Natural  := Row_Gap + 4;
@@ -634,7 +635,7 @@ package body Guikit.Settings_Panel is
             if Vis then
                if I = P.Focused then
                   Add_Rect (Hl_X, Row_Y, Hl_W, Row_H, Guikit.Draw.Hover_Color);
-                  Add_Rect (Region_X, Row_Y, 3, Row_H, Guikit.Draw.Selection_Color);
+                  Add_Rect (Accent_X, Row_Y, 3, Row_H, Guikit.Draw.Selection_Color);
                   if Focused then
                      Guikit.Widgets.Draw_Focus_Ring
                        (Rectangles, Clip_Width, Clip_Height, Hl_X, Row_Y,
