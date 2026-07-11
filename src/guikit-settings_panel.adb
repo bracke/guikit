@@ -430,6 +430,10 @@ package body Guikit.Settings_Panel is
    is
       LH        : constant Positive := P.Config.Line_Height;
       Row_H     : constant Natural  := LH + Row_Gap;
+      --  Shared height for interactive controls: fill the row band (leaving a
+      --  small margin) so fields and buttons are comfortably tall, not a short
+      --  fraction of the line height.
+      Ctrl_H    : constant Natural  := Row_H - 4;
       Cell_W    : constant Natural  := Guikit.Layout.Caret_Advance_Width (LH);
       N         : constant Natural  := Natural (P.Fields.Length);
       Tab_Count : constant Natural  := Section_Count (P);
@@ -556,7 +560,7 @@ package body Guikit.Settings_Panel is
                Region_X => Content_X, Region_Y => Switch_Y + 2, Region_Width => Content_W,
                --  Fill the tab band (leaving a small margin) rather than a short
                --  line-height strip, so the tabs are comfortably tall.
-               Region_Height => Row_H - 4, Clip_Width => Clip_Width, Clip_Height => Clip_Height,
+               Region_Height => Ctrl_H, Clip_Width => Clip_Width, Clip_Height => Clip_Height,
                Line_Height => LH, Hover_X => Hover_X, Hover_Y => Hover_Y,
                Rectangles => S_Rects, Text => S_Text, Tooltips => S_Tips, Accessibility => S_Nodes);
             for C of S_Rects loop
@@ -615,7 +619,7 @@ package body Guikit.Settings_Panel is
                      when Toggle =>
                         declare
                            TW : constant Natural := Natural'Min (Ctrl_W, 2 * LH);
-                           TH : constant Natural := (2 * LH) / 3;
+                           TH : constant Natural := Ctrl_H;
                            TX : constant Natural := Ctrl_X + Ctrl_W - TW;
                            TY : constant Natural := Row_Y + (Row_H - TH) / 2;
                         begin
@@ -634,7 +638,7 @@ package body Guikit.Settings_Panel is
                               declare
                                  --  Fill the field row (leaving a small margin) so
                                  --  the choice buttons are comfortably tall.
-                                 SH    : constant Natural := Row_H - 4;
+                                 SH    : constant Natural := Ctrl_H;
                                  SY    : constant Natural := Row_Y + (Row_H - SH) / 2;
                                  Segs  : Guikit.Segmented.Segment_Vectors.Vector;
                                  R     : Guikit.Draw.Rectangle_Command_Vectors.Vector;
@@ -674,7 +678,7 @@ package body Guikit.Settings_Panel is
                      when Number =>
                         declare
                            Btn : constant Natural := LH;
-                           BH  : constant Natural := (2 * LH) / 3;
+                           BH  : constant Natural := Ctrl_H;
                            BY  : constant Natural := Row_Y + (Row_H - BH) / 2;
                            Val_X : constant Natural := Ctrl_X + Btn;
                            Val_W : constant Natural := (if Ctrl_W > 2 * Btn then Ctrl_W - 2 * Btn else 0);
@@ -691,7 +695,7 @@ package body Guikit.Settings_Panel is
 
                      when Settings_Panel.Text =>
                         declare
-                           TH : constant Natural := (2 * LH) / 3;
+                           TH : constant Natural := Ctrl_H;
                            TY : constant Natural := Row_Y + (Row_H - TH) / 2;
                            VY : constant Natural := Row_Y + (Row_H - LH) / 2;
                         begin
@@ -716,7 +720,7 @@ package body Guikit.Settings_Panel is
                         --  waiting for a chord.
                         declare
                            Armed : constant Boolean := I = P.Capturing;
-                           TH : constant Natural := (2 * LH) / 3;
+                           TH : constant Natural := Ctrl_H;
                            TY : constant Natural := Row_Y + (Row_H - TH) / 2;
                            VY : constant Natural := Row_Y + (Row_H - LH) / 2;
                         begin
@@ -742,7 +746,7 @@ package body Guikit.Settings_Panel is
                            if Count > 0 and then Ctrl_W > 0 then
                               declare
                                  BW : constant Natural := (Ctrl_W - (Count - 1) * 4) / Count;
-                                 BH : constant Natural := (2 * LH) / 3;
+                                 BH : constant Natural := Ctrl_H;
                                  BY : constant Natural := Row_Y + (Row_H - BH) / 2;
                               begin
                                  for J in 1 .. Count loop

@@ -130,9 +130,14 @@ package body Guikit.Segmented is
       Label_H : constant Natural := Natural'Min (Line_Height, Region_Height);
       --  Centre the labels in the region by default, or honour a caller-supplied
       --  inset (e.g. to sit them on an external baseline while cells fill the bar).
+      --  The default raises the text by a small baseline compensation: glyphs are
+      --  baseline-placed and sit low in their cell, so centring the cell alone
+      --  leaves the ink below centre.
       Inset   : constant Natural :=
         (if Label_Inset >= 0 then Natural (Label_Inset)
-         elsif Region_Height > Label_H then (Region_Height - Label_H) / 2 else 0);
+         elsif Region_Height > Label_H
+         then Natural'Max (0, (Region_Height - Label_H) / 2 - Line_Height / 6)
+         else 0);
    begin
       --  Cell fills and labels.
       for Cell in 1 .. Count loop
