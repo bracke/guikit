@@ -196,7 +196,9 @@ package body Guikit.Widgets is
                Text         => Glyph,
                Color        => Glyph_Color,
                Truncated    => False,
-               Scale_To_Box => False,
+               --  Center the glyph's box within the button: a lone symbol (the
+               --  close "x") is otherwise baseline-placed and sits off-centre.
+               Scale_To_Box => True,
                Italic       => False));
       end if;
    end Draw_Close_Button;
