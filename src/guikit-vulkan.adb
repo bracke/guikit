@@ -34,6 +34,23 @@ package body Guikit.Vulkan is
    Icon_Atlas_Channels : constant Positive := 4;
    Max_Icon_Atlas_Tiles : constant Positive :=
      Max_Atlas_Bytes / (Icon_Atlas_Tile_Size * Icon_Atlas_Tile_Size * Icon_Atlas_Channels);
+   --  A large (e.g. Quick Look) image icon gets a tile up to this many pixels per
+   --  side instead of the 64-pixel icon tile, so it renders crisply. Bounded so
+   --  the icon atlas stays within Max_Atlas_Bytes.
+   Max_Overlay_Tile : constant Positive := 512;
+   Max_Atlas_Dimension : constant Positive := 16_384;
+
+   --  Placement of one icon's tile within the icon atlas. When every tile is the
+   --  64-pixel icon size the tiles form the historical single-row strip; a large
+   --  image tile switches the layout to a compact shelf pack.
+   type Icon_Tile_Rect is record
+      X : Natural := 0;
+      Y : Natural := 0;
+      W : Natural := 0;
+      H : Natural := 0;
+   end record;
+   package Icon_Tile_Rect_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Icon_Tile_Rect);
    Infinite_Timeout : constant Interfaces.Unsigned_64 := Interfaces.Unsigned_64'Last;
    Format_R8G8B8A8_Unorm : constant Vk.Format_T := Vk.Format_T (37);
    Format_R8G8B8A8_Srgb  : constant Vk.Format_T := Vk.Format_T (43);
@@ -4126,9 +4143,95 @@ package body Guikit.Vulkan is
                Texture  => Texture_None));
       end Append_Triangle;
 
+      --  Per-icon atlas tile placement, filled by Build_Icon_Atlas and read by the
+      --  main and overlay icon vertex passes (index = 1-based non-toolbar icon).
+      Icon_Tile_Layout : Icon_Tile_Rect_Vectors.Vector;
+
       procedure Build_Icon_Atlas is
          Tile_Size  : constant Positive := Icon_Atlas_Tile_Size;
          Icon_Count : Natural := 0;
+
+         --  The tile size for one icon: the 64-pixel icon tile, or up to
+         --  Max_Overlay_Tile (clamped to Cap) when it carries a large image.
+         function Tile_W_For (Icon : Guikit.Draw.Icon_Command; Cap : Positive) return Positive is
+           (if Icon.Thumbnail_Width > Tile_Size
+            then Natural'Min (Icon.Thumbnail_Width, Natural'Min (Max_Overlay_Tile, Cap))
+            else Tile_Size);
+         function Tile_H_For (Icon : Guikit.Draw.Icon_Command; Cap : Positive) return Positive is
+           (if Icon.Thumbnail_Height > Tile_Size
+            then Natural'Min (Icon.Thumbnail_Height, Natural'Min (Max_Overlay_Tile, Cap))
+            else Tile_Size);
+
+         --  Compute the tile layout for a given overlay cap. When no tile exceeds
+         --  the icon size the tiles form the historical single-row strip (byte
+         --  identical to before); otherwise they are shelf-packed into a 512-wide
+         --  region so a large image fits alongside the icons within Max_Atlas_Bytes.
+         procedure Layout_Tiles
+           (Cap      : Positive;
+            Atlas_W  : out Natural;
+            Atlas_H  : out Natural;
+            Fits     : out Boolean)
+         is
+            Has_Large : Boolean := False;
+            Shelf_W   : constant Positive := Natural'Max (Tile_Size * 8, Max_Overlay_Tile);
+            Cursor_X  : Natural := 0;
+            Cursor_Y  : Natural := 0;
+            Shelf_H   : Natural := 0;
+         begin
+            Icon_Tile_Layout.Clear;
+            for Icon of Icons loop
+               if not Is_Toolbar_Icon (To_String (Icon.Icon_Id))
+                 and then (Tile_W_For (Icon, Cap) > Tile_Size
+                           or else Tile_H_For (Icon, Cap) > Tile_Size)
+               then
+                  Has_Large := True;
+               end if;
+            end loop;
+
+            if not Has_Large then
+               Atlas_W := Icon_Count * Tile_Size;
+               Atlas_H := Tile_Size;
+               declare
+                  X : Natural := 0;
+               begin
+                  for Icon of Icons loop
+                     if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
+                        Icon_Tile_Layout.Append
+                          (Icon_Tile_Rect'(X => X, Y => 0, W => Tile_Size, H => Tile_Size));
+                        X := X + Tile_Size;
+                     end if;
+                  end loop;
+               end;
+               Fits := True;
+               return;
+            end if;
+
+            for Icon of Icons loop
+               if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
+                  declare
+                     TW : constant Positive := Tile_W_For (Icon, Cap);
+                     TH : constant Positive := Tile_H_For (Icon, Cap);
+                  begin
+                     if Cursor_X + TW > Shelf_W then
+                        Cursor_Y := Cursor_Y + Shelf_H;
+                        Cursor_X := 0;
+                        Shelf_H := 0;
+                     end if;
+                     Icon_Tile_Layout.Append
+                       (Icon_Tile_Rect'(X => Cursor_X, Y => Cursor_Y, W => TW, H => TH));
+                     Cursor_X := Cursor_X + TW;
+                     Shelf_H := Natural'Max (Shelf_H, TH);
+                  end;
+               end if;
+            end loop;
+
+            Atlas_W := Shelf_W;
+            Atlas_H := Cursor_Y + Shelf_H;
+            Fits :=
+              Atlas_W <= Max_Atlas_Dimension
+              and then Atlas_H <= Max_Atlas_Dimension
+              and then Atlas_W * Atlas_H * Icon_Atlas_Channels <= Max_Atlas_Bytes;
+         end Layout_Tiles;
 
          procedure Append_Clear_Pixels
            (Count : Natural) is
@@ -4198,31 +4301,35 @@ package body Guikit.Vulkan is
             Asset_Text : constant String :=
               Guikit.Draw.Icon_Asset_Text (To_String (Icon.Icon_Id), To_String (Icon.Theme_Name));
             Asset      : Guikit.Draw.Icon_Asset := Guikit.Draw.Parse_Icon_Asset (Asset_Text);
-            Tile_X     : constant Natural := Tile_Index * Tile_Size;
+            Tile       : constant Icon_Tile_Rect := Icon_Tile_Layout.Element (Tile_Index + 1);
 
             procedure Fill_Rect
               (Rect : Guikit.Draw.Icon_Asset_Rect)
             is
                X0 : constant Natural :=
                  Saturating_Add
-                   (Tile_X,
-                    Bounded_Product_Divide (Value => Rect.Grid_X, Factor => Tile_Size, Denominator => Asset.Grid));
+                   (Tile.X,
+                    Bounded_Product_Divide (Value => Rect.Grid_X, Factor => Tile.W, Denominator => Asset.Grid));
                Y0 : constant Natural :=
-                 Bounded_Product_Divide (Value => Rect.Grid_Y, Factor => Tile_Size, Denominator => Asset.Grid);
+                 Saturating_Add
+                   (Tile.Y,
+                    Bounded_Product_Divide (Value => Rect.Grid_Y, Factor => Tile.H, Denominator => Asset.Grid));
                X1 : constant Natural :=
                  Natural'Min
-                   (Saturating_Add (Tile_X, Tile_Size),
+                   (Saturating_Add (Tile.X, Tile.W),
                     Saturating_Add
-                      (Tile_X,
+                      (Tile.X,
                        Bounded_Product_Divide
                          (Value       => Rect.Grid_X + Rect.Grid_W,
-                          Factor      => Tile_Size,
+                          Factor      => Tile.W,
                           Denominator => Asset.Grid)));
                Y1 : constant Natural :=
                  Natural'Min
-                   (Tile_Size,
-                    Bounded_Product_Divide
-                      (Value => Rect.Grid_Y + Rect.Grid_H, Factor => Tile_Size, Denominator => Asset.Grid));
+                   (Saturating_Add (Tile.Y, Tile.H),
+                    Saturating_Add
+                      (Tile.Y,
+                       Bounded_Product_Divide
+                         (Value => Rect.Grid_Y + Rect.Grid_H, Factor => Tile.H, Denominator => Asset.Grid)));
                R  : Interfaces.Unsigned_8;
                G  : Interfaces.Unsigned_8;
                B  : Interfaces.Unsigned_8;
@@ -4243,7 +4350,6 @@ package body Guikit.Vulkan is
             function Rasterize_Thumbnail return Boolean is
                Source_Width  : constant Natural := Icon.Thumbnail_Width;
                Source_Height : constant Natural := Icon.Thumbnail_Height;
-               Tile_X        : constant Natural := Tile_Index * Tile_Size;
             begin
                if Source_Width = 0
                  or else Source_Height = 0
@@ -4252,17 +4358,17 @@ package body Guikit.Vulkan is
                   return False;
                end if;
 
-               for Y in 0 .. Tile_Size - 1 loop
-                  for X in 0 .. Tile_Size - 1 loop
+               for Y in 0 .. Tile.H - 1 loop
+                  for X in 0 .. Tile.W - 1 loop
                      declare
-                        Source_X : constant Natural := (X * Source_Width) / Tile_Size;
-                        Source_Y : constant Natural := (Y * Source_Height) / Tile_Size;
+                        Source_X : constant Natural := (X * Source_Width) / Tile.W;
+                        Source_Y : constant Natural := (Y * Source_Height) / Tile.H;
                         Offset   : constant Positive :=
                           Positive (((Source_Y * Source_Width) + Source_X) * 4 + 1);
                      begin
                         Put_Pixel
-                          (Tile_X + X,
-                           Y,
+                          (Tile.X + X,
+                           Tile.Y + Y,
                            Icon.Thumbnail_Pixels.Element (Offset),
                            Icon.Thumbnail_Pixels.Element (Offset + 1),
                            Icon.Thumbnail_Pixels.Element (Offset + 2),
@@ -4292,6 +4398,10 @@ package body Guikit.Vulkan is
          end Rasterize_Asset;
 
          Tile_Index : Natural := 0;
+         Atlas_W    : Natural := 0;
+         Atlas_H    : Natural := 0;
+         Fits       : Boolean := False;
+         Cap        : Positive := Max_Overlay_Tile;
       begin
          for Icon of Icons loop
             if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
@@ -4305,8 +4415,16 @@ package body Guikit.Vulkan is
             return;
          end if;
 
-         Result.Icon_Atlas_Width := Icon_Count * Tile_Size;
-         Result.Icon_Atlas_Height := Tile_Size;
+         --  Shrink the large-image cap until the atlas fits the byte budget; at
+         --  the icon size every tile is 64 and the strip layout always fits.
+         loop
+            Layout_Tiles (Cap, Atlas_W, Atlas_H, Fits);
+            exit when Fits or else Cap <= Tile_Size;
+            Cap := Natural'Max (Tile_Size, (Cap * 3) / 4);
+         end loop;
+
+         Result.Icon_Atlas_Width := Atlas_W;
+         Result.Icon_Atlas_Height := Atlas_H;
          Result.Icon_Atlas_Channels := Icon_Atlas_Channels;
          Result.Icon_Atlas_Bytes :=
            Result.Icon_Atlas_Width * Result.Icon_Atlas_Height * Result.Icon_Atlas_Channels;
@@ -4383,15 +4501,10 @@ package body Guikit.Vulkan is
 
       if Result.Icon_Atlas_Dirty then
          declare
+            Atlas_W : constant Natural := Result.Icon_Atlas_Width;
+            Atlas_H : constant Natural := Result.Icon_Atlas_Height;
             Source_Icon_Index : Natural := 0;
-            Icon_Count : Natural := 0;
          begin
-            for Icon of Icons loop
-               if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
-                  Icon_Count := Icon_Count + 1;
-               end if;
-            end loop;
-
             --  Main-layer icons only. Overlay icons keep their atlas slot in the
             --  index sequence (so every icon's UV still matches its atlas tile)
             --  but are emitted later, in the overlay pass, so they sit on top of
@@ -4401,24 +4514,22 @@ package body Guikit.Vulkan is
                   if not Icon.Overlay then
                      declare
                         Before : constant Natural := Natural (Result.Vertices.Length);
-                        U0     : constant Float :=
-                          (if Icon_Count = 0
-                           then 0.0
-                           else Float (Source_Icon_Index) / Float (Icon_Count));
-                        U1     : constant Float :=
-                          (if Icon_Count = 0
-                           then 0.0
-                           else Float (Source_Icon_Index + 1) / Float (Icon_Count));
+                        Tile   : constant Icon_Tile_Rect :=
+                          Icon_Tile_Layout.Element (Source_Icon_Index + 1);
+                        Draw_W : constant Natural :=
+                          (if Icon.Draw_Width > 0 then Icon.Draw_Width else Icon.Size);
+                        Draw_H : constant Natural :=
+                          (if Icon.Draw_Height > 0 then Icon.Draw_Height else Icon.Size);
                      begin
                         Append_Quad
                           (X        => Float (Icon.X),
                            Y        => Float (Icon.Y),
-                           Width    => Float (Icon.Size),
-                           Height   => Float (Icon.Size),
-                           U0       => U0,
-                           V0       => 0.0,
-                           U1       => U1,
-                           V1       => 1.0,
+                           Width    => Float (Draw_W),
+                           Height   => Float (Draw_H),
+                           U0       => (if Atlas_W = 0 then 0.0 else Float (Tile.X) / Float (Atlas_W)),
+                           V0       => (if Atlas_H = 0 then 0.0 else Float (Tile.Y) / Float (Atlas_H)),
+                           U1       => (if Atlas_W = 0 then 0.0 else Float (Tile.X + Tile.W) / Float (Atlas_W)),
+                           V1       => (if Atlas_H = 0 then 0.0 else Float (Tile.Y + Tile.H) / Float (Atlas_H)),
                            Color    => Guikit.Draw.Icon_File_Color,
                            Textured => True,
                            Texture  => Texture_Icon_Atlas);
@@ -4483,38 +4594,31 @@ package body Guikit.Vulkan is
          --  using the same atlas index sequence as the main icon pass.
          if Result.Icon_Atlas_Dirty then
             declare
+               Atlas_W : constant Natural := Result.Icon_Atlas_Width;
+               Atlas_H : constant Natural := Result.Icon_Atlas_Height;
                Source_Icon_Index : Natural := 0;
-               Icon_Count : Natural := 0;
             begin
-               for Icon of Icons loop
-                  if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
-                     Icon_Count := Icon_Count + 1;
-                  end if;
-               end loop;
-
                for Icon of Icons loop
                   if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
                      if Icon.Overlay then
                         declare
                            Before : constant Natural := Natural (Result.Vertices.Length);
-                           U0     : constant Float :=
-                             (if Icon_Count = 0
-                              then 0.0
-                              else Float (Source_Icon_Index) / Float (Icon_Count));
-                           U1     : constant Float :=
-                             (if Icon_Count = 0
-                              then 0.0
-                              else Float (Source_Icon_Index + 1) / Float (Icon_Count));
+                           Tile   : constant Icon_Tile_Rect :=
+                             Icon_Tile_Layout.Element (Source_Icon_Index + 1);
+                           Draw_W : constant Natural :=
+                             (if Icon.Draw_Width > 0 then Icon.Draw_Width else Icon.Size);
+                           Draw_H : constant Natural :=
+                             (if Icon.Draw_Height > 0 then Icon.Draw_Height else Icon.Size);
                         begin
                            Append_Quad
                              (X        => Float (Icon.X),
                               Y        => Float (Icon.Y),
-                              Width    => Float (Icon.Size),
-                              Height   => Float (Icon.Size),
-                              U0       => U0,
-                              V0       => 0.0,
-                              U1       => U1,
-                              V1       => 1.0,
+                              Width    => Float (Draw_W),
+                              Height   => Float (Draw_H),
+                              U0       => (if Atlas_W = 0 then 0.0 else Float (Tile.X) / Float (Atlas_W)),
+                              V0       => (if Atlas_H = 0 then 0.0 else Float (Tile.Y) / Float (Atlas_H)),
+                              U1       => (if Atlas_W = 0 then 0.0 else Float (Tile.X + Tile.W) / Float (Atlas_W)),
+                              V1       => (if Atlas_H = 0 then 0.0 else Float (Tile.Y + Tile.H) / Float (Atlas_H)),
                               Color    => Guikit.Draw.Icon_File_Color,
                               Textured => True,
                               Texture  => Texture_Icon_Atlas);

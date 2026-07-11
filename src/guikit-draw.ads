@@ -191,6 +191,11 @@ package Guikit.Draw is
       --  grid's icons and text), so it sits on top of an opaque overlay panel
       --  such as Quick Look rather than under the grid content.
       Overlay          : Boolean := False;
+      --  Explicit on-screen draw size. When zero the icon is drawn Size x Size
+      --  (square, as grid icons are); a large non-square image preview sets these
+      --  to draw undistorted at its aspect ratio.
+      Draw_Width       : Natural := 0;
+      Draw_Height      : Natural := 0;
    end record;
 
    package Icon_Command_Vectors is new Ada.Containers.Vectors
