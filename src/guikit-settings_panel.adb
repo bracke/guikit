@@ -449,10 +449,16 @@ package body Guikit.Settings_Panel is
          then Region_Width - Pad - LH - 2 * Natural'Max (4, LH / 4)
          else Content_W);
       Switch_Y  : constant Natural  := Title_Y + Row_H;
-      Rows_Top  : constant Natural  := Title_Y + Row_H + Switch_H;
+      --  Leave a gap between the tab bar and the first row (the action buttons)
+      --  when the tabs are shown.
+      Lead_Gap  : constant Natural  := (if Switch_H > 0 then Row_Gap else 0);
+      Rows_Top  : constant Natural  := Title_Y + Row_H + Switch_H + Lead_Gap;
       --  Field indices rendered as rows now (preamble + active section), compact.
       Visible   : Index_Array (1 .. Natural'Max (1, N)) := (others => 0);
       Vis_N     : Natural := 0;
+      --  Number of leading visible rows belonging to the preamble (Section 0),
+      --  which precede all of the active section's rows.
+      Preamble_Rows : Natural := 0;
       --  Footer content: a status/validation line takes precedence; otherwise the
       --  focused field's help is shown, so per-field descriptions are visible and
       --  not merely exposed to assistive tech.
@@ -468,6 +474,14 @@ package body Guikit.Settings_Panel is
       Label_W   : constant Natural  := Content_W * 45 / 100;
       Ctrl_X    : constant Natural  := Content_X + Label_W + Pad;
       Ctrl_W    : constant Natural  := (if Content_W > Label_W + Pad then Content_W - Label_W - Pad else 0);
+      --  Row highlight spans the content, not the full panel width: from the accent
+      --  bar to the content's right edge, so it stays clear of the scrollbar.
+      Hl_X      : constant Natural  := Region_X + 3;
+      Hl_W      : constant Natural  :=
+        (if Content_X + Content_W > Hl_X then Content_X + Content_W - Hl_X else 0);
+      --  Extra vertical breathing room separating the preamble (the action buttons)
+      --  from the active section's fields below it.
+      Group_Gap : constant Natural  := Row_Gap + 4;
 
       procedure Add_Rect (X, Y, W, H : Natural; Color : Guikit.Draw.Render_Color) is
       begin
@@ -498,10 +512,21 @@ package body Guikit.Settings_Panel is
          if Field_Is_Visible (P, I) then
             Vis_N := Vis_N + 1;
             Visible (Vis_N) := I;
+            if Field_Section (P, I) = 0 then
+               Preamble_Rows := Preamble_Rows + 1;
+            end if;
          end if;
       end loop;
       P.Content_Rows := Vis_N;
-      P.Visible_Rows := (if Row_H > 0 then Avail_H / Row_H else 0);
+      declare
+         --  The preamble→section gap consumes vertical space; discount it so the
+         --  visible-row count (hence scrolling) reflects the taller layout.
+         Split    : constant Boolean := Preamble_Rows > 0 and then Preamble_Rows < Vis_N;
+         Gapped_H : constant Natural :=
+           (if Split and then Avail_H > Group_Gap then Avail_H - Group_Gap else Avail_H);
+      begin
+         P.Visible_Rows := (if Row_H > 0 then Gapped_H / Row_H else 0);
+      end;
 
       --  Clamp scroll and keep the focused row on screen (rows are the compact
       --  positions of the visible fields, not raw field indices).
@@ -587,18 +612,23 @@ package body Guikit.Settings_Panel is
             R   : constant Natural := VR - 1;
             Vis : constant Boolean :=
               R >= P.Offset and then (P.Visible_Rows = 0 or else R < P.Offset + P.Visible_Rows);
-            Row_Y : constant Natural := Rows_Top + (R - P.Offset) * Row_H;
+            --  Section rows sit below an extra gap that separates them from the
+            --  preamble (the action buttons) above.
+            Extra : constant Natural :=
+              (if Preamble_Rows > 0 and then Preamble_Rows < Vis_N and then VR > Preamble_Rows
+               then Group_Gap else 0);
+            Row_Y : constant Natural := Rows_Top + (R - P.Offset) * Row_H + Extra;
             Mid_Y : constant Natural := Row_Y + (Row_H - LH) / 2;
          begin
             exit when not Vis and then R >= P.Offset + P.Visible_Rows;
             if Vis then
                if I = P.Focused then
-                  Add_Rect (Region_X + 3, Row_Y, Region_Width - 3, Row_H, Guikit.Draw.Hover_Color);
+                  Add_Rect (Hl_X, Row_Y, Hl_W, Row_H, Guikit.Draw.Hover_Color);
                   Add_Rect (Region_X, Row_Y, 3, Row_H, Guikit.Draw.Selection_Color);
                   if Focused then
                      Guikit.Widgets.Draw_Focus_Ring
-                       (Rectangles, Clip_Width, Clip_Height, Region_X + 3, Row_Y,
-                        Region_Width - 3, Row_H, Guikit.Draw.Selection_Color);
+                       (Rectangles, Clip_Width, Clip_Height, Hl_X, Row_Y,
+                        Hl_W, Row_H, Guikit.Draw.Selection_Color);
                   end if;
                end if;
 
