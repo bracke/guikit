@@ -9,7 +9,8 @@ package body Guikit.Command_Palette is
    use type Guikit.Draw.Render_Color;
 
    Icon_Slot : constant Natural := 36;
-   Bar_Width : constant Natural := 8;
+   --  Match the grid/list scrollbar width so panels look consistent.
+   Bar_Width : constant Natural := 12;
    Ellipsis  : constant String :=
      Character'Val (16#E2#) & Character'Val (16#80#) & Character'Val (16#A6#);  --  U+2026
 
@@ -442,8 +443,8 @@ package body Guikit.Command_Palette is
                Track_Height => Layout.Results_Height,
                Thumb_Y      => Layout.Results_Y + Thumb.Offset,
                Thumb_Height => Thumb.Length,
-               Track_Color  => Guikit.Draw.Input_Color,
-               Thumb_Color  => Guikit.Draw.Border_Color,
+               Track_Color  => Guikit.Draw.Border_Color,
+               Thumb_Color  => Guikit.Draw.Selection_Color,
                Grip_Color   => Guikit.Draw.Muted_Text_Color);
          end if;
       end;
@@ -463,7 +464,10 @@ package body Guikit.Command_Palette is
                Button_X => Bx, Button_Y => By, Button_Width => Btn, Button_Height => Btn,
                Fill_Color => Guikit.Draw.Pane_Color, Border_Color => Guikit.Draw.Border_Color,
                Glyph_X => Bx, Glyph_Y => By, Glyph_Width => Btn, Glyph_Height => Btn,
-               Glyph => To_Unbounded_String ("x"), Glyph_Color => Guikit.Draw.Muted_Text_Color,
+               --  U+00D7 (times), which sits on the math axis so it centres in
+               --  the button, matching the other panels' close glyph.
+               Glyph => To_Unbounded_String (Character'Val (16#C3#) & Character'Val (16#97#)),
+               Glyph_Color => Guikit.Draw.Muted_Text_Color,
                Show_Glyph => True);
             Accessibility.Append
               (Guikit.Draw.Accessibility_Node'
