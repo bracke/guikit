@@ -820,7 +820,10 @@ package body Guikit.Settings_Panel is
             Button_X => Bx, Button_Y => By, Button_Width => Btn, Button_Height => Btn,
             Fill_Color => Guikit.Draw.Pane_Color, Border_Color => Guikit.Draw.Border_Color,
             Glyph_X => Bx, Glyph_Y => By, Glyph_Width => Btn, Glyph_Height => Btn,
-            Glyph => To_Unbounded_String ("x"), Glyph_Color => Guikit.Draw.Muted_Text_Color,
+            --  U+00D7 (times): sits on the math axis so it centres in the button,
+            --  unlike a lowercase "x" which sits low off-centre.
+            Glyph => To_Unbounded_String (Character'Val (16#C3#) & Character'Val (16#97#)),
+            Glyph_Color => Guikit.Draw.Muted_Text_Color,
             Show_Glyph => True);
          Accessibility.Append
            (Guikit.Draw.Accessibility_Node'
