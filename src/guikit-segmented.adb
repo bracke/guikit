@@ -30,6 +30,15 @@ package body Guikit.Segmented is
       return Sum;
    end Prefix_Width;
 
+   function Natural_Width
+     (Segments    : Segment_Vectors.Vector;
+      Line_Height : Positive)
+      return Natural
+   is
+   begin
+      return Prefix_Width (Segments, Line_Height, Natural (Segments.Length));
+   end Natural_Width;
+
    procedure Cell_Bounds
      (Segments     : Segment_Vectors.Vector;
       Region_X     : Natural;

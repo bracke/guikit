@@ -46,6 +46,19 @@ package Guikit.Segmented is
       X            : out Natural;
       Width        : out Natural);
 
+   --  The control's natural (unstretched) width: the sum of every cell's desired
+   --  width at the given line height. Build_Frame stretches the cells to fill its
+   --  region, so laying the control out in exactly this width draws each cell at
+   --  its desired size with no stretching.
+   --
+   --  @param Segments The cells, left to right.
+   --  @param Line_Height Row height in pixels (drives label measurement).
+   --  @return The summed desired width in pixels.
+   function Natural_Width
+     (Segments    : Segment_Vectors.Vector;
+      Line_Height : Positive)
+      return Natural;
+
    --  The one-based cell index at horizontal coordinate X within the control's
    --  region, or 0 when X is outside the region.
    --

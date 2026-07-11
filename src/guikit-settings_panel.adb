@@ -483,7 +483,66 @@ package body Guikit.Settings_Panel is
       Avail_H   : constant Natural  := (if Rows_Bot > Rows_Top then Rows_Bot - Rows_Top else 0);
       Label_W   : constant Natural  := Content_W * 45 / 100;
       Ctrl_X    : constant Natural  := Content_X + Label_W + Pad;
-      Ctrl_W    : constant Natural  := (if Content_W > Label_W + Pad then Content_W - Label_W - Pad else 0);
+      Avail_W   : constant Natural  := (if Content_W > Label_W + Pad then Content_W - Label_W - Pad else 0);
+
+      --  The unstretched width a field's control needs. The value column is sized to
+      --  the widest visible one, so it is no wider than necessary rather than filling
+      --  the whole remaining row.
+      function Control_Width (F : Field) return Natural is
+      begin
+         case F.Kind is
+            when Toggle =>
+               return 2 * LH;
+            when Choice =>
+               declare
+                  Segs : Guikit.Segmented.Segment_Vectors.Vector;
+               begin
+                  for J in F.Option_Labels.First_Index .. F.Option_Labels.Last_Index loop
+                     Segs.Append
+                       (Guikit.Segmented.Segment'(Label => F.Option_Labels.Element (J), others => <>));
+                  end loop;
+                  return Guikit.Segmented.Natural_Width (Segs, LH);
+               end;
+            when Buttons =>
+               declare
+                  Count : constant Natural := Natural (F.Option_Labels.Length);
+                  Sum   : Natural := 0;
+               begin
+                  for J in 1 .. Count loop
+                     Sum := Sum
+                       + Guikit.Layout.Label_Pixel_Width (To_String (F.Option_Labels.Element (J)), Cell_W)
+                       + 2 * 6;
+                  end loop;
+                  if Count > 1 then
+                     Sum := Sum + (Count - 1) * 4;
+                  end if;
+                  return Sum;
+               end;
+            when Number =>
+               --  Two steppers plus room for a few digits.
+               return 2 * LH + 5 * Cell_W;
+            when Settings_Panel.Text | Shortcut =>
+               --  An input field grows with its value but keeps a sensible minimum.
+               return Natural'Max
+                        (16 * Cell_W,
+                         Guikit.Utf8.Display_Units (To_String (F.Value)) * Cell_W + 8);
+            when Section =>
+               return 0;
+         end case;
+      end Control_Width;
+
+      function Max_Value_Width return Natural is
+         Max : Natural := 2 * LH;  --  never narrower than a toggle
+      begin
+         for I in P.Fields.First_Index .. P.Fields.Last_Index loop
+            if Field_Is_Visible (P, I) then
+               Max := Natural'Max (Max, Control_Width (P.Fields.Element (I)));
+            end if;
+         end loop;
+         return Max;
+      end Max_Value_Width;
+
+      Ctrl_W    : constant Natural  := Natural'Min (Avail_W, Max_Value_Width);
       --  Row highlight aligns with the content: the fill spans exactly the content
       --  columns (no left padding, clear of the scrollbar) and the accent bar hugs
       --  the content's left edge.
