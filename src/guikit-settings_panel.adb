@@ -553,8 +553,10 @@ package body Guikit.Settings_Panel is
             end loop;
             Guikit.Segmented.Build_Frame
               (Segments => Segs, Active => P.Active,
-               Region_X => Content_X, Region_Y => Switch_Y, Region_Width => Content_W,
-               Region_Height => LH, Clip_Width => Clip_Width, Clip_Height => Clip_Height,
+               Region_X => Content_X, Region_Y => Switch_Y + 2, Region_Width => Content_W,
+               --  Fill the tab band (leaving a small margin) rather than a short
+               --  line-height strip, so the tabs are comfortably tall.
+               Region_Height => Row_H - 4, Clip_Width => Clip_Width, Clip_Height => Clip_Height,
                Line_Height => LH, Hover_X => Hover_X, Hover_Y => Hover_Y,
                Rectangles => S_Rects, Text => S_Text, Tooltips => S_Tips, Accessibility => S_Nodes);
             for C of S_Rects loop
@@ -630,7 +632,9 @@ package body Guikit.Settings_Panel is
                         begin
                            if Count > 0 and then Ctrl_W > 0 then
                               declare
-                                 SH    : constant Natural := (LH * 4) / 5;
+                                 --  Fill the field row (leaving a small margin) so
+                                 --  the choice buttons are comfortably tall.
+                                 SH    : constant Natural := Row_H - 4;
                                  SY    : constant Natural := Row_Y + (Row_H - SH) / 2;
                                  Segs  : Guikit.Segmented.Segment_Vectors.Vector;
                                  R     : Guikit.Draw.Rectangle_Command_Vectors.Vector;
