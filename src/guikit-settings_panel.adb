@@ -481,10 +481,6 @@ package body Guikit.Settings_Panel is
       Rows_Bot  : constant Natural  :=
         (if Region_Height > Pad + Foot_H then Region_Y + Region_Height - Pad - Foot_H else Region_Y);
       Avail_H   : constant Natural  := (if Rows_Bot > Rows_Top then Rows_Bot - Rows_Top else 0);
-      Label_W   : constant Natural  := Content_W * 45 / 100;
-      Ctrl_X    : constant Natural  := Content_X + Label_W + Pad;
-      Avail_W   : constant Natural  := (if Content_W > Label_W + Pad then Content_W - Label_W - Pad else 0);
-
       --  The unstretched width a field's control needs. The value column is sized to
       --  the widest visible one, so it is no wider than necessary rather than filling
       --  the whole remaining row.
@@ -542,7 +538,17 @@ package body Guikit.Settings_Panel is
          return Max;
       end Max_Value_Width;
 
-      Ctrl_W    : constant Natural  := Natural'Min (Avail_W, Max_Value_Width);
+      --  Keep at least this much for the label column, so a very wide control cannot
+      --  crowd the labels out entirely.
+      Min_Label : constant Natural  := Content_W * 45 / 100;
+      Value_Cap : constant Natural  :=
+        (if Content_W > Min_Label + Pad then Content_W - Min_Label - Pad else 0);
+      Ctrl_W    : constant Natural  := Natural'Min (Max_Value_Width, Value_Cap);
+      --  The label column takes all the width the value column leaves; the value
+      --  column is thereby right-aligned against the content's right edge.
+      Label_W   : constant Natural  :=
+        (if Content_W > Ctrl_W + Pad then Content_W - Ctrl_W - Pad else Content_W);
+      Ctrl_X    : constant Natural  := Content_X + Label_W + Pad;
       --  Row highlight aligns with the content: the fill spans exactly the content
       --  columns (no left padding, clear of the scrollbar) and the accent bar hugs
       --  the content's left edge.
