@@ -11,7 +11,7 @@ package body Guikit.Settings_Panel is
 
    Pad     : constant Natural := 14;   --  panel inner padding
    Row_Gap : constant Natural := 8;    --  gap between field rows
-   Bar_W   : constant Natural := 8;    --  scrollbar width
+   Bar_W   : constant Natural := 12;   --  scrollbar width (matches the grid/list)
 
    --  ----- small value helpers -------------------------------------------------
 
@@ -437,7 +437,13 @@ package body Guikit.Settings_Panel is
       Content_X : constant Natural  := Region_X + Pad;
       Content_W : constant Natural  :=
         (if Region_Width > 2 * Pad + Bar_W then Region_Width - 2 * Pad - Bar_W else 0);
-      Title_Y   : constant Natural  := Region_Y + Pad;
+      --  Align the title header with the close icon (same top inset), forming a
+      --  title bar at the very top of the panel; keep its text clear of the icon.
+      Title_Y   : constant Natural  := Region_Y + Natural'Max (4, LH / 4);
+      Title_W   : constant Natural  :=
+        (if Region_Width > Pad + LH + 2 * Natural'Max (4, LH / 4)
+         then Region_Width - Pad - LH - 2 * Natural'Max (4, LH / 4)
+         else Content_W);
       Switch_Y  : constant Natural  := Title_Y + Row_H;
       Rows_Top  : constant Natural  := Title_Y + Row_H + Switch_H;
       --  Field indices rendered as rows now (preamble + active section), compact.
@@ -528,7 +534,7 @@ package body Guikit.Settings_Panel is
         (Guikit.Draw.Accessibility_Node'
            (Role => Guikit.Draw.Role_Dialog, X => Region_X, Y => Region_Y,
             Width => Region_Width, Height => Region_Height, Name => P.Config.Title, others => <>));
-      Add_Text (Content_X, Title_Y + (Row_H - LH) / 2, Content_W, P.Config.Title, Guikit.Draw.Text_Color);
+      Add_Text (Content_X, Title_Y, Title_W, P.Config.Title, Guikit.Draw.Text_Color);
 
       --  Section switcher (the tabs): a segmented control of the section labels,
       --  the active one highlighted, each cell clickable to switch section.
@@ -795,14 +801,14 @@ package body Guikit.Settings_Panel is
               (Rectangles   => Rectangles,
                Clip_Width   => Clip_Width,
                Clip_Height  => Clip_Height,
-               Track_X      => Region_X + Region_Width - Pad - Bar_W,
+               Track_X      => Region_X + Region_Width - Bar_W,
                Track_Y      => Rows_Top,
                Track_Width  => Bar_W,
                Track_Height => Avail_H,
                Thumb_Y      => Rows_Top + Thumb.Offset,
                Thumb_Height => Thumb.Length,
-               Track_Color  => Guikit.Draw.Input_Color,
-               Thumb_Color  => Guikit.Draw.Border_Color,
+               Track_Color  => Guikit.Draw.Border_Color,
+               Thumb_Color  => Guikit.Draw.Selection_Color,
                Grip_Color   => Guikit.Draw.Muted_Text_Color);
          end if;
       end;
