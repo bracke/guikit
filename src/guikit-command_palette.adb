@@ -239,8 +239,17 @@ package body Guikit.Command_Palette is
          then Layout.Search_Y + (Layout.Search_Height - LH) / 2
          else Layout.Search_Y);
       Enabled : Guikit.Layout.Palette_Enabled_Vectors.Vector;
+      --  Overlay close-button geometry (top-right). The search field is shortened
+      --  to end before it so the input does not run under the close icon.
+      Close_Btn   : constant Natural := LH;
+      Close_Inset : constant Natural := Natural'Max (4, LH / 4);
+      Search_W    : constant Natural :=
+        (if P.Config.Overlay
+           and then Layout.X + Layout.Width > Layout.Search_X + Close_Btn + 2 * Close_Inset
+         then (Layout.X + Layout.Width - Close_Btn - 2 * Close_Inset) - Layout.Search_X
+         else Layout.Search_Width);
       Field_W : constant Natural :=
-        (if Layout.Search_Width > 2 * Pad then Layout.Search_Width - 2 * Pad else 0);
+        (if Search_W > 2 * Pad then Search_W - 2 * Pad else 0);
    begin
       P.Rows.Clear;
       P.Visible_Rows := Guikit.Layout.Visible_Row_Count (Layout.Results_Height, Layout.Row_Height);
@@ -274,7 +283,7 @@ package body Guikit.Command_Palette is
       --  Search box + query/placeholder + caret.
       Guikit.Widgets.Draw_Input_Field
         (Rectangles, Clip_Width, Clip_Height, Layout.Search_X, Layout.Search_Y,
-         Layout.Search_Width, Layout.Search_Height, Guikit.Draw.Input_Color, Guikit.Draw.Border_Color);
+         Search_W, Layout.Search_Height, Guikit.Draw.Input_Color, Guikit.Draw.Border_Color);
       if Q'Length > 0 then
          Text.Append
            (Guikit.Draw.Text_Command'
@@ -289,7 +298,7 @@ package body Guikit.Command_Palette is
       if Focused then
          Guikit.Widgets.Draw_Focus_Ring
            (Rectangles, Clip_Width, Clip_Height, Layout.Search_X, Layout.Search_Y,
-            Layout.Search_Width, Layout.Search_Height, Guikit.Draw.Selection_Color);
+            Search_W, Layout.Search_Height, Guikit.Draw.Selection_Color);
          Guikit.Widgets.Draw_Caret
            (Rectangles, Clip_Width, Clip_Height,
             Layout.Search_X + Pad + Guikit.Utf8.Display_Units (Q) * Cell_W, Text_Y,
@@ -298,7 +307,7 @@ package body Guikit.Command_Palette is
       Accessibility.Append
         (Guikit.Draw.Accessibility_Node'
            (Role => Guikit.Draw.Role_Text_Input, X => Layout.Search_X, Y => Layout.Search_Y,
-            Width => Layout.Search_Width, Height => Layout.Search_Height,
+            Width => Search_W, Height => Layout.Search_Height,
             Name => P.Query, Focused => Focused, others => <>));
 
       --  Result rows.
@@ -437,7 +446,7 @@ package body Guikit.Command_Palette is
               (Rectangles   => Rectangles,
                Clip_Width   => Clip_Width,
                Clip_Height  => Clip_Height,
-               Track_X      => Layout.Results_X + Layout.Results_Width - Bar_Width,
+               Track_X      => Layout.X + Layout.Width - Bar_Width,
                Track_Y      => Layout.Results_Y,
                Track_Width  => Bar_Width,
                Track_Height => Layout.Results_Height,
@@ -453,8 +462,8 @@ package body Guikit.Command_Palette is
       --  panel-close geometry: inset = max(4, line/4), a line-height square).
       if P.Config.Overlay then
          declare
-            Inset : constant Natural := Natural'Max (4, LH / 4);
-            Btn   : constant Natural := LH;
+            Inset : constant Natural := Close_Inset;
+            Btn   : constant Natural := Close_Btn;
             Bx    : constant Natural :=
               (if Layout.Width > Inset + Btn then Layout.X + Layout.Width - Inset - Btn else Layout.X);
             By    : constant Natural := Layout.Y + Inset;
