@@ -98,11 +98,23 @@ package Guikit.Draw is
      (Index_Type   => Positive,
       Element_Type => Icon_Asset_Rect);
 
+   --  A filled triangle in grid units, for diagonals the rectangles cannot draw
+   --  (folded corners, folder tabs, pointed shapes). Vertices lie on 0 .. Grid.
+   type Icon_Asset_Tri is record
+      X1, Y1, X2, Y2, X3, Y3 : Natural := 0;
+      Role                   : Icon_Asset_Color_Role := Icon_Asset_Base;
+   end record;
+
+   package Icon_Asset_Tri_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Icon_Asset_Tri);
+
    type Icon_Asset is record
       Valid      : Boolean := False;
       Name       : UString;
       Grid       : Positive := 16;
       Rectangles : Icon_Asset_Rect_Vectors.Vector;
+      Triangles  : Icon_Asset_Tri_Vectors.Vector;
    end record;
 
    --  Return bundled files-icon-v1 asset text for an icon and theme.

@@ -395,6 +395,39 @@ package body Guikit.Draw is
                end if;
                Result.Rectangles.Append (Rect);
             end;
+         elsif Starts_With (Line, "tri=") then
+            if not Saw_Grid then
+               Parse_Failed := True;
+               return;
+            end if;
+
+            declare
+               Data : constant String := Line (Line'First + 4 .. Line'Last);
+               Tri  : Icon_Asset_Tri;
+            begin
+               if not Try_Parse_Natural (Field (Data, 1), Tri.X1)
+                 or else not Try_Parse_Natural (Field (Data, 2), Tri.Y1)
+                 or else not Try_Parse_Natural (Field (Data, 3), Tri.X2)
+                 or else not Try_Parse_Natural (Field (Data, 4), Tri.Y2)
+                 or else not Try_Parse_Natural (Field (Data, 5), Tri.X3)
+                 or else not Try_Parse_Natural (Field (Data, 6), Tri.Y3)
+                 or else not Try_Parse_Role (Field (Data, 7), Tri.Role)
+               then
+                  Parse_Failed := True;
+                  return;
+               end if;
+
+               --  Vertices may sit on the grid edge (0 .. Grid), unlike a rect's
+               --  top-left origin which must be strictly inside.
+               if Tri.X1 > Result.Grid or else Tri.Y1 > Result.Grid
+                 or else Tri.X2 > Result.Grid or else Tri.Y2 > Result.Grid
+                 or else Tri.X3 > Result.Grid or else Tri.Y3 > Result.Grid
+               then
+                  Parse_Failed := True;
+                  return;
+               end if;
+               Result.Triangles.Append (Tri);
+            end;
          else
             Parse_Failed := True;
             return;
