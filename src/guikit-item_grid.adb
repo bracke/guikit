@@ -413,8 +413,7 @@ package body Guikit.Item_Grid is
          Text_Commands.Append
            (Guikit.Draw.Text_Command'
               (X => X, Y => Y, Width => Draw_W, Height => Draw_H, Text => Result, Color => Color,
-               Truncated => Truncated, Scale_To_Box => False, Shrink_To_Box => False,
-               Italic => Italic));
+               Truncated => Truncated, Scale_To_Box => False, Italic => Italic));
       end if;
    end Draw_Fitted_Text;
 

@@ -187,11 +187,6 @@ package Guikit.Draw is
       Color  : Render_Color := Text_Color;
       Truncated : Boolean := False;
       Scale_To_Box : Boolean := False;
-      --  With Scale_To_Box, only ever enlarge a glyph to fill its box. Shrink_To_Box
-      --  additionally allows scaling a glyph *down* to fit a box smaller than the
-      --  glyph (used for the small extension tab); it has no effect without
-      --  Scale_To_Box.
-      Shrink_To_Box : Boolean := False;
       Italic : Boolean := False;
    end record;
 
