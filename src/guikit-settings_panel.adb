@@ -449,8 +449,11 @@ package body Guikit.Settings_Panel is
       Tab_Count : constant Natural  := Section_Count (P);
       Switch_H  : constant Natural  := (if Tab_Count > 1 then Row_H else 0);
       Content_X : constant Natural  := Region_X + Pad;
+      --  Equal padding on both sides. The scrollbar (Bar_W, narrower than Pad) sits
+      --  within the right padding at the panel edge, so the content still clears it
+      --  without reserving extra width on the right.
       Content_W : constant Natural  :=
-        (if Region_Width > 2 * Pad + Bar_W then Region_Width - 2 * Pad - Bar_W else 0);
+        (if Region_Width > 2 * Pad then Region_Width - 2 * Pad else 0);
       --  Align the title header with the close icon (same top inset), forming a
       --  title bar at the very top of the panel; keep its text clear of the icon.
       Title_Y   : constant Natural  := Region_Y + Natural'Max (4, LH / 4);
