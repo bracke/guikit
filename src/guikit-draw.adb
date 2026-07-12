@@ -104,7 +104,14 @@ package body Guikit.Draw is
       end case;
    end Color_For;
 
-   function Icon_Asset_Text
+   Asset_Source : Icon_Asset_Source := null;
+
+   procedure Set_Icon_Asset_Source (Source : Icon_Asset_Source) is
+   begin
+      Asset_Source := Source;
+   end Set_Icon_Asset_Source;
+
+   function Builtin_Icon_Asset_Text
      (Icon_Id    : String;
       Theme_Name : String)
       return String
@@ -252,6 +259,23 @@ package body Guikit.Draw is
       else
          return "";
       end if;
+   end Builtin_Icon_Asset_Text;
+
+   function Icon_Asset_Text
+     (Icon_Id    : String;
+      Theme_Name : String)
+      return String is
+   begin
+      if Asset_Source /= null then
+         declare
+            Supplied : constant String := Asset_Source (Icon_Id, Theme_Name);
+         begin
+            if Supplied /= "" then
+               return Supplied;
+            end if;
+         end;
+      end if;
+      return Builtin_Icon_Asset_Text (Icon_Id, Theme_Name);
    end Icon_Asset_Text;
 
    function Parse_Icon_Asset

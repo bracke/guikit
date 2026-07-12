@@ -117,15 +117,32 @@ package Guikit.Draw is
       Triangles  : Icon_Asset_Tri_Vectors.Vector;
    end record;
 
-   --  Return bundled files-icon-v1 asset text for an icon and theme.
+   --  Return the shape definition (files-icon-v1) for an icon and theme. When an
+   --  external source has been registered (see Set_Icon_Asset_Source) its
+   --  definition is used; otherwise the built-in copy is returned. The result is
+   --  an empty string when no definition exists.
    --
    --  @param Icon_Id Bundled icon identifier.
    --  @param Theme_Name Icon theme identifier.
-   --  @return Icon asset text, or an empty string when no bundled asset exists.
+   --  @return Icon shape definition, or an empty string when none exists.
    function Icon_Asset_Text
      (Icon_Id    : String;
       Theme_Name : String)
       return String;
+
+   --  A source of icon shape definitions supplied by the host (e.g. reading the
+   --  bundled .icon files from disk), so those files are the single edit surface.
+   --  It returns the definition for (Icon_Id, Theme_Name) or "" when it has none,
+   --  in which case Icon_Asset_Text falls back to the built-in copy.
+   type Icon_Asset_Source is access function
+     (Icon_Id    : String;
+      Theme_Name : String)
+      return String;
+
+   --  Register (or clear, with null) the external icon-definition source.
+   --
+   --  @param Source Definition provider, or null to use only the built-in copies.
+   procedure Set_Icon_Asset_Source (Source : Icon_Asset_Source);
 
    --  Parse a files-icon-v1 asset into rasterizable rectangle commands.
    --
