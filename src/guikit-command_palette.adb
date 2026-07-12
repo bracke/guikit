@@ -225,8 +225,14 @@ package body Guikit.Command_Palette is
       Accessibility : out Guikit.Draw.Accessibility_Node_Vectors.Vector)
    is
       LH      : constant Positive := P.Config.Line_Height;
+      --  Reserve a title band (one line plus a gap) at the top when a heading is
+      --  configured, so the search box and results sit below it.
+      Title_H : constant Natural :=
+        (if Length (P.Config.Title) > 0
+         then Guikit.Layout.Saturating_Add (LH, Guikit.Layout.Palette_Padding) else 0);
       Layout  : constant Guikit.Layout.Palette_Layout :=
-        Guikit.Layout.Calculate_Palette_Layout (Region_X, Region_Y, Region_Width, Region_Height, LH);
+        Guikit.Layout.Calculate_Palette_Layout
+          (Region_X, Region_Y, Region_Width, Region_Height, LH, Title_H);
       Pad     : constant Natural := Guikit.Layout.Palette_Padding;
       Row_Pad : constant Natural := Guikit.Layout.Palette_Result_Row_Padding;
       Cell_W  : constant Natural := Guikit.Layout.Caret_Advance_Width (LH);
@@ -239,12 +245,15 @@ package body Guikit.Command_Palette is
          then Layout.Search_Y + (Layout.Search_Height - LH) / 2
          else Layout.Search_Y);
       Enabled : Guikit.Layout.Palette_Enabled_Vectors.Vector;
-      --  Overlay close-button geometry (top-right). The search field is shortened
-      --  to end before it so the input does not run under the close icon.
+      --  Overlay close-button geometry (top-right). Without a title the close icon
+      --  shares the search row, so the search field is shortened to end before it;
+      --  with a title the close icon sits in the title row and the search is full
+      --  width.
       Close_Btn   : constant Natural := LH;
       Close_Inset : constant Natural := Natural'Max (4, LH / 4);
       Search_W    : constant Natural :=
-        (if P.Config.Overlay
+        (if Title_H > 0 then Layout.Search_Width
+         elsif P.Config.Overlay
            and then Layout.X + Layout.Width > Layout.Search_X + Close_Btn + 2 * Close_Inset
          then (Layout.X + Layout.Width - Close_Btn - 2 * Close_Inset) - Layout.Search_X
          else Layout.Search_Width);
@@ -279,6 +288,29 @@ package body Guikit.Command_Palette is
         (Guikit.Draw.Accessibility_Node'
            (Role => Guikit.Draw.Role_Dialog, X => Layout.X, Y => Layout.Y,
             Width => Layout.Width, Height => Layout.Height, others => <>));
+
+      --  Panel title (heading): top-left, aligned with the close icon and matching
+      --  the settings panel's title; the search box sits below it.
+      if Title_H > 0 then
+         declare
+            Title_X : constant Natural := Layout.X + Pad;
+            Title_Y : constant Natural := Layout.Y + Natural'Max (4, LH / 4);
+            Title_W : constant Natural :=
+              (if Layout.Width > Pad + Close_Btn + 2 * Close_Inset
+               then Layout.Width - Pad - Close_Btn - 2 * Close_Inset else 0);
+         begin
+            if Title_W > 0 then
+               Text.Append
+                 (Guikit.Draw.Text_Command'
+                    (X => Title_X, Y => Title_Y, Width => Title_W, Height => LH,
+                     Text => P.Config.Title, Color => Guikit.Draw.Text_Color, others => <>));
+               Accessibility.Append
+                 (Guikit.Draw.Accessibility_Node'
+                    (Role => Guikit.Draw.Role_Heading, X => Title_X, Y => Title_Y,
+                     Width => Title_W, Height => LH, Name => P.Config.Title, others => <>));
+            end if;
+         end;
+      end if;
 
       --  Search box + query/placeholder + caret.
       Guikit.Widgets.Draw_Input_Field

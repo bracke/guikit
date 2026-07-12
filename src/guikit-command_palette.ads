@@ -55,6 +55,7 @@ package Guikit.Command_Palette is
       Wrap_Selection : Boolean  := False;  --  navigation wraps at the ends
       Placeholder    : UString;            --  shown in the search box when empty
       Empty_State    : UString;            --  shown when no command matches
+      Title          : UString;            --  panel heading (empty = no title row)
    end record;
 
    type Palette is private;

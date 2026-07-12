@@ -476,7 +476,8 @@ package body Guikit.Layout is
       Command_Y      : Natural;
       Command_Width  : Natural;
       Command_Height : Natural;
-      Line_Height    : Positive := 20)
+      Line_Height    : Positive := 20;
+      Title_Height   : Natural  := 0)
       return Palette_Layout
    is
       Search_H  : constant Natural :=
@@ -495,9 +496,13 @@ package body Guikit.Layout is
         (if Command_Height > Saturating_Multiply (Palette_Padding, 2)
          then Command_Height - Saturating_Multiply (Palette_Padding, 2)
          else Command_Height);
+      --  A title band (Title_Height, 0 for none) reserved at the top of the
+      --  content pushes the search box and results down below it.
+      Search_Y  : constant Natural := Saturating_Add (Content_Y, Title_Height);
       Results_Y : constant Natural :=
-        Saturating_Add (Content_Y, Saturating_Add (Search_H, Palette_Padding));
-      Used_H    : constant Natural := Saturating_Add (Search_H, Palette_Padding);
+        Saturating_Add (Search_Y, Saturating_Add (Search_H, Palette_Padding));
+      Used_H    : constant Natural :=
+        Saturating_Add (Title_Height, Saturating_Add (Search_H, Palette_Padding));
    begin
       return
         (X              => Command_X,
@@ -505,7 +510,7 @@ package body Guikit.Layout is
          Width          => Command_Width,
          Height         => Command_Height,
          Search_X       => Content_X,
-         Search_Y       => Content_Y,
+         Search_Y       => Search_Y,
          Search_Width   => Content_W,
          Search_Height  => Search_H,
          Results_X      => Content_X,

@@ -387,13 +387,16 @@ package Guikit.Layout is
    --  @param Command_Width Width of the overlay region.
    --  @param Command_Height Height of the overlay region.
    --  @param Line_Height Text line height in pixels.
+   --  @param Title_Height Height of a title band reserved at the top of the content
+   --    (0 for none); the search box and results shift down by this amount.
    --  @return Palette panel, search and results geometry.
    function Calculate_Palette_Layout
      (Command_X      : Natural;
       Command_Y      : Natural;
       Command_Width  : Natural;
       Command_Height : Natural;
-      Line_Height    : Positive := 20)
+      Line_Height    : Positive := 20;
+      Title_Height   : Natural  := 0)
       return Palette_Layout;
 
    --  Lay out the visible result rows for a palette, honouring the scroll
