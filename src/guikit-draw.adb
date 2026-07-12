@@ -117,39 +117,46 @@ package body Guikit.Draw is
          return "files-icon-v1" & LF & "name=" & Asset_Name & LF & "grid=16" & LF;
       end Header;
 
+      --  A page on the finer 32-unit grid with a real folded top-right corner (a
+      --  triangle), so filetype icons read as detailed shapes rather than blocky
+      --  rectangles at large sizes. The caller paints its glyph over the page.
       function Document
         (Asset_Name : String;
          Body_Text  : String)
          return String is
       begin
          return
-           Header (Asset_Name)
-           & "rect=1,0,14,16,base" & LF
-           & "rect=11,0,4,4," & Corner_Role & LF
+           "files-icon-v1" & LF & "name=" & Asset_Name & LF & "grid=32" & LF
+           & "rect=7,3,11,26,base" & LF
+           & "rect=18,9,7,20,base" & LF
+           & "tri=18,3,25,9,18,9," & Corner_Role & LF
            & Body_Text;
       end Document;
    begin
       if Icon_Id = "folder" then
          return
-           Header ("folder")
-           & "rect=0,3,7,3,base" & LF
-           & "rect=0,6,16,10,base" & LF
-           & "rect=1,7,14,1,border" & LF
-           & (if Theme_Name = "files-high-contrast" then "rect=1,14,14,1,border" & LF else "");
+           "files-icon-v1" & LF & "name=folder" & LF & "grid=32" & LF
+           & "rect=4,5,10,6,base" & LF
+           & "tri=14,5,14,11,18,11,base" & LF
+           & "rect=4,11,24,16,base" & LF
+           & "rect=4,11,24,3,accent" & LF
+           & "rect=6,16,20,1,border" & LF;
       elsif Icon_Id = "text" then
          return
            Document
              ("text",
-              "rect=4,6,8,1,border" & LF
-              & "rect=4,9,8,1,border" & LF
-              & "rect=4,12,6,1,border" & LF);
+              "rect=10,13,12,1,border" & LF
+              & "rect=10,17,12,1,border" & LF
+              & "rect=10,21,12,1,border" & LF
+              & "rect=10,25,8,1,border" & LF);
       elsif Icon_Id = "image" then
          return
            Document
              ("image",
-              "rect=3,5,10,6,accent" & LF
-              & "rect=4,8,4,2,border" & LF
-              & "rect=8,7,4,3,border" & LF);
+              "rect=9,13,14,13,accent" & LF
+              & "rect=11,15,3,3,base" & LF
+              & "tri=9,26,16,16,20,26,border" & LF
+              & "tri=15,26,20,20,23,26,border" & LF);
       elsif Icon_Id = "thumbnail" then
          return
            Header ("thumbnail")
@@ -163,37 +170,42 @@ package body Guikit.Draw is
          return
            Document
              ("executable",
-              "rect=1,0,3,16,accent" & LF
-              & "rect=7,5,3,6,accent" & LF
-              & "rect=10,8,3,3,accent" & LF);
+              "tri=11,13,11,21,18,17,accent" & LF
+              & "rect=13,23,8,2,border" & LF);
       elsif Icon_Id = "link" then
          return
            Document
              ("link",
-              "rect=3,8,8,2,accent" & LF
-              & "rect=8,5,5,2,accent" & LF
-              & "rect=8,11,5,2,accent" & LF);
+              "tri=13,23,15,23,21,13,accent" & LF
+              & "tri=15,23,21,13,21,15,accent" & LF
+              & "tri=15,11,23,11,23,19,accent" & LF);
       elsif Icon_Id = "unknown" then
          return
            Document
              ("unknown",
-              "rect=5,4,6,2,border" & LF
-              & "rect=8,6,2,5,border" & LF
-              & "rect=8,13,2,1,border" & LF);
+              "rect=13,12,7,2,border" & LF
+              & "rect=18,13,2,4,border" & LF
+              & "rect=15,16,5,2,border" & LF
+              & "rect=15,18,2,4,border" & LF
+              & "rect=15,25,2,2,border" & LF);
       elsif Icon_Id = "ada" then
          return
            Document
              ("ada",
-              "rect=4,5,3,8,accent" & LF
-              & "rect=9,5,3,8,accent" & LF
-              & "rect=5,8,6,2,border" & LF);
+              "tri=15,12,17,12,11,27,accent" & LF
+              & "tri=15,12,11,27,13,27,accent" & LF
+              & "tri=15,12,17,12,21,27,accent" & LF
+              & "tri=17,12,21,27,19,27,accent" & LF
+              & "rect=13,21,6,2,border" & LF);
       elsif Icon_Id = "markdown" then
          return
            Document
              ("markdown",
-              "rect=4,5,2,8,border" & LF
-              & "rect=7,8,2,5,border" & LF
-              & "rect=10,5,2,8,border" & LF);
+              "rect=10,12,2,9,border" & LF
+              & "rect=20,12,2,9,border" & LF
+              & "tri=11,12,21,12,16,18,border" & LF
+              & "rect=15,21,2,3,accent" & LF
+              & "tri=13,23,19,23,16,27,accent" & LF);
       elsif Icon_Id = "toolbar-home" then
          return
            Header ("toolbar-home")
