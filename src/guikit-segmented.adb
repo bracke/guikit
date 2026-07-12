@@ -187,7 +187,8 @@ package body Guikit.Segmented is
                     (Guikit.Draw.Text_Command'
                        (X => Label_X, Y => Label_Y, Width => Draw_W, Height => Draw_H, Text => S.Label,
                         Color => (if S.Enabled then Guikit.Draw.Text_Color else Guikit.Draw.Muted_Text_Color),
-                        Truncated => False, Scale_To_Box => False, Italic => False));
+                        Truncated => False, Scale_To_Box => False, Shrink_To_Box => False,
+                        Italic => False));
                end if;
 
                if Length (S.Tooltip) > 0 then

@@ -152,14 +152,14 @@ package body Guikit.Text is
                      if Metrics.W > 0 and then Metrics.H > 0 then
                         declare
                            Origin_X : constant Float := (if Unit_Width = 0 then Base_X else Cell_X);
+                           Fit_Ratio : constant Float :=
+                             0.86 * Float'Min
+                               (Float (Text.Width) / Float (Metrics.W),
+                                Float (Text.Height) / Float (Metrics.H));
                            Scale    : constant Float :=
-                             (if Text.Scale_To_Box
-                              then Float'Max
-                                (1.0,
-                                 0.86 * Float'Min
-                                   (Float (Text.Width) / Float (Metrics.W),
-                                    Float (Text.Height) / Float (Metrics.H)))
-                              else 1.0);
+                             (if not Text.Scale_To_Box then 1.0
+                              elsif Text.Shrink_To_Box then Float'Max (0.30, Fit_Ratio)
+                              else Float'Max (1.0, Fit_Ratio));
                            Scaled_W : constant Float := Float (Metrics.W) * Scale;
                            Scaled_H : constant Float := Float (Metrics.H) * Scale;
                            Draw_X   : Float;
