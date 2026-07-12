@@ -4028,7 +4028,9 @@ package body Guikit.Vulkan is
       Overlay_Rectangles : Guikit.Draw.Rectangle_Command_Vectors.Vector;
       Layout             : Guikit.Draw.Layout_Metrics;
       Theme              : Guikit.Draw.Theme_Kind;
-      Text               : Guikit.Draw.Text_Render_Result)
+      Text               : Guikit.Draw.Text_Render_Result;
+      Overlay_Triangles  : Guikit.Draw.Triangle_Command_Vectors.Vector :=
+                             Guikit.Draw.Triangle_Command_Vectors.Empty_Vector)
       return Submission_Batch
    is
       Result : Submission_Batch;
@@ -4584,6 +4586,23 @@ package body Guikit.Vulkan is
                   Color    => Rectangle.Color,
                   Textured => False,
                   Texture  => Texture_None);
+               Result.Overlay_Vertex_Count :=
+                 Result.Overlay_Vertex_Count + Natural (Result.Vertices.Length) - Before;
+            end;
+         end loop;
+
+         for Triangle of Overlay_Triangles loop
+            declare
+               Before : constant Natural := Natural (Result.Vertices.Length);
+            begin
+               Append_Triangle
+                 (X1    => Triangle.X1,
+                  Y1    => Triangle.Y1,
+                  X2    => Triangle.X2,
+                  Y2    => Triangle.Y2,
+                  X3    => Triangle.X3,
+                  Y3    => Triangle.Y3,
+                  Color => Triangle.Color);
                Result.Overlay_Vertex_Count :=
                  Result.Overlay_Vertex_Count + Natural (Result.Vertices.Length) - Before;
             end;

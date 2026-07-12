@@ -459,6 +459,8 @@ package Guikit.Vulkan is
    --  @param Layout Frame layout geometry used to normalize coordinates.
    --  @param Theme Palette theme recorded on the batch for downstream color.
    --  @param Text Text render result containing glyph commands.
+   --  @param Overlay_Triangles Triangle commands drawn over the frame body,
+   --    alongside the overlay rectangles and beneath the overlay glyphs.
    --  @return Submission batch containing quad vertices.
    function Build_Submission
      (Rectangles         : Guikit.Draw.Rectangle_Command_Vectors.Vector;
@@ -467,7 +469,9 @@ package Guikit.Vulkan is
       Overlay_Rectangles : Guikit.Draw.Rectangle_Command_Vectors.Vector;
       Layout             : Guikit.Draw.Layout_Metrics;
       Theme              : Guikit.Draw.Theme_Kind;
-      Text               : Guikit.Draw.Text_Render_Result)
+      Text               : Guikit.Draw.Text_Render_Result;
+      Overlay_Triangles  : Guikit.Draw.Triangle_Command_Vectors.Vector :=
+                             Guikit.Draw.Triangle_Command_Vectors.Empty_Vector)
       return Submission_Batch;
 
    --  Compare two Vulkan submission batches as deterministic screenshot proxies.
