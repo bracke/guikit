@@ -117,6 +117,7 @@ package body Guikit.Text is
                      --  width; a Scale_To_Box glyph is rescaled to its box afterwards,
                      --  so a box narrower than a native cell must not suppress it.
                      if not Text.Scale_To_Box
+                       and then not Text.Shrink_To_Box
                        and then Unit_Width > 0
                        and then Cell_X + Float (Sat_Mul (Unit_Width, R.Cell_Width)) > Limit_X
                      then
@@ -160,10 +161,17 @@ package body Guikit.Text is
                              0.86 * Float'Min
                                (Float (Text.Width) / Float (Metrics.W),
                                 Float (Text.Height) / Float (Metrics.H));
+                           --  Scale_To_Box fits one glyph to its box (optionally down,
+                           --  with Shrink_To_Box). Shrink_To_Box alone uniformly scales
+                           --  a whole run down to the box height (Cell_Height is the
+                           --  native line height), keeping the run on one baseline.
                            Scale    : constant Float :=
-                             (if not Text.Scale_To_Box then 1.0
-                              elsif Text.Shrink_To_Box then Float'Max (0.30, Fit_Ratio)
-                              else Float'Max (1.0, Fit_Ratio));
+                             (if Text.Scale_To_Box then
+                                (if Text.Shrink_To_Box then Float'Max (0.30, Fit_Ratio)
+                                 else Float'Max (1.0, Fit_Ratio))
+                              elsif Text.Shrink_To_Box then
+                                Float'Min (1.0, Float (Text.Height) / Float (R.Cell_Height))
+                              else 1.0);
                            Scaled_W : constant Float := Float (Metrics.W) * Scale;
                            Scaled_H : constant Float := Float (Metrics.H) * Scale;
                            Draw_X   : Float;
@@ -173,6 +181,12 @@ package body Guikit.Text is
                            if Text.Scale_To_Box then
                               Draw_X := Float (Text.X) + (Float (Text.Width) - Scaled_W) / 2.0;
                               Draw_Y := Float (Text.Y) + (Float (Text.Height) - Scaled_H) / 2.0;
+                           elsif Text.Shrink_To_Box then
+                              --  Scale each glyph's native offset from the box top-left
+                              --  by the run scale, so the run shrinks as a unit on a
+                              --  shared baseline.
+                              Draw_X := Float (Text.X) + (Placement.X - Float (Text.X)) * Scale;
+                              Draw_Y := Float (Text.Y) + (Placement.Y - Float (Text.Y)) * Scale;
                            elsif Decoded_Codepoint = 16#2026# then
                               --  Snap the ellipsis to the left of its cell so it
                               --  hugs the preceding character.
