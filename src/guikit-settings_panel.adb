@@ -482,8 +482,9 @@ package body Guikit.Settings_Panel is
         (if Region_Height > Pad + Foot_H then Region_Y + Region_Height - Pad - Foot_H else Region_Y);
       Avail_H   : constant Natural  := (if Rows_Bot > Rows_Top then Rows_Bot - Rows_Top else 0);
       --  The unstretched width a field's control needs. The value column is sized to
-      --  the widest visible one, so it is no wider than necessary rather than filling
-      --  the whole remaining row.
+      --  the widest control across every section (not just the visible one), so the
+      --  column -- and hence each control's right edge, e.g. toggles -- stays put
+      --  when switching sections, while still being no wider than necessary.
       function Control_Width (F : Field) return Natural is
       begin
          case F.Kind is
@@ -530,10 +531,10 @@ package body Guikit.Settings_Panel is
       function Max_Value_Width return Natural is
          Max : Natural := 2 * LH;  --  never narrower than a toggle
       begin
+         --  Every field, not just the visible section, so the column is stable
+         --  across sections (Section fields report width 0 and never raise it).
          for I in P.Fields.First_Index .. P.Fields.Last_Index loop
-            if Field_Is_Visible (P, I) then
-               Max := Natural'Max (Max, Control_Width (P.Fields.Element (I)));
-            end if;
+            Max := Natural'Max (Max, Control_Width (P.Fields.Element (I)));
          end loop;
          return Max;
       end Max_Value_Width;
