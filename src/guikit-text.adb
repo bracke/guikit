@@ -113,7 +113,11 @@ package body Guikit.Text is
                   begin
                      Guikit.Utf8.Decode_Next_Codepoint (Content, Index, Decoded_Codepoint);
                      Unit_Width := Guikit.Utf8.Display_Units (Content (Unit_Start .. Index - 1));
-                     if Unit_Width > 0
+                     --  The overflow check compares against the glyph's native cell
+                     --  width; a Scale_To_Box glyph is rescaled to its box afterwards,
+                     --  so a box narrower than a native cell must not suppress it.
+                     if not Text.Scale_To_Box
+                       and then Unit_Width > 0
                        and then Cell_X + Float (Sat_Mul (Unit_Width, R.Cell_Width)) > Limit_X
                      then
                         exit;
