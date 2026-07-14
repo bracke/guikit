@@ -23,3 +23,12 @@ textrender = "*"
 
 [[pins]]
 textrender = { path = "../textrender" }
+
+# Build dependencies in the development profile (-Og) too, not the default release
+# (-O3). Alire only puts the *root* in development and leaves dependencies at -O3,
+# which is a lot of optimisation for code we are only about to test -- and the
+# profile lives in each crate's generated config gpr, so a root that disagrees with
+# its neighbours silently forces a full rebuild of the shared ones. files and
+# launcher already pin this; guikit is what they share, so it pins it too.
+[build-profiles]
+"*" = "development"

@@ -22,3 +22,8 @@ guikit = { path = ".." }
 
 [[depends-on]]
 aunit = "^26.0.0"
+
+# Same profile as the library root: see guikit's own alire.toml. A test run has no
+# use for -O3, and disagreeing with the root would rebuild guikit from scratch.
+[build-profiles]
+"*" = "development"
