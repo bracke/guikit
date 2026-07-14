@@ -17,8 +17,18 @@ project Guikit_Tests is
    end Binder;
 
    package Linker is
-      for Default_Switches ("Ada") use
-        ("-lvulkan", "-lz", "-lgdk_pixbuf-2.0", "-lgobject-2.0", "-lglib-2.0");
+      --  "-lz" was here, and nothing wanted it: guikit calls no C zlib, and the zlib
+      --  sibling crate implements every codec it supports in Ada and links none.
+      case Guikit_Tests_Config.Alire_Host_OS is
+         when "windows" =>
+            --  The Vulkan loader is vulkan-1.dll on Windows, so the library is
+            --  vulkan-1, not vulkan. Asking for -lvulkan there simply does not link.
+            for Default_Switches ("Ada") use
+              ("-lvulkan-1", "-lgdk_pixbuf-2.0", "-lgobject-2.0", "-lglib-2.0");
+         when others =>
+            for Default_Switches ("Ada") use
+              ("-lvulkan", "-lgdk_pixbuf-2.0", "-lgobject-2.0", "-lglib-2.0");
+      end case;
    end Linker;
 
    package Builder is
