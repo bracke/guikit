@@ -335,7 +335,14 @@ package body Guikit_Suite.Widgets is
       Assert (Count (Rects) = 5, "a button is a fill and four border edges");
       Assert (Count (Texts) = 1, "a button draws its label");
       Assert (Texts (1).X = 58, "the label is inset by the padding");
-      Assert (Texts (1).Y = 104, "the label is vertically centred in the button");
+
+      --  Not 104, which is where the label's *box* centres (100 + (28 - 20) / 2).
+      --  Draw_Button deliberately raises it above that: glyphs are baseline-placed
+      --  and sit low in their line box, so centring the box alone leaves the ink
+      --  looking low. This assertion was left behind when that was fixed, and has
+      --  been failing ever since -- it asserts the geometry the widget was corrected
+      --  away from.
+      Assert (Texts (1).Y = 101, "the label is optically centred, raised off the box centre");
    end Test_Button;
 
    procedure Test_Tooltip (T : in out AUnit.Test_Cases.Test_Case'Class) is
