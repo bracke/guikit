@@ -367,7 +367,14 @@ package body Guikit.Command_Palette is
                Label_W    : constant Natural :=
                  (if Right_Edge > Label_X + Pad then Right_Edge - Label_X - Pad else 0);
                Label_Trunc : Boolean;
-               Desc_Trunc  : Boolean;
+               --  A row with no description has nothing to truncate, and nothing
+               --  assigns this: Fit_To_Cells sets it, and it is only called when
+               --  Has_Desc. The aggregate below reads it either way, so without a
+               --  value here it read whatever the stack happened to hold -- and a
+               --  Boolean whose byte is neither 0 nor 1 raises Constraint_Error
+               --  ("invalid data"). It only ever showed up once the optimiser
+               --  stopped hiding it.
+               Desc_Trunc  : Boolean := False;
                Label_Fit  : constant String :=
                  Fit_To_Cells (To_String (C.Label), Label_W / Natural'Max (1, Cell_W), Label_Trunc);
                Has_Desc   : constant Boolean := Row.Height > LH and then Length (C.Description) > 0;
