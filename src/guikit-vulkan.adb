@@ -1071,6 +1071,11 @@ package body Guikit.Vulkan is
       end if;
    end Set_Readback_Enabled;
 
+   function Readback_Enabled (Renderer : Vulkan_Renderer) return Boolean is
+   begin
+      return Renderer.Readback_Enabled;
+   end Readback_Enabled;
+
    function Create_Render_Targets
      (Renderer : in out Vulkan_Renderer;
       Format   : Vk.Format_T)

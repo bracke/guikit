@@ -493,6 +493,14 @@ package Guikit.Vulkan is
      (Renderer : in out Vulkan_Renderer;
       Enabled  : Boolean);
 
+   --  Whether framebuffer readback diagnostics are enabled. A caller that skips
+   --  presenting an unchanged frame must still present while this is on, since
+   --  the readback copy is produced by the present path.
+   --
+   --  @param Renderer Renderer state to query.
+   --  @return True when readback is enabled.
+   function Readback_Enabled (Renderer : Vulkan_Renderer) return Boolean;
+
    --  Return the ink fraction of a layout-derived rectangle of the last frame.
    --
    --  The renderer retains a copy of the most recent read-back framebuffer;
