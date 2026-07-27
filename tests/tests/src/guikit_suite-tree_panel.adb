@@ -45,12 +45,14 @@ package body Guikit_Suite.Tree_Panel is
       return Natural (Texts.Length);
    end Count_Texts;
 
+   overriding
    function Name (T : Tree_Panel_Test_Case) return AUnit.Message_String is
       pragma Unreferenced (T);
    begin
       return AUnit.Format ("guikit tree panel draw commands");
    end Name;
 
+   overriding
    procedure Register_Tests (T : in out Tree_Panel_Test_Case) is
    begin
       AUnit.Test_Cases.Registration.Register_Routine
@@ -115,7 +117,7 @@ package body Guikit_Suite.Tree_Panel is
       Result : constant AUnit.Test_Suites.Access_Test_Suite :=
         new AUnit.Test_Suites.Test_Suite;
    begin
-      Result.Add_Test (new Tree_Panel_Test_Case);
+      Result.Add_Test (AUnit.Test_Cases.Test_Case_Access'(new Tree_Panel_Test_Case));
       return Result;
    end Suite;
 

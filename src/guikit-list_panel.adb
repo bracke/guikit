@@ -1,4 +1,3 @@
-with Ada.Strings.Unbounded;
 
 with Guikit.Layout;
 with Guikit.Utf8;

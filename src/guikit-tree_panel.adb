@@ -1,7 +1,6 @@
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
 with Guikit.Layout;
-with Guikit.List_Panel;
 
 package body Guikit.Tree_Panel is
 
