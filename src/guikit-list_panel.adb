@@ -50,13 +50,15 @@ package body Guikit.List_Panel is
       Region_Height : Natural;
       Config        : List_Panel_Configuration;
       Rows          : List_Panel_Row_Vectors.Vector;
-      Draw_Chrome   : Boolean := True)
+      Draw_Chrome   : Boolean := True;
+      Row_Height         : Natural := 0;
+      Leading_Icon_Width : Natural := 0)
    is
       Line_Height : constant Positive := Config.Line_Height;
       --  Rows are Row_Height tall when a larger height is configured, otherwise
       --  one Line_Height each (historic behaviour).
       Eff_Row_Height : constant Positive :=
-        (if Config.Row_Height > Line_Height then Config.Row_Height else Line_Height);
+        (if Row_Height > Line_Height then Row_Height else Line_Height);
       Cell_W      : constant Positive :=
         Positive'Max (1, Guikit.Layout.Saturating_Multiply (Line_Height, 12) / 20);
       Text_Width  : constant Natural :=
@@ -178,7 +180,7 @@ package body Guikit.List_Panel is
             Label_Y : constant Natural := Row_Y + (Eff_Row_Height - Line_Height) / 2;
             --  Width available to the label after the reserved leading-icon column.
             Avail_W : constant Natural :=
-              (if Text_Width > Config.Leading_Icon_Width then Text_Width - Config.Leading_Icon_Width else 0);
+              (if Text_Width > Leading_Icon_Width then Text_Width - Leading_Icon_Width else 0);
             Combined : constant String :=
               (if Length (Row.Detail) = 0 then To_String (Row.Label)
                else To_String (Row.Label) & " - " & To_String (Row.Detail));
@@ -213,7 +215,7 @@ package body Guikit.List_Panel is
                Background_Color      => Background,
                Selected              => Row.Selected,
                Accent_Color          => Row.Accent_Color,
-               Label_X               => Title_X + Config.Leading_Icon_Width,
+               Label_X               => Title_X + Leading_Icon_Width,
                Label_Y               => Label_Y,
                Label_Width           => Label_W,
                Label_Height          => Line_Height,

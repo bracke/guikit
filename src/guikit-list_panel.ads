@@ -34,15 +34,6 @@ package Guikit.List_Panel is
       Line_Height         : Positive := 20;
       Text_Padding        : Natural := 12;
       Show_Alternate_Rows : Boolean := True;
-      --  Height of each row. 0 keeps the historic behaviour (one Line_Height per
-      --  row); a larger value gives taller, roomier rows with the label vertically
-      --  centred -- used by the root/drive selector, whose rows are padded.
-      Row_Height          : Natural := 0;
-      --  Width of a reserved leading column (left of the label) for a caller-drawn
-      --  icon. 0 keeps the historic text-only layout. The widget draws nothing in
-      --  the column and only shifts the label right by it; the caller paints its
-      --  own glyph there (domain icon assets stay caller-side).
-      Leading_Icon_Width  : Natural := 0;
    end record;
 
    --  Draw a reusable list panel into the supplied draw vectors.
@@ -63,6 +54,16 @@ package Guikit.List_Panel is
       Region_Height : Natural;
       Config        : List_Panel_Configuration;
       Rows          : List_Panel_Row_Vectors.Vector;
-      Draw_Chrome   : Boolean := True);
+      Draw_Chrome   : Boolean := True;
+      --  Height of each row. 0 keeps the historic behaviour (one Line_Height per
+      --  row); a larger value gives taller rows with the label vertically centred
+      --  (used by the padded root/drive selector). Passed as a defaulted parameter
+      --  rather than a Config field so adding it does not break callers' full
+      --  List_Panel_Configuration aggregates.
+      Row_Height         : Natural := 0;
+      --  Width of a reserved leading column (left of the label) for a caller-drawn
+      --  icon. 0 keeps the historic text-only layout; the widget draws nothing in
+      --  the column and only shifts the label right by it.
+      Leading_Icon_Width : Natural := 0);
 
 end Guikit.List_Panel;
