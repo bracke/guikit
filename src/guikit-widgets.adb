@@ -90,6 +90,19 @@ package body Guikit.Widgets is
         (Rectangles, Clip_Width, Clip_Height, Saturating_Add (X, Width - 1), Y, 1, Height, Color);
    end Add_Border;
 
+   procedure Draw_Border
+     (Rectangles  : in out Rectangle_Command_Vectors.Vector;
+      Clip_Width  : Natural;
+      Clip_Height : Natural;
+      X           : Natural;
+      Y           : Natural;
+      Width       : Natural;
+      Height      : Natural;
+      Color       : Render_Color) is
+   begin
+      Add_Border (Rectangles, Clip_Width, Clip_Height, X, Y, Width, Height, Color);
+   end Draw_Border;
+
    procedure Draw_Focus_Ring
      (Rectangles  : in out Rectangle_Command_Vectors.Vector;
       Clip_Width  : Natural;

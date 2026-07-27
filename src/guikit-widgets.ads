@@ -38,6 +38,28 @@ package Guikit.Widgets is
       Height      : Natural;
       Color       : Guikit.Draw.Render_Color);
 
+   --  Draw a one-pixel rectangular border (the four clipped edge rects) into a
+   --  rectangle vector. Nothing is drawn when Width or Height is zero. Pass the
+   --  base-layer or overlay-layer vector as Rectangles.
+   --
+   --  @param Rectangles Rectangle command vector to append the edges to.
+   --  @param Clip_Width Drawable window width in pixels.
+   --  @param Clip_Height Drawable window height in pixels.
+   --  @param X Border left edge in pixels.
+   --  @param Y Border top edge in pixels.
+   --  @param Width Border width in pixels; nothing is drawn when zero.
+   --  @param Height Border height in pixels; nothing is drawn when zero.
+   --  @param Color Border color.
+   procedure Draw_Border
+     (Rectangles  : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Clip_Width  : Natural;
+      Clip_Height : Natural;
+      X           : Natural;
+      Y           : Natural;
+      Width       : Natural;
+      Height      : Natural;
+      Color       : Guikit.Draw.Render_Color);
+
    --  Draw a drop shadow along the bottom and right edges of a box: a
    --  horizontal band below it and a vertical band to its right, both offset by
    --  three pixels.
