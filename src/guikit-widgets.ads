@@ -60,6 +60,35 @@ package Guikit.Widgets is
       Height      : Natural;
       Color       : Guikit.Draw.Render_Color);
 
+   --  Draw a meter / progress bar: a full-width track rect and a left-aligned
+   --  fill rect whose width is Filled_Num / Filled_Den of the track (clamped to
+   --  the track; a zero or negative denominator fills it completely). The caller
+   --  draws any border. Nothing is drawn when Width or Height is zero.
+   --
+   --  @param Rectangles Rectangle command vector to append to.
+   --  @param Clip_Width Drawable window width in pixels.
+   --  @param Clip_Height Drawable window height in pixels.
+   --  @param X Meter left edge in pixels.
+   --  @param Y Meter top edge in pixels.
+   --  @param Width Track width in pixels; nothing is drawn when zero.
+   --  @param Height Track height in pixels; nothing is drawn when zero.
+   --  @param Filled_Num Numerator of the filled fraction.
+   --  @param Filled_Den Denominator; <= 0 fills the whole track.
+   --  @param Track_Color Track (background) color.
+   --  @param Fill_Color Filled-portion color.
+   procedure Draw_Meter
+     (Rectangles  : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Clip_Width  : Natural;
+      Clip_Height : Natural;
+      X           : Natural;
+      Y           : Natural;
+      Width       : Natural;
+      Height      : Natural;
+      Filled_Num  : Long_Long_Integer;
+      Filled_Den  : Long_Long_Integer;
+      Track_Color : Guikit.Draw.Render_Color;
+      Fill_Color  : Guikit.Draw.Render_Color);
+
    --  Draw a drop shadow along the bottom and right edges of a box: a
    --  horizontal band below it and a vertical band to its right, both offset by
    --  three pixels.

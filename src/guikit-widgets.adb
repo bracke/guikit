@@ -103,6 +103,48 @@ package body Guikit.Widgets is
       Add_Border (Rectangles, Clip_Width, Clip_Height, X, Y, Width, Height, Color);
    end Draw_Border;
 
+   procedure Draw_Meter
+     (Rectangles  : in out Rectangle_Command_Vectors.Vector;
+      Clip_Width  : Natural;
+      Clip_Height : Natural;
+      X           : Natural;
+      Y           : Natural;
+      Width       : Natural;
+      Height      : Natural;
+      Filled_Num  : Long_Long_Integer;
+      Filled_Den  : Long_Long_Integer;
+      Track_Color : Render_Color;
+      Fill_Color  : Render_Color)
+   is
+      Fill_W : Natural;
+   begin
+      if Width = 0 or else Height = 0 then
+         return;
+      end if;
+
+      Add_Clipped_Rect (Rectangles, Clip_Width, Clip_Height, X, Y, Width, Height, Track_Color);
+
+      if Filled_Den <= 0 then
+         Fill_W := Width;
+      elsif Filled_Num <= 0 then
+         Fill_W := 0;
+      else
+         declare
+            Scaled : constant Long_Long_Integer :=
+              Filled_Num * Long_Long_Integer (Width) / Filled_Den;
+         begin
+            Fill_W :=
+              (if Scaled >= Long_Long_Integer (Width) then Width
+               elsif Scaled <= 0 then 0
+               else Natural (Scaled));
+         end;
+      end if;
+
+      if Fill_W > 0 then
+         Add_Clipped_Rect (Rectangles, Clip_Width, Clip_Height, X, Y, Fill_W, Height, Fill_Color);
+      end if;
+   end Draw_Meter;
+
    procedure Draw_Focus_Ring
      (Rectangles  : in out Rectangle_Command_Vectors.Vector;
       Clip_Width  : Natural;
