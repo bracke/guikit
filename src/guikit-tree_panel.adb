@@ -25,7 +25,9 @@ package body Guikit.Tree_Panel is
          Empty_State         => Config.Empty_State,
          Line_Height         => Config.Line_Height,
          Text_Padding        => Config.Text_Padding,
-         Show_Alternate_Rows => Config.Show_Alternate_Rows);
+         Show_Alternate_Rows => Config.Show_Alternate_Rows,
+         Row_Height          => 0,
+         Leading_Icon_Width  => 0);
       List_Rows : Guikit.List_Panel.List_Panel_Row_Vectors.Vector;
       Line_Height : constant Positive := Config.Line_Height;
       Cell_W      : constant Positive :=

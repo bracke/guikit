@@ -53,6 +53,10 @@ package body Guikit.List_Panel is
       Draw_Chrome   : Boolean := True)
    is
       Line_Height : constant Positive := Config.Line_Height;
+      --  Rows are Row_Height tall when a larger height is configured, otherwise
+      --  one Line_Height each (historic behaviour).
+      Eff_Row_Height : constant Positive :=
+        (if Config.Row_Height > Line_Height then Config.Row_Height else Line_Height);
       Cell_W      : constant Positive :=
         Positive'Max (1, Guikit.Layout.Saturating_Multiply (Line_Height, 12) / 20);
       Text_Width  : constant Natural :=
@@ -60,8 +64,9 @@ package body Guikit.List_Panel is
       Text_Columns : constant Natural := Text_Width / Cell_W;
       Has_Title    : constant Boolean := Length (Config.Title) > 0;
       Title_Rows   : constant Natural := (if Has_Title then 1 else 0);
-      Max_Rows     : constant Natural :=
-        (if Region_Height / Line_Height > Title_Rows then Region_Height / Line_Height - Title_Rows else 0);
+      Rows_Area_H  : constant Natural :=
+        (if Region_Height > Title_Rows * Line_Height then Region_Height - Title_Rows * Line_Height else 0);
+      Max_Rows     : constant Natural := Rows_Area_H / Eff_Row_Height;
       Rows_To_Render : constant Natural := Natural'Min (Natural (Rows.Length), Max_Rows);
       Title_Text : constant UString := Fit_Text (Config.Title, Text_Columns);
       Title_Truncated : constant Boolean :=
@@ -168,16 +173,21 @@ package body Guikit.List_Panel is
       for I in 1 .. Rows_To_Render loop
          declare
             Row : constant List_Panel_Row := Rows (I);
-            Row_Y : constant Natural := Row_Base_Y + ((I - 1) * Line_Height);
+            Row_Y : constant Natural := Row_Base_Y + ((I - 1) * Eff_Row_Height);
+            --  Label is one Line_Height tall, vertically centred in the row.
+            Label_Y : constant Natural := Row_Y + (Eff_Row_Height - Line_Height) / 2;
+            --  Width available to the label after the reserved leading-icon column.
+            Avail_W : constant Natural :=
+              (if Text_Width > Config.Leading_Icon_Width then Text_Width - Config.Leading_Icon_Width else 0);
             Combined : constant String :=
               (if Length (Row.Detail) = 0 then To_String (Row.Label)
                else To_String (Row.Label) & " - " & To_String (Row.Detail));
             Shortcut_W : constant Natural :=
-              (if Length (Row.Shortcut) > 0 and then Text_Width > 14 * Cell_W then 10 * Cell_W else 0);
+              (if Length (Row.Shortcut) > 0 and then Avail_W > 14 * Cell_W then 10 * Cell_W else 0);
             Label_W : constant Natural :=
-              (if Shortcut_W > 0 and then Text_Width > Shortcut_W + Cell_W
-               then Text_Width - Shortcut_W - Cell_W
-               else Text_Width);
+              (if Shortcut_W > 0 and then Avail_W > Shortcut_W + Cell_W
+               then Avail_W - Shortcut_W - Cell_W
+               else Avail_W);
             Label_Columns : constant Natural := Label_W / Cell_W;
             Shortcut_Columns : constant Natural := Shortcut_W / Cell_W;
             Combined_Text : constant UString := Fit_Text (To_Unbounded_String (Combined), Label_Columns);
@@ -199,12 +209,12 @@ package body Guikit.List_Panel is
                Row_X                 => Region_X,
                Row_Y                 => Row_Y,
                Row_Width             => Region_Width,
-               Row_Height            => Line_Height,
+               Row_Height            => Eff_Row_Height,
                Background_Color      => Background,
                Selected              => Row.Selected,
                Accent_Color          => Row.Accent_Color,
-               Label_X               => Title_X,
-               Label_Y               => Row_Y,
+               Label_X               => Title_X + Config.Leading_Icon_Width,
+               Label_Y               => Label_Y,
                Label_Width           => Label_W,
                Label_Height          => Line_Height,
                Label_Text            => Combined_Text,
@@ -228,7 +238,7 @@ package body Guikit.List_Panel is
                   X           => Region_X,
                   Y           => Row_Y,
                   Width       => Region_Width,
-                  Height      => Line_Height,
+                  Height      => Eff_Row_Height,
                   Name        => To_Unbounded_String (Combined),
                   Description => Row.Detail,
                   Enabled     => Row.Enabled,
