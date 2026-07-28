@@ -38,11 +38,10 @@ jobs:
 
       # guikit pins textrender at ../textrender, so it must exist as a sibling
       # checkout or the manifest will not load.
-      - name: Check out textrender sibling
-        uses: actions/checkout@v7
+      - name: Check out sibling crates (transitive pin closure)
+        uses: bracke/project_tools/.github/actions/checkout-ada-siblings@main
         with:
-          repository: ${{ github.repository_owner }}/textrender
-          path: textrender
+          root: guikit
 
       - name: Install system libraries (Linux)
         if: runner.os == 'Linux'
