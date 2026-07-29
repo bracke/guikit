@@ -152,7 +152,10 @@ package body Guikit.Text is
                      if Metrics.W > 0 and then Metrics.H > 0 then
                         declare
                            Origin_X : constant Float := (if Unit_Width = 0 then Base_X else Cell_X);
-                           Scale    : constant Float :=
+
+                           --  How much of the box a fitted glyph fills, before
+                           --  rounding: 86% of the tighter of the two axes.
+                           Box_Fit  : constant Float :=
                              (if Text.Scale_To_Box
                               then Float'Max
                                 (1.0,
@@ -160,6 +163,26 @@ package body Guikit.Text is
                                    (Float (Text.Width) / Float (Metrics.W),
                                     Float (Text.Height) / Float (Metrics.H)))
                               else 1.0);
+
+                           --  Whole numbers only, because the atlas is sampled
+                           --  with FILTER_NEAREST. A fractional magnification
+                           --  duplicates some source columns and not others: at
+                           --  1.29x an 8-pixel glyph becomes 10 pixels by using
+                           --  two of its columns twice, which on a diagonal like
+                           --  the close button's multiplication sign makes one
+                           --  stroke visibly thicker than the other. At a whole
+                           --  factor every source pixel becomes the same size
+                           --  block and the shape survives; below 2x that means
+                           --  drawing it at its rasterized size, which is sharp
+                           --  rather than merely bigger.
+                           --
+                           --  Linear filtering would be the other answer and is
+                           --  not available per quad: the sampler is fixed in the
+                           --  descriptor set, the shaders are embedded SPIR-V
+                           --  with no source to branch in, and making the one
+                           --  sampler linear would soften every 1:1 glyph in the
+                           --  interface to fix magnified ones.
+                           Scale    : constant Float := Float (Natural (Float'Floor (Box_Fit)));
                            Scaled_W : constant Float := Float (Metrics.W) * Scale;
                            Scaled_H : constant Float := Float (Metrics.H) * Scale;
                            Draw_X   : Float;

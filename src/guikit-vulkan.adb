@@ -3250,15 +3250,35 @@ package body Guikit.Vulkan is
          return Renderer.Last_Status;
       end if;
 
-      Chosen_Format := Formats (1);
-      for Index in 1 .. Natural (Format_Count) loop
-         if Formats (Index).format = Vk.FORMAT_B8G8R8A8_SRGB
-           and then Formats (Index).color_Space = Vk.COLOR_SPACE_SRGB_NONLINEAR_KHR
-         then
-            Chosen_Format := Formats (Index);
-            exit;
+      --  An sRGB swapchain is not a preference here, it is a requirement.
+      --  Color_To_Vertex converts every colour from sRGB to linear on the way to
+      --  the GPU, on the understanding that the swapchain encodes back to sRGB
+      --  when it stores. That is what makes the blending gamma-correct. Handed a
+      --  UNORM target instead, the same linear values are displayed as if they
+      --  were already sRGB and the whole interface comes out too dark -- a wrong
+      --  picture rather than an error, which is the kind of failure worth
+      --  refusing outright.
+      --
+      --  Either sRGB byte order will do; the surface reports which it prefers.
+      declare
+         Found_Srgb : Boolean := False;
+      begin
+         for Index in 1 .. Natural (Format_Count) loop
+            if (Formats (Index).format = Vk.FORMAT_B8G8R8A8_SRGB
+                  or else Formats (Index).format = Format_R8G8B8A8_Srgb)
+              and then Formats (Index).color_Space = Vk.COLOR_SPACE_SRGB_NONLINEAR_KHR
+            then
+               Chosen_Format := Formats (Index);
+               Found_Srgb := True;
+               exit;
+            end if;
+         end loop;
+
+         if not Found_Srgb then
+            Renderer.Last_Status := Vulkan_Swapchain_Create_Failed;
+            return Renderer.Last_Status;
          end if;
-      end loop;
+      end;
 
       Image_Count := Capabilities.min_Image_Count + 1;
       if Capabilities.max_Image_Count /= 0 and then Image_Count > Capabilities.max_Image_Count then
