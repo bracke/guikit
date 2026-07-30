@@ -43,12 +43,7 @@ package Guikit.Vulkan is
    type Texture_Source is
      (Texture_None,
       Texture_Text_Atlas,
-      Texture_Icon_Atlas,
-
-      --  Colour glyphs, in a sheet of their own rather than a share of the icon
-      --  atlas: an emoji is a picture the size it was rasterized, and the icon
-      --  atlas would give it a full tile and resample it to fit.
-      Texture_Colour_Glyphs);
+      Texture_Icon_Atlas);
 
    type Atlas_Texture_Format is
      (Atlas_Texture_None,
