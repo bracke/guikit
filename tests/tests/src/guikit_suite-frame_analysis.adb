@@ -33,6 +33,7 @@ package body Guikit_Suite.Frame_Analysis is
 
    procedure Test_Uniform_Frame_Fails (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Identical_Icons_Share_A_Tile (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Shared_Tile_Id_Shares_Pictures (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Banded_Frame_Passes (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Empty_Band_Fails (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Region_Ink_Detection (T : in out AUnit.Test_Cases.Test_Case'Class);
@@ -111,6 +112,9 @@ package body Guikit_Suite.Frame_Analysis is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Identical_Icons_Share_A_Tile'Access,
          "icons that would rasterize alike share one atlas tile, unlike ones do not");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Shared_Tile_Id_Shares_Pictures'Access,
+         "icons carrying pixels share a tile when they name the same identity");
    end Register_Tests;
 
    --  The icon atlas allocates by tile, and a tile is shared by every icon that
@@ -121,6 +125,79 @@ package body Guikit_Suite.Frame_Analysis is
    --
    --  Measured through the atlas width, because at icon size the tiles form a
    --  single row: the width in tiles is the number of tiles.
+   --  Icons carrying their own pixels get their own tile, because a thumbnail
+   --  belongs to one file. A colour glyph is the exception: the same emoji twice
+   --  is the same picture, so it names an identity and the tiles collapse.
+   --
+   --  Without this the emoji in a listing would each take one of the 256 tiles,
+   --  and a directory full of them would take every icon off the screen.
+   procedure Test_Shared_Tile_Id_Shares_Pictures (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Ada.Strings.Unbounded;
+
+      Tile_Size : constant := 64;
+      Picture   : constant := 16;
+
+      function With_Pixels (Identity : String) return Guikit.Draw.Icon_Command is
+         Icon : Guikit.Draw.Icon_Command;
+      begin
+         Icon.Size := Picture;
+         Icon.Thumbnail_Width := Picture;
+         Icon.Thumbnail_Height := Picture;
+         Icon.Shared_Tile_Id := To_Unbounded_String (Identity);
+
+         for Byte in 1 .. Picture * Picture * 4 loop
+            Icon.Thumbnail_Pixels.Append (200);
+         end loop;
+
+         return Icon;
+      end With_Pixels;
+
+      function Tiles_For
+        (Icons : Guikit.Draw.Icon_Command_Vectors.Vector) return Natural
+      is
+         None   : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         No_Tri : Guikit.Draw.Triangle_Command_Vectors.Vector;
+         Text   : Guikit.Draw.Text_Render_Result;
+         Layout : Guikit.Draw.Layout_Metrics;
+      begin
+         return Guikit.Vulkan.Build_Submission
+           (Rectangles         => None,
+            Triangles          => No_Tri,
+            Icons              => Icons,
+            Overlay_Rectangles => None,
+            Layout             => Layout,
+            Theme              => Guikit.Draw.Theme_Dark,
+            Text               => Text).Icon_Atlas_Width / Tile_Size;
+      end Tiles_For;
+
+      Same      : Guikit.Draw.Icon_Command_Vectors.Vector;
+      Anonymous : Guikit.Draw.Icon_Command_Vectors.Vector;
+   begin
+      for Repeat in 1 .. 12 loop
+         Same.Append (With_Pixels ("colour-glyph: 127881"));
+      end loop;
+
+      Assert (Tiles_For (Same) = 1,
+              "twelve copies of one emoji need one tile, got"
+              & Natural'Image (Tiles_For (Same)));
+
+      --  Pixel-carrying icons that name no identity keep the old behaviour: one
+      --  tile each, because two thumbnails are two different pictures.
+      for Repeat in 1 .. 12 loop
+         declare
+            Icon : Guikit.Draw.Icon_Command := With_Pixels ("");
+         begin
+            Icon.Shared_Tile_Id := Null_Unbounded_String;
+            Anonymous.Append (Icon);
+         end;
+      end loop;
+
+      Assert (Tiles_For (Anonymous) = 12,
+              "twelve unnamed pictures still need twelve tiles, got"
+              & Natural'Image (Tiles_For (Anonymous)));
+   end Test_Shared_Tile_Id_Shares_Pictures;
+
    procedure Test_Identical_Icons_Share_A_Tile (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);
       use Ada.Strings.Unbounded;

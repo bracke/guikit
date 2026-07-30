@@ -17,6 +17,7 @@ package body Guikit.Vulkan is
    use type Interfaces.Integer_32;
    use type System.Address;
    use type Guikit.Draw.Text_Render_Status;
+   use type Guikit.Draw.Icon_Command_Vectors.Vector;
    use type Vk.Result_T;
    use type Vk.Format_T;
    use type Vk.Color_Space_KHR_T;
@@ -4184,6 +4185,12 @@ package body Guikit.Vulkan is
                Texture  => Texture_None));
       end Append_Triangle;
 
+      --  The icons to draw, plus the colour glyphs the text layer could not draw
+      --  as glyphs. An emoji is a picture, so it arrives here rather than in the
+      --  glyph quads, and from this point on it is an icon like any other.
+      All_Icons : constant Guikit.Draw.Icon_Command_Vectors.Vector :=
+        (if Text.Colour_Icons.Is_Empty then Icons else Icons & Text.Colour_Icons);
+
       --  Atlas tile placement, filled by Build_Icon_Atlas and read by the main
       --  and overlay icon vertex passes. Indexed by tile, not by icon: icons
       --  that would rasterize to the same pixels share one.
@@ -4210,7 +4217,8 @@ package body Guikit.Vulkan is
          Slot_Of  : Tile_Slot_Maps.Map;
 
          function Tile_Key (Icon : Guikit.Draw.Icon_Command) return Unbounded_String is
-           (if Icon.Thumbnail_Pixels.Is_Empty
+           (if Icon.Shared_Tile_Id /= Null_Unbounded_String then Icon.Shared_Tile_Id
+            elsif Icon.Thumbnail_Pixels.Is_Empty
             then Icon.Icon_Id & ASCII.NUL & Icon.Theme_Name
             else Null_Unbounded_String);
 
@@ -4256,7 +4264,7 @@ package body Guikit.Vulkan is
             --  repeats were both settled when the slots were assigned.
             for Rep of Slot_Rep loop
                declare
-                  Icon : Guikit.Draw.Icon_Command renames Icons (Rep);
+                  Icon : Guikit.Draw.Icon_Command renames All_Icons (Rep);
                begin
                   if Tile_W_For (Icon, Cap) > Tile_Size
                     or else Tile_H_For (Icon, Cap) > Tile_Size
@@ -4284,7 +4292,7 @@ package body Guikit.Vulkan is
 
             for Rep of Slot_Rep loop
                declare
-                  Icon : Guikit.Draw.Icon_Command renames Icons (Rep);
+                  Icon : Guikit.Draw.Icon_Command renames All_Icons (Rep);
                   TW   : constant Positive := Tile_W_For (Icon, Cap);
                   TH   : constant Positive := Tile_H_For (Icon, Cap);
                begin
@@ -4482,7 +4490,7 @@ package body Guikit.Vulkan is
          declare
             Index : Natural := 0;
          begin
-            for Icon of Icons loop
+            for Icon of All_Icons loop
                Index := Index + 1;
 
                if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
@@ -4535,7 +4543,7 @@ package body Guikit.Vulkan is
          --  Once per tile: a shared tile is rasterized from the first icon that
          --  asked for it, and every other icon with the same identity reads it.
          for Rep of Slot_Rep loop
-            Rasterize_Asset (Tile_Index, Icons (Rep));
+            Rasterize_Asset (Tile_Index, All_Icons (Rep));
             Tile_Index := Tile_Index + 1;
          end loop;
       end Build_Icon_Atlas;
@@ -4610,7 +4618,7 @@ package body Guikit.Vulkan is
             --  index sequence (so every icon's UV still matches its atlas tile)
             --  but are emitted later, in the overlay pass, so they sit on top of
             --  an opaque overlay panel.
-            for Icon of Icons loop
+            for Icon of All_Icons loop
                if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
                   if not Icon.Overlay then
                      declare
@@ -4700,7 +4708,7 @@ package body Guikit.Vulkan is
                Atlas_H : constant Natural := Result.Icon_Atlas_Height;
                Source_Icon_Index : Natural := 0;
             begin
-               for Icon of Icons loop
+               for Icon of All_Icons loop
                   if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
                      if Icon.Overlay then
                         declare

@@ -62,6 +62,22 @@ package Guikit.Text is
    --  @param Commands The primary text commands.
    --  @param Overlay The overlay text commands.
    --  @return Glyph quads plus the shared atlas the backend uploads.
+   --  Teach this renderer to decode the pictures some fonts hold instead of
+   --  outlines, so emoji can be drawn in colour.
+   --
+   --  Decoding them means decoding PNG, which means an inflate implementation,
+   --  and guikit does not have one and should not grow one for this -- so the
+   --  caller supplies it. Without a decoder installed nothing changes: those
+   --  codepoints fall back exactly as they do today.
+   --
+   --  @param R A loaded renderer.
+   --  @param Extent Answers how big the image in these bytes is.
+   --  @param Decode Decodes those bytes into RGBA pixels.
+   procedure Set_Image_Decoder
+     (R      : in out Renderer;
+      Extent : Textrender.Image_Extent_Reader;
+      Decode : Textrender.Image_Decoder);
+
    function Build_Glyphs
      (R        : in out Renderer;
       Commands : Guikit.Draw.Text_Command_Vectors.Vector;

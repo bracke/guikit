@@ -225,6 +225,11 @@ package Guikit.Draw is
       --  to draw undistorted at its aspect ratio.
       Draw_Width       : Natural := 0;
       Draw_Height      : Natural := 0;
+      --  Icons carrying their own pixels get their own atlas tile, because a
+      --  thumbnail belongs to one file. Set this when they do not: icons naming
+      --  the same identity here share one tile however many of them there are.
+      --  A colour glyph does that -- the same emoji twice is one picture.
+      Shared_Tile_Id   : UString;
    end record;
 
    package Icon_Command_Vectors is new Ada.Containers.Vectors
@@ -316,6 +321,11 @@ package Guikit.Draw is
       Status       : Text_Render_Status := Text_Render_Font_Not_Loaded;
       Glyphs       : Glyph_Command_Vectors.Vector;
       Overlay_Glyphs : Glyph_Command_Vectors.Vector;
+      --  Codepoints the font draws as pictures rather than outlines: emoji. They
+      --  cannot be glyph quads, because those read the alpha atlas, where a
+      --  coverage value has no colour to carry. They leave as icons instead and
+      --  join the icon pass, which already draws arbitrary RGBA.
+      Colour_Icons : Icon_Command_Vectors.Vector;
       Missing_Glyph_Count : Natural := 0;
       Atlas_Width  : Natural := 0;
       Atlas_Height : Natural := 0;

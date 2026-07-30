@@ -1,4 +1,7 @@
+with Ada.Containers;
 with Ada.Strings.Unbounded;
+
+with Interfaces;
 
 with Guikit.Layout;
 with Guikit.Utf8;
@@ -61,6 +64,14 @@ package body Guikit.Text is
       return Guikit.Draw.Text_Render_Success;
    end Initialize;
 
+   procedure Set_Image_Decoder
+     (R      : in out Renderer;
+      Extent : Textrender.Image_Extent_Reader;
+      Decode : Textrender.Image_Decoder) is
+   begin
+      Textrender.Set_Image_Decoder (R.Backend, Extent, Decode);
+   end Set_Image_Decoder;
+
    function Build_Glyphs
      (R        : in out Renderer;
       Commands : Guikit.Draw.Text_Command_Vectors.Vector;
@@ -88,9 +99,76 @@ package body Guikit.Text is
       end Pixel_Snapped;
 
       procedure Append_Glyphs
-        (Cmds   : Text_Command_Vectors.Vector;
-         Glyphs : in out Glyph_Command_Vectors.Vector)
+        (Cmds    : Text_Command_Vectors.Vector;
+         Glyphs  : in out Glyph_Command_Vectors.Vector;
+         Overlay : Boolean)
       is
+         --  A codepoint the font holds as a picture leaves as an icon rather
+         --  than a glyph quad. The quads read the alpha atlas, and a coverage
+         --  value has nowhere to keep a colour; the icon pass already draws
+         --  arbitrary RGBA, so the picture goes there instead.
+         --
+         --  False when there is no decoder installed, no picture for this
+         --  codepoint, or it decodes to nothing -- in which case the caller
+         --  carries on and looks for an outline as it always did.
+         function Emit_Colour_Glyph
+           (Code     : Textrender.Codepoint;
+            Origin_X : Float;
+            Cell_Y   : Float)
+            return Boolean
+         is
+            Colour    : Textrender.Colour_Glyph;
+            Pixels    : access constant Textrender.Rgba_Buffer;
+            Synthetic : Textrender.Glyph_Metric;
+            Place     : Textrender.Glyph_Placement;
+            Icon      : Guikit.Draw.Icon_Command;
+         begin
+            if Textrender.Get_Colour_Glyph (R.Backend, Code, Colour) /= Textrender.Success
+              or else Colour.Width = 0
+              or else Colour.Height = 0
+            then
+               return False;
+            end if;
+
+            Pixels := Textrender.Colour_Glyph_Pixels (R.Backend, Code);
+
+            if Pixels = null then
+               return False;
+            end if;
+
+            --  Placed by the same arithmetic an outlined glyph is, so it sits on
+            --  the line with the text beside it rather than at the top of a cell.
+            Synthetic :=
+              (X => 0, Y => 0, W => Colour.Width, H => Colour.Height,
+               U0 => 0.0, V0 => 0.0, U1 => 0.0, V1 => 0.0,
+               Advance_X => Colour.Advance_X,
+               Bearing_X => 0.0,
+               Bearing_Y => Colour.Bearing_Y);
+            Place := Textrender.Place_Glyph_In_Cell (R.Backend, Synthetic, Origin_X, Cell_Y);
+
+            Icon.X := Natural (Float'Max (0.0, Pixel_Snapped (Place.X)));
+            Icon.Y := Natural (Float'Max (0.0, Pixel_Snapped (Place.Y)));
+            Icon.Size := Colour.Width;
+            Icon.Draw_Width := Colour.Width;
+            Icon.Draw_Height := Colour.Height;
+            Icon.Thumbnail_Width := Colour.Width;
+            Icon.Thumbnail_Height := Colour.Height;
+            Icon.Overlay := Overlay;
+
+            --  The same emoji twice is the same picture, so it is one tile.
+            Icon.Shared_Tile_Id :=
+              To_Unbounded_String ("colour-glyph:" & Textrender.Codepoint'Image (Code));
+
+            Icon.Thumbnail_Pixels.Reserve_Capacity
+              (Ada.Containers.Count_Type (Pixels'Length));
+
+            for Index in Pixels'Range loop
+               Icon.Thumbnail_Pixels.Append (Interfaces.Unsigned_8 (Pixels (Index)));
+            end loop;
+
+            Result.Colour_Icons.Append (Icon);
+            return True;
+         end Emit_Colour_Glyph;
       begin
          for Text of Cmds loop
             declare
@@ -110,6 +188,7 @@ package body Guikit.Text is
                      Placement         : Textrender.Glyph_Placement;
                      Status            : Textrender.Status_Code;
                      Unit_Width        : Natural;
+                     In_Colour         : Boolean := False;
                   begin
                      Guikit.Utf8.Decode_Next_Codepoint (Content, Index, Decoded_Codepoint);
                      Unit_Width := Guikit.Utf8.Display_Units (Content (Unit_Start .. Index - 1));
@@ -120,11 +199,30 @@ package body Guikit.Text is
                      end if;
 
                      Codepoint := Textrender.Codepoint (Decoded_Codepoint);
-                     Status :=
-                       Textrender.Get_Glyph
-                         (R.Backend, Codepoint, Metrics,
-                          Style => (if Text.Italic then Textrender.Italic else Textrender.Regular));
-                     if Status /= Textrender.Success then
+
+                     if Textrender.Has_Colour_Glyph (R.Backend, Codepoint) then
+                        In_Colour :=
+                          Emit_Colour_Glyph
+                            (Codepoint,
+                             (if Unit_Width = 0 then Base_X else Cell_X),
+                             Cell_Y);
+                     end if;
+
+                     if In_Colour then
+                        --  Drawn as an icon; leave nothing for the glyph pass.
+                        Metrics :=
+                          (X => 0, Y => 0, W => 0, H => 0,
+                           U0 => 0.0, V0 => 0.0, U1 => 0.0, V1 => 0.0,
+                           Advance_X => 0.0, Bearing_X => 0.0, Bearing_Y => 0.0);
+                        Status := Textrender.Success;
+                     else
+                        Status :=
+                          Textrender.Get_Glyph
+                            (R.Backend, Codepoint, Metrics,
+                             Style => (if Text.Italic then Textrender.Italic else Textrender.Regular));
+                     end if;
+
+                     if not In_Colour and then Status /= Textrender.Success then
                         if Unit_Width > 0 then
                            Result.Missing_Glyph_Count := Sat_Add (Result.Missing_Glyph_Count, 1);
                            Codepoint := Textrender.Codepoint (Character'Pos ('?'));
@@ -235,8 +333,8 @@ package body Guikit.Text is
       Result.Atlas_Height := R.Atlas_Height;
       Result.Atlas_Bytes  := Sat_Mul (R.Atlas_Width, R.Atlas_Height);
 
-      Append_Glyphs (Commands, Result.Glyphs);
-      Append_Glyphs (Overlay, Result.Overlay_Glyphs);
+      Append_Glyphs (Commands, Result.Glyphs, Overlay => False);
+      Append_Glyphs (Overlay, Result.Overlay_Glyphs, Overlay => True);
 
       Result.Atlas_Dirty := Textrender.Atlas_Dirty (R.Backend);
       if Textrender.Atlas_Pixels (R.Backend) /= null then
