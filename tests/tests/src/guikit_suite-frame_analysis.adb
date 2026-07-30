@@ -153,23 +153,71 @@ package body Guikit_Suite.Frame_Analysis is
          return Icon;
       end With_Pixels;
 
-      function Tiles_For
+      --  How many distinct rectangles of the atlas the icons read between them.
+      --
+      --  Counted from the quads rather than from the atlas width: a picture now
+      --  gets a tile its own size, so the sheet's width says nothing about how
+      --  many tiles are on it. Two icons sharing a tile read the same rectangle,
+      --  which is the property under test either way.
+      function Distinct_Tiles
         (Icons : Guikit.Draw.Icon_Command_Vectors.Vector) return Natural
       is
+         use type Guikit.Vulkan.Texture_Source;
+
          None   : Guikit.Draw.Rectangle_Command_Vectors.Vector;
          No_Tri : Guikit.Draw.Triangle_Command_Vectors.Vector;
          Text   : Guikit.Draw.Text_Render_Result;
          Layout : Guikit.Draw.Layout_Metrics;
+
+         Batch : constant Guikit.Vulkan.Submission_Batch :=
+           Guikit.Vulkan.Build_Submission
+             (Rectangles         => None,
+              Triangles          => No_Tri,
+              Icons              => Icons,
+              Overlay_Rectangles => None,
+              Layout             => Layout,
+              Theme              => Guikit.Draw.Theme_Dark,
+              Text               => Text);
+
+         Seen  : array (1 .. 64) of Float := [others => -1.0];
+         Count : Natural := 0;
+         Index : Natural := 0;
+         Left  : Float := -1.0;
       begin
-         return Guikit.Vulkan.Build_Submission
-           (Rectangles         => None,
-            Triangles          => No_Tri,
-            Icons              => Icons,
-            Overlay_Rectangles => None,
-            Layout             => Layout,
-            Theme              => Guikit.Draw.Theme_Dark,
-            Text               => Text).Icon_Atlas_Width / Tile_Size;
-      end Tiles_For;
+         --  A quad's left edge identifies its tile. Counted per quad, not per
+         --  vertex value: two tiles packed side by side share the edge between
+         --  them, so counting distinct edges finds one fewer than there are.
+         for Vertex of Batch.Vertices loop
+            if Vertex.Texture = Guikit.Vulkan.Texture_Icon_Atlas then
+               if Index mod 6 = 0 then
+                  Left := Vertex.U;
+               elsif Vertex.U < Left then
+                  Left := Vertex.U;
+               end if;
+
+               if Index mod 6 = 5 then
+                  declare
+                     Known : Boolean := False;
+                  begin
+                     for Slot in 1 .. Count loop
+                        if abs (Seen (Slot) - Left) < 0.000_1 then
+                           Known := True;
+                        end if;
+                     end loop;
+
+                     if not Known and then Count < Seen'Length then
+                        Count := Count + 1;
+                        Seen (Count) := Left;
+                     end if;
+                  end;
+               end if;
+
+               Index := Index + 1;
+            end if;
+         end loop;
+
+         return Count;
+      end Distinct_Tiles;
 
       Same      : Guikit.Draw.Icon_Command_Vectors.Vector;
       Anonymous : Guikit.Draw.Icon_Command_Vectors.Vector;
@@ -178,9 +226,9 @@ package body Guikit_Suite.Frame_Analysis is
          Same.Append (With_Pixels ("colour-glyph: 127881"));
       end loop;
 
-      Assert (Tiles_For (Same) = 1,
-              "twelve copies of one emoji need one tile, got"
-              & Natural'Image (Tiles_For (Same)));
+      Assert (Distinct_Tiles (Same) = 1,
+              "twelve copies of one emoji read one tile between them, got"
+              & Natural'Image (Distinct_Tiles (Same)));
 
       --  Pixel-carrying icons that name no identity keep the old behaviour: one
       --  tile each, because two thumbnails are two different pictures.
@@ -193,9 +241,9 @@ package body Guikit_Suite.Frame_Analysis is
          end;
       end loop;
 
-      Assert (Tiles_For (Anonymous) = 12,
-              "twelve unnamed pictures still need twelve tiles, got"
-              & Natural'Image (Tiles_For (Anonymous)));
+      Assert (Distinct_Tiles (Anonymous) = 12,
+              "twelve unnamed pictures still read twelve, got"
+              & Natural'Image (Distinct_Tiles (Anonymous)));
    end Test_Shared_Tile_Id_Shares_Pictures;
 
    procedure Test_Identical_Icons_Share_A_Tile (T : in out AUnit.Test_Cases.Test_Case'Class) is
