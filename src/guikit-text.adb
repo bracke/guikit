@@ -154,7 +154,7 @@ package body Guikit.Text is
                return False;
             end if;
 
-            Pixels := Textrender.Colour_Glyph_Pixels (R.Backend, Code);
+            Pixels := Textrender.Colour_Sheet_Pixels (R.Backend);
 
             if Pixels = null then
                return False;
@@ -187,10 +187,23 @@ package body Guikit.Text is
             --  rest are drawn from the tile it produced.
             if not Already_Carried (Code) then
                Icon.Thumbnail_Pixels.Reserve_Capacity
-                 (Ada.Containers.Count_Type (Pixels'Length));
+                 (Ada.Containers.Count_Type (Colour.Width * Colour.Height * 4));
 
-               for Index in Pixels'Range loop
-                  Icon.Thumbnail_Pixels.Append (Interfaces.Unsigned_8 (Pixels (Index)));
+               --  Copied out of the sheet: this backend has no binding to spare
+               --  for one, so the picture rides the icon atlas instead.
+               for Row in 0 .. Colour.Height - 1 loop
+                  for Column in 0 .. Colour.Width - 1 loop
+                     declare
+                        At_Sheet : constant Natural :=
+                          ((Colour.Y + Row) * Textrender.Colour_Sheet_Width (R.Backend)
+                           + Colour.X + Column) * 4;
+                     begin
+                        for Channel in 0 .. 3 loop
+                           Icon.Thumbnail_Pixels.Append
+                             (Interfaces.Unsigned_8 (Pixels (At_Sheet + Channel)));
+                        end loop;
+                     end;
+                  end loop;
                end loop;
 
                Carried.Append (Natural (Code));
