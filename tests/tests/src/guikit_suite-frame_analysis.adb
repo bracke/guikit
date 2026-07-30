@@ -4,7 +4,11 @@ with AUnit;
 with AUnit.Assertions;
 with AUnit.Test_Cases;
 
+with Ada.Strings.Unbounded;
+
+with Guikit.Draw;
 with Guikit.Frame_Analysis;
+with Guikit.Vulkan;
 
 --  Structural framebuffer-analysis tests. These exercise the pure, GPU-free
 --  analysis on synthetic in-memory RGBA buffers: a blank frame must fail, a
@@ -28,6 +32,7 @@ package body Guikit_Suite.Frame_Analysis is
    overriding procedure Register_Tests (T : in out Frame_Test_Case);
 
    procedure Test_Uniform_Frame_Fails (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Identical_Icons_Share_A_Tile (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Banded_Frame_Passes (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Empty_Band_Fails (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Region_Ink_Detection (T : in out AUnit.Test_Cases.Test_Case'Class);
@@ -103,7 +108,72 @@ package body Guikit_Suite.Frame_Analysis is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Region_Clamping'Access,
          "region checks clamp safely for out-of-range and empty rectangles");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Identical_Icons_Share_A_Tile'Access,
+         "icons that would rasterize alike share one atlas tile, unlike ones do not");
    end Register_Tests;
+
+   --  The icon atlas allocates by tile, and a tile is shared by every icon that
+   --  would rasterize to the same pixels. This matters beyond memory: the tile
+   --  budget is fixed, and the caller abandons the whole atlas above it, so
+   --  without sharing a long enough listing would take every icon off the screen
+   --  rather than just the last ones.
+   --
+   --  Measured through the atlas width, because at icon size the tiles form a
+   --  single row: the width in tiles is the number of tiles.
+   procedure Test_Identical_Icons_Share_A_Tile (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Ada.Strings.Unbounded;
+
+      Tile_Size : constant := 64;
+
+      function Icon (Id : String) return Guikit.Draw.Icon_Command is
+        (X => 0, Y => 0, Size => Tile_Size,
+         Icon_Id => To_Unbounded_String (Id),
+         others => <>);
+
+      function Atlas_Width_For
+        (Icons : Guikit.Draw.Icon_Command_Vectors.Vector) return Natural
+      is
+         No_Rectangles : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         No_Triangles  : Guikit.Draw.Triangle_Command_Vectors.Vector;
+         No_Text       : Guikit.Draw.Text_Render_Result;
+         Layout        : Guikit.Draw.Layout_Metrics;
+      begin
+         return Guikit.Vulkan.Build_Submission
+           (Rectangles         => No_Rectangles,
+            Triangles          => No_Triangles,
+            Icons              => Icons,
+            Overlay_Rectangles => No_Rectangles,
+            Layout             => Layout,
+            Theme              => Guikit.Draw.Theme_Dark,
+            Text               => No_Text).Icon_Atlas_Width;
+      end Atlas_Width_For;
+
+      Same      : Guikit.Draw.Icon_Command_Vectors.Vector;
+      Different : Guikit.Draw.Icon_Command_Vectors.Vector;
+   begin
+      for Row in 1 .. 40 loop
+         Same.Append (Icon ("folder"));
+      end loop;
+
+      Assert (Atlas_Width_For (Same) = Tile_Size,
+              "forty rows of the same folder icon need one tile, got"
+              & Natural'Image (Atlas_Width_For (Same) / Tile_Size));
+
+      --  The sharing must be by identity, not a blanket collapse: three ids are
+      --  three tiles however often each is drawn.
+      Different.Append (Icon ("folder"));
+      Different.Append (Icon ("folder"));
+      Different.Append (Icon ("text-x-generic"));
+      Different.Append (Icon ("folder"));
+      Different.Append (Icon ("image-x-generic"));
+      Different.Append (Icon ("text-x-generic"));
+
+      Assert (Atlas_Width_For (Different) = 3 * Tile_Size,
+              "three distinct icons need three tiles, got"
+              & Natural'Image (Atlas_Width_For (Different) / Tile_Size));
+   end Test_Identical_Icons_Share_A_Tile;
 
    procedure Test_Uniform_Frame_Fails (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);

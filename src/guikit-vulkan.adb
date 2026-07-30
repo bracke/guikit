@@ -1,4 +1,6 @@
+with Ada.Containers.Hashed_Maps;
 with Ada.Numerics.Elementary_Functions;
+with Ada.Strings.Hash;
 with Ada.Strings.Unbounded;
 with Ada.Unchecked_Deallocation;
 
@@ -51,6 +53,20 @@ package body Guikit.Vulkan is
    end record;
    package Icon_Tile_Rect_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Icon_Tile_Rect);
+
+   package Natural_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Natural);
+
+   function Hash_Unbounded (Key : Ada.Strings.Unbounded.Unbounded_String)
+     return Ada.Containers.Hash_Type
+   is (Ada.Strings.Hash (Ada.Strings.Unbounded.To_String (Key)));
+
+   --  Which tile an icon draws from, keyed by what decides its pixels.
+   package Tile_Slot_Maps is new Ada.Containers.Hashed_Maps
+     (Key_Type        => Ada.Strings.Unbounded.Unbounded_String,
+      Element_Type    => Positive,
+      Hash            => Hash_Unbounded,
+      Equivalent_Keys => Ada.Strings.Unbounded."=");
    Infinite_Timeout : constant Interfaces.Unsigned_64 := Interfaces.Unsigned_64'Last;
    Format_R8G8B8A8_Unorm : constant Vk.Format_T := Vk.Format_T (37);
    Format_R8G8B8A8_Srgb  : constant Vk.Format_T := Vk.Format_T (43);
@@ -4168,13 +4184,35 @@ package body Guikit.Vulkan is
                Texture  => Texture_None));
       end Append_Triangle;
 
-      --  Per-icon atlas tile placement, filled by Build_Icon_Atlas and read by the
-      --  main and overlay icon vertex passes (index = 1-based non-toolbar icon).
+      --  Atlas tile placement, filled by Build_Icon_Atlas and read by the main
+      --  and overlay icon vertex passes. Indexed by tile, not by icon: icons
+      --  that would rasterize to the same pixels share one.
       Icon_Tile_Layout : Icon_Tile_Rect_Vectors.Vector;
+
+      --  The tile each non-toolbar icon draws from (index = 1-based non-toolbar
+      --  icon, value = 1-based index into Icon_Tile_Layout).
+      Icon_Tile_Of : Natural_Vectors.Vector;
 
       procedure Build_Icon_Atlas is
          Tile_Size  : constant Positive := Icon_Atlas_Tile_Size;
          Icon_Count : Natural := 0;
+
+         --  Icons that would rasterize to the same pixels share one tile, which
+         --  is what keeps a listing cheap: a hundred rows showing the same folder
+         --  icon cost one tile between them rather than a hundred, and the cap on
+         --  tiles stops being a cap on how many files may be on screen.
+         --
+         --  Identity is whatever Rasterize_Asset reads: the id picks the asset
+         --  and its colours, the theme picks the variant. An icon carrying its
+         --  own picture is never shared -- a thumbnail belongs to one file, so
+         --  comparing pixel buffers would cost more than the tile it might save.
+         Slot_Rep : Natural_Vectors.Vector;
+         Slot_Of  : Tile_Slot_Maps.Map;
+
+         function Tile_Key (Icon : Guikit.Draw.Icon_Command) return Unbounded_String is
+           (if Icon.Thumbnail_Pixels.Is_Empty
+            then Icon.Icon_Id & ASCII.NUL & Icon.Theme_Name
+            else Null_Unbounded_String);
 
          --  The tile size for one icon: the 64-pixel icon tile, or up to
          --  Max_Overlay_Tile (clamped to Cap) when it carries a large image.
@@ -4213,13 +4251,19 @@ package body Guikit.Vulkan is
             Shelf_H   : Natural := 0;
          begin
             Icon_Tile_Layout.Clear;
-            for Icon of Icons loop
-               if not Is_Toolbar_Icon (To_String (Icon.Icon_Id))
-                 and then (Tile_W_For (Icon, Cap) > Tile_Size
-                           or else Tile_H_For (Icon, Cap) > Tile_Size)
-               then
-                  Has_Large := True;
-               end if;
+
+            --  One pass per tile, not per icon: the toolbar icons and the shared
+            --  repeats were both settled when the slots were assigned.
+            for Rep of Slot_Rep loop
+               declare
+                  Icon : Guikit.Draw.Icon_Command renames Icons (Rep);
+               begin
+                  if Tile_W_For (Icon, Cap) > Tile_Size
+                    or else Tile_H_For (Icon, Cap) > Tile_Size
+                  then
+                     Has_Large := True;
+                  end if;
+               end;
             end loop;
 
             if not Has_Large then
@@ -4228,35 +4272,32 @@ package body Guikit.Vulkan is
                declare
                   X : Natural := 0;
                begin
-                  for Icon of Icons loop
-                     if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
-                        Icon_Tile_Layout.Append
-                          (Icon_Tile_Rect'(X => X, Y => 0, W => Tile_Size, H => Tile_Size));
-                        X := X + Tile_Size;
-                     end if;
+                  for Ignored in 1 .. Icon_Count loop
+                     Icon_Tile_Layout.Append
+                       (Icon_Tile_Rect'(X => X, Y => 0, W => Tile_Size, H => Tile_Size));
+                     X := X + Tile_Size;
                   end loop;
                end;
                Fits := True;
                return;
             end if;
 
-            for Icon of Icons loop
-               if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
-                  declare
-                     TW : constant Positive := Tile_W_For (Icon, Cap);
-                     TH : constant Positive := Tile_H_For (Icon, Cap);
-                  begin
-                     if Cursor_X + TW > Shelf_W then
-                        Cursor_Y := Cursor_Y + Shelf_H;
-                        Cursor_X := 0;
-                        Shelf_H := 0;
-                     end if;
-                     Icon_Tile_Layout.Append
-                       (Icon_Tile_Rect'(X => Cursor_X, Y => Cursor_Y, W => TW, H => TH));
-                     Cursor_X := Cursor_X + TW;
-                     Shelf_H := Natural'Max (Shelf_H, TH);
-                  end;
-               end if;
+            for Rep of Slot_Rep loop
+               declare
+                  Icon : Guikit.Draw.Icon_Command renames Icons (Rep);
+                  TW   : constant Positive := Tile_W_For (Icon, Cap);
+                  TH   : constant Positive := Tile_H_For (Icon, Cap);
+               begin
+                  if Cursor_X + TW > Shelf_W then
+                     Cursor_Y := Cursor_Y + Shelf_H;
+                     Cursor_X := 0;
+                     Shelf_H := 0;
+                  end if;
+                  Icon_Tile_Layout.Append
+                    (Icon_Tile_Rect'(X => Cursor_X, Y => Cursor_Y, W => TW, H => TH));
+                  Cursor_X := Cursor_X + TW;
+                  Shelf_H := Natural'Max (Shelf_H, TH);
+               end;
             end loop;
 
             Atlas_W := Shelf_W;
@@ -4438,11 +4479,36 @@ package body Guikit.Vulkan is
          Fits       : Boolean := False;
          Cap        : Positive := Max_Overlay_Tile;
       begin
-         for Icon of Icons loop
-            if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
-               Icon_Count := Icon_Count + 1;
-            end if;
-         end loop;
+         declare
+            Index : Natural := 0;
+         begin
+            for Icon of Icons loop
+               Index := Index + 1;
+
+               if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
+                  declare
+                     Key  : constant Unbounded_String := Tile_Key (Icon);
+                     Slot : Positive;
+                  begin
+                     if Key /= Null_Unbounded_String and then Slot_Of.Contains (Key) then
+                        Slot := Slot_Of.Element (Key);
+                     else
+                        Slot_Rep.Append (Index);
+                        Slot := Positive (Slot_Rep.Length);
+
+                        if Key /= Null_Unbounded_String then
+                           Slot_Of.Insert (Key, Slot);
+                        end if;
+                     end if;
+
+                     Icon_Tile_Of.Append (Slot);
+                  end;
+               end if;
+            end loop;
+         end;
+
+         --  The budget is tiles, so it is the shared count that has to fit.
+         Icon_Count := Natural (Slot_Rep.Length);
 
          if Icon_Count = 0
            or else Icon_Count > Max_Icon_Atlas_Tiles
@@ -4466,11 +4532,11 @@ package body Guikit.Vulkan is
          Result.Icon_Atlas_Dirty := True;
          Append_Clear_Pixels (Result.Icon_Atlas_Bytes);
 
-         for Icon of Icons loop
-            if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
-               Rasterize_Asset (Tile_Index, Icon);
-               Tile_Index := Tile_Index + 1;
-            end if;
+         --  Once per tile: a shared tile is rasterized from the first icon that
+         --  asked for it, and every other icon with the same identity reads it.
+         for Rep of Slot_Rep loop
+            Rasterize_Asset (Tile_Index, Icons (Rep));
+            Tile_Index := Tile_Index + 1;
          end loop;
       end Build_Icon_Atlas;
    begin
@@ -4550,7 +4616,8 @@ package body Guikit.Vulkan is
                      declare
                         Before : constant Natural := Natural (Result.Vertices.Length);
                         Tile   : constant Icon_Tile_Rect :=
-                          Icon_Tile_Layout.Element (Source_Icon_Index + 1);
+                          Icon_Tile_Layout.Element
+                            (Icon_Tile_Of.Element (Source_Icon_Index + 1));
                         Draw_W : constant Natural :=
                           (if Icon.Draw_Width > 0 then Icon.Draw_Width else Icon.Size);
                         Draw_H : constant Natural :=
@@ -4639,7 +4706,8 @@ package body Guikit.Vulkan is
                         declare
                            Before : constant Natural := Natural (Result.Vertices.Length);
                            Tile   : constant Icon_Tile_Rect :=
-                             Icon_Tile_Layout.Element (Source_Icon_Index + 1);
+                             Icon_Tile_Layout.Element
+                               (Icon_Tile_Of.Element (Source_Icon_Index + 1));
                            Draw_W : constant Natural :=
                              (if Icon.Draw_Width > 0 then Icon.Draw_Width else Icon.Size);
                            Draw_H : constant Natural :=
