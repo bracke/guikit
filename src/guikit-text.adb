@@ -1,4 +1,5 @@
 with Ada.Containers;
+with Ada.Containers.Vectors;
 with Ada.Strings.Unbounded;
 
 with Interfaces;
@@ -72,6 +73,9 @@ package body Guikit.Text is
       Textrender.Set_Image_Decoder (R.Backend, Extent, Decode);
    end Set_Image_Decoder;
 
+   package Codepoint_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Natural);
+
    function Build_Glyphs
      (R        : in out Renderer;
       Commands : Guikit.Draw.Text_Command_Vectors.Vector;
@@ -86,6 +90,9 @@ package body Guikit.Text is
         renames Guikit.Layout.Saturating_Multiply;
 
       Result : Text_Render_Result;
+
+      --  Spans both layers: an overlay emoji shares the main layer's tile.
+      Carried : Codepoint_Vectors.Vector;
 
       function Pixel_Snapped (Value : Float) return Float is
       begin
@@ -103,6 +110,23 @@ package body Guikit.Text is
          Glyphs  : in out Glyph_Command_Vectors.Vector;
          Overlay : Boolean)
       is
+         --  Whether this codepoint has already handed its picture over.
+         --
+         --  Icons naming the same identity share one tile, and the backend
+         --  rasterizes it from the first of them, so every copy after that was
+         --  allocated, filled and never read. Twenty of one emoji on a line came
+         --  to thirty thousand bytes of which fifteen hundred were used.
+         function Already_Carried (Code : Textrender.Codepoint) return Boolean is
+         begin
+            for Seen of Carried loop
+               if Seen = Natural (Code) then
+                  return True;
+               end if;
+            end loop;
+
+            return False;
+         end Already_Carried;
+
          --  A codepoint the font holds as a picture leaves as an icon rather
          --  than a glyph quad. The quads read the alpha atlas, and a coverage
          --  value has nowhere to keep a colour; the icon pass already draws
@@ -159,12 +183,18 @@ package body Guikit.Text is
             Icon.Shared_Tile_Id :=
               To_Unbounded_String ("colour-glyph:" & Textrender.Codepoint'Image (Code));
 
-            Icon.Thumbnail_Pixels.Reserve_Capacity
-              (Ada.Containers.Count_Type (Pixels'Length));
+            --  Only the first of an identity needs to carry the picture; the
+            --  rest are drawn from the tile it produced.
+            if not Already_Carried (Code) then
+               Icon.Thumbnail_Pixels.Reserve_Capacity
+                 (Ada.Containers.Count_Type (Pixels'Length));
 
-            for Index in Pixels'Range loop
-               Icon.Thumbnail_Pixels.Append (Interfaces.Unsigned_8 (Pixels (Index)));
-            end loop;
+               for Index in Pixels'Range loop
+                  Icon.Thumbnail_Pixels.Append (Interfaces.Unsigned_8 (Pixels (Index)));
+               end loop;
+
+               Carried.Append (Natural (Code));
+            end if;
 
             Result.Colour_Icons.Append (Icon);
             return True;
