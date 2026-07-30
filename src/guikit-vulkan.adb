@@ -4199,6 +4199,15 @@ package body Guikit.Vulkan is
          is
             Has_Large : Boolean := False;
             Shelf_W   : constant Positive := Natural'Max (Tile_Size * 8, Max_Overlay_Tile);
+
+            --  The shelf width comes from constants, so a width that broke the
+            --  dimension limit would be a mistake in them rather than a layout
+            --  that failed to fit. Caught here, where it cannot rot, instead of
+            --  by a run-time test that today can only ever answer True.
+            pragma Compile_Time_Error
+              (Icon_Atlas_Tile_Size * 8 > Max_Atlas_Dimension
+                 or else Max_Overlay_Tile > Max_Atlas_Dimension,
+               "the icon shelf is wider than a texture may be");
             Cursor_X  : Natural := 0;
             Cursor_Y  : Natural := 0;
             Shelf_H   : Natural := 0;
@@ -4252,9 +4261,10 @@ package body Guikit.Vulkan is
 
             Atlas_W := Shelf_W;
             Atlas_H := Cursor_Y + Shelf_H;
+            --  Only the height and the byte total vary here: the width is the
+            --  shelf's, fixed above.
             Fits :=
-              Atlas_W <= Max_Atlas_Dimension
-              and then Atlas_H <= Max_Atlas_Dimension
+              Atlas_H <= Max_Atlas_Dimension
               and then Atlas_W * Atlas_H * Icon_Atlas_Channels <= Max_Atlas_Bytes;
          end Layout_Tiles;
 
