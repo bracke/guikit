@@ -3443,6 +3443,54 @@ package body Guikit.Vulkan is
          return Renderer.Last_Status;
    end Create_Swapchain_Resources;
 
+   --  Drivers layered over another API (MoltenVK on macOS) implement only a
+   --  portability subset of Vulkan. The loader hides them unless the instance
+   --  asks for them with this extension and flag, and a device that offers the
+   --  subset extension must have it enabled.
+   Portability_Enumeration : constant String := "VK_KHR_portability_enumeration";
+   Portability_Subset      : constant String := "VK_KHR_portability_subset";
+   Create_Enumerate_Portability : constant Vk.Instance_Create_Flags_T := 16#0000_0001#;
+
+   type Extension_Property_Array is array (Positive range <>) of aliased Vk.Extension_Properties_T
+     with Convention => C;
+
+   function Has_Extension (Properties : Extension_Property_Array; Name : String) return Boolean is
+   begin
+      for Item of Properties loop
+         if Interfaces.C.To_Ada (Interfaces.C.char_array (Item.extension_Name)) = Name then
+            return True;
+         end if;
+      end loop;
+      return False;
+   end Has_Extension;
+
+   --  Whether the instance (Physical = null) or the device offers Name.
+   function Offers_Extension (Physical : Vk.Physical_Device_T; Name : String) return Boolean is
+      Count  : aliased Interfaces.Unsigned_32 := 0;
+      Result : Vk.Result_T;
+   begin
+      Result :=
+        (if Physical = System.Null_Address
+         then Vk.Enumerate_Instance_Extension_Properties (System.Null_Address, Count'Address, System.Null_Address)
+         else Vk.Enumerate_Device_Extension_Properties
+                (Physical, System.Null_Address, Count'Address, System.Null_Address));
+      if Result /= Vk.SUCCESS or else Count = 0 then
+         return False;
+      end if;
+      declare
+         Properties : aliased Extension_Property_Array (1 .. Natural (Count));
+      begin
+         Result :=
+           (if Physical = System.Null_Address
+            then Vk.Enumerate_Instance_Extension_Properties
+                   (System.Null_Address, Count'Address, Properties'Address)
+            else Vk.Enumerate_Device_Extension_Properties
+                   (Physical, System.Null_Address, Count'Address, Properties'Address));
+         return (Result = Vk.SUCCESS or else Result = Vk.INCOMPLETE)
+           and then Has_Extension (Properties (1 .. Natural'Min (Natural (Count), Properties'Length)), Name);
+      end;
+   end Offers_Extension;
+
    function Initialize
      (Renderer : in out Vulkan_Renderer)
       return Vulkan_Status
@@ -3451,15 +3499,6 @@ package body Guikit.Vulkan is
       Extension_Names : constant System.Address :=
         Glfw.Windows.Vulkan.Required_Instance_Extensions (Extension_Count);
 
-      Instance_Info : aliased Vk.Instance_Create_Info_T :=
-        (s_Type                   => Vk.STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-         p_Next                   => System.Null_Address,
-         flags                    => 0,
-         p_Application_Info       => System.Null_Address,
-         enabled_Layer_Count      => 0,
-         pp_Enabled_Layer_Names   => System.Null_Address,
-         enabled_Extension_Count  => Extension_Count,
-         pp_Enabled_Extension_Names => Extension_Names);
       Instance_Handle : aliased Vk.Instance_T := System.Null_Address;
       Instance_Result : Vk.Result_T;
 
@@ -3474,11 +3513,31 @@ package body Guikit.Vulkan is
          return Renderer.Last_Status;
       end if;
 
-      Instance_Result :=
-        Vk.Create_Instance
-          (p_Create_Info => Instance_Info'Address,
-           p_Allocator   => System.Null_Address,
-           p_Instance    => Instance_Handle'Address);
+      declare
+         Required : constant Address_Array (1 .. Natural (Extension_Count))
+           with Import, Address => Extension_Names;
+         Portable : constant Boolean := Offers_Extension (System.Null_Address, Portability_Enumeration);
+         Portability_Name : aliased Interfaces.C.char_array := Interfaces.C.To_C (Portability_Enumeration);
+         Names : aliased Address_Array (1 .. Required'Length + 1) :=
+           [for I in 1 .. Required'Length + 1 =>
+              (if I <= Required'Length then Required (I)
+               else Portability_Name (Portability_Name'First)'Address)];
+         Instance_Info : aliased Vk.Instance_Create_Info_T :=
+           (s_Type                   => Vk.STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+            p_Next                   => System.Null_Address,
+            flags                    => (if Portable then Create_Enumerate_Portability else 0),
+            p_Application_Info       => System.Null_Address,
+            enabled_Layer_Count      => 0,
+            pp_Enabled_Layer_Names   => System.Null_Address,
+            enabled_Extension_Count  => Extension_Count + (if Portable then 1 else 0),
+            pp_Enabled_Extension_Names => Names'Address);
+      begin
+         Instance_Result :=
+           Vk.Create_Instance
+             (p_Create_Info => Instance_Info'Address,
+              p_Allocator   => System.Null_Address,
+              p_Instance    => Instance_Handle'Address);
+      end;
 
       if Instance_Result /= Vk.SUCCESS or else Instance_Handle = System.Null_Address then
          Renderer.Last_Status := Vulkan_Instance_Create_Failed;
@@ -3509,8 +3568,11 @@ package body Guikit.Vulkan is
       declare
          Swapchain_Extension : aliased Interfaces.C.char_array :=
            Interfaces.C.To_C ("VK_KHR_swapchain");
-         Extension_Names     : aliased Address_Array (1 .. 1) :=
-           [1 => Swapchain_Extension (Swapchain_Extension'First)'Address];
+         Subset_Extension    : aliased Interfaces.C.char_array := Interfaces.C.To_C (Portability_Subset);
+         Subset              : constant Boolean := Offers_Extension (Physical, Portability_Subset);
+         Extension_Names     : aliased Address_Array (1 .. 2) :=
+           [Swapchain_Extension (Swapchain_Extension'First)'Address,
+            Subset_Extension (Subset_Extension'First)'Address];
          Queue_Family        : constant Interfaces.Unsigned_32 :=
            Choose_Graphics_Queue_Family (Physical);
          Priority          : aliased Interfaces.C.C_float := 1.0;
@@ -3529,7 +3591,7 @@ package body Guikit.Vulkan is
             p_Queue_Create_Infos     => Queue_Create_Info'Address,
             enabled_Layer_Count      => 0,
             pp_Enabled_Layer_Names   => System.Null_Address,
-            enabled_Extension_Count  => 1,
+            enabled_Extension_Count  => (if Subset then 2 else 1),
             pp_Enabled_Extension_Names => Extension_Names'Address,
             p_Enabled_Features       => System.Null_Address);
          Device_Handle     : aliased Vk.Device_T := System.Null_Address;
