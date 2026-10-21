@@ -1061,7 +1061,10 @@ package body Guikit.Settings_Panel is
                           (if Length (F.Help) > 0 then F.Help
                            elsif Length (F.Display) > 0 then F.Display
                            else F.Value),
-                        Enabled => F.Enabled, Selected => I = P.Focused, others => <>));
+                        Enabled => F.Enabled, Selected => I = P.Focused,
+                        --  The keyboard is on this field while the panel has it,
+                        --  which a screen reader follows and announces.
+                        Focused => Focused and then I = P.Focused));
                end if;
             end if;
          end;
