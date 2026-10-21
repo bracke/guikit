@@ -117,7 +117,7 @@ package body Guikit_Suite.Widgets is
       pragma Unreferenced (T);
       Rects : Rectangle_Command_Vectors.Vector;
    begin
-      Draw_Drop_Shadow (Rects, Big, Big, 10, 10, 20, 15, Overlay_Color);
+      Draw_Drop_Shadow (Rects, Big, Big, 10, 10, 20, 15, Shadow_Color);
       Assert (Count (Rects) = 2, "a drop shadow is a horizontal and a vertical band");
       Assert (Rects (1).X = 13 and then Rects (1).Y = 25, "the bottom band is offset below the box");
       Assert (Rects (1).Width = 20 and then Rects (1).Height = 3, "the bottom band spans the box width");
@@ -126,7 +126,7 @@ package body Guikit_Suite.Widgets is
 
       --  Both bands fall outside a tiny clip window and are dropped.
       Rects.Clear;
-      Draw_Drop_Shadow (Rects, 20, 20, 10, 10, 20, 15, Overlay_Color);
+      Draw_Drop_Shadow (Rects, 20, 20, 10, 10, 20, 15, Shadow_Color);
       Assert (Count (Rects) = 0, "shadow bands off-screen of the clip are dropped");
    end Test_Drop_Shadow;
 
@@ -350,14 +350,23 @@ package body Guikit_Suite.Widgets is
       Rects : Rectangle_Command_Vectors.Vector;
       Texts : Text_Command_Vectors.Vector;
    begin
+      Texts.Append
+        (Text_Command'
+           (X => 30, Y => 25, Width => 30, Height => 16,
+            Text => U.To_Unbounded_String ("covered"), others => <>));
+      Texts.Append
+        (Text_Command'
+           (X => 120, Y => 25, Width => 30, Height => 16,
+            Text => U.To_Unbounded_String ("clear"), others => <>));
       Draw_Tooltip
         (Rects, Texts, Big, Big, 20, 20, 80, 24,
          Pane_Color, Border_Color, 24, 24, 72, 16,
          U.To_Unbounded_String ("Hint"), Label_Truncated => False, Label_Color => Text_Color);
       Assert (Count (Rects) = 5, "a tooltip is a fill and a four-edge border");
-      Assert (Count (Texts) = 1, "a tooltip draws its label");
+      Assert (Count (Texts) = 2, "a tooltip hides covered text and draws its label");
       Assert (Rects (1).Color = Pane_Color, "the first rectangle is the tooltip fill");
-      Assert (Texts (1).X = 24 and then Texts (1).Color = Text_Color, "the label sits at its box origin");
+      Assert (U.To_String (Texts (1).Text) = "clear", "text outside the tooltip remains queued");
+      Assert (Texts (2).X = 24 and then Texts (2).Color = Text_Color, "the label sits at its box origin");
    end Test_Tooltip;
 
    procedure Test_Caret (T : in out AUnit.Test_Cases.Test_Case'Class) is

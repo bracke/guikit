@@ -21,8 +21,7 @@ package body Guikit.Draw is
          return (R => R, G => G, B => B, A => A);
       end RGB;
 
-      --  Dark base palette. Theme_High_Contrast reuses these values so its
-      --  rendering is unchanged from before the light theme was introduced.
+      --  Dark base palette.
       function Dark_Color return Palette_Color is
       begin
          case Role is
@@ -55,7 +54,9 @@ package body Guikit.Draw is
             when Label_Purple_Color    => return RGB (0.64, 0.44, 0.86);
             when Label_Gray_Color      => return RGB (0.60, 0.62, 0.66);
             when Marquee_Color         => return RGB (0.21, 0.38, 0.62, 0.25);
-            when Overlay_Color         => return RGB (0.04, 0.05, 0.06, 0.86);
+            when Modal_Backdrop_Color => return RGB (0.00, 0.00, 0.00, 0.52);
+            when Shadow_Color          => return RGB (0.00, 0.00, 0.00, 0.45);
+            when Overlay_Color         => return RGB (0.04, 0.05, 0.06);
          end case;
       end Dark_Color;
 
@@ -93,13 +94,57 @@ package body Guikit.Draw is
             when Label_Purple_Color    => return RGB (0.50, 0.30, 0.76);
             when Label_Gray_Color      => return RGB (0.46, 0.48, 0.52);
             when Marquee_Color         => return RGB (0.62, 0.78, 0.98, 0.30);
-            when Overlay_Color         => return RGB (0.20, 0.22, 0.26, 0.62);
+            when Modal_Backdrop_Color => return RGB (0.08, 0.10, 0.14, 0.32);
+            when Shadow_Color          => return RGB (0.08, 0.10, 0.14, 0.25);
+            when Overlay_Color         => return RGB (0.90, 0.91, 0.93);
          end case;
       end Light_Color;
+
+      --  High contrast keeps a dark canvas but deliberately separates every
+      --  interactive surface and raises secondary/disabled text above the
+      --  ordinary dark palette. Bright borders make focus and panel geometry
+      --  visible without relying on subtle changes in near-black fills.
+      function High_Contrast_Color return Palette_Color is
+      begin
+         case Role is
+            when Canvas_Color           => return RGB (0.01, 0.01, 0.02);
+            when Toolbar_Color          => return RGB (0.02, 0.02, 0.03);
+            when Bottom_Bar_Color       => return RGB (0.02, 0.02, 0.03);
+            when Main_Color             => return RGB (0.04, 0.04, 0.05);
+            when Detail_Alternate_Color => return RGB (0.08, 0.08, 0.10);
+            when Pane_Color             => return RGB (0.10, 0.10, 0.12);
+            when Input_Color            => return RGB (0.13, 0.13, 0.15);
+            when Input_Error_Color      => return RGB (0.46, 0.05, 0.08);
+            when Selection_Color        => return RGB (0.08, 0.43, 0.88);
+            when Hover_Color            => return RGB (0.18, 0.18, 0.22);
+            when Pressed_Color          => return RGB (0.08, 0.30, 0.58);
+            when Border_Color           => return RGB (0.72, 0.74, 0.78);
+            when Text_Color             => return RGB (1.00, 1.00, 1.00);
+            when Muted_Text_Color       => return RGB (0.82, 0.84, 0.87);
+            when Error_Text_Color       => return RGB (1.00, 0.34, 0.30);
+            when Disabled_Text_Color    => return RGB (0.62, 0.64, 0.67);
+            when Icon_Directory_Color   => return RGB (0.32, 0.62, 1.00);
+            when Icon_File_Color        => return RGB (0.88, 0.90, 0.94);
+            when Icon_Executable_Color  => return RGB (0.36, 0.86, 0.42);
+            when Icon_Unknown_Color     => return RGB (0.76, 0.78, 0.82);
+            when Favorite_Star_Color    => return RGB (1.00, 0.84, 0.20);
+            when Label_Red_Color        => return RGB (1.00, 0.30, 0.28);
+            when Label_Orange_Color     => return RGB (1.00, 0.62, 0.20);
+            when Label_Yellow_Color     => return RGB (1.00, 0.90, 0.22);
+            when Label_Green_Color      => return RGB (0.40, 0.88, 0.44);
+            when Label_Blue_Color       => return RGB (0.34, 0.66, 1.00);
+            when Label_Purple_Color     => return RGB (0.76, 0.50, 1.00);
+            when Label_Gray_Color       => return RGB (0.78, 0.80, 0.84);
+            when Marquee_Color          => return RGB (0.08, 0.43, 0.88, 0.38);
+            when Modal_Backdrop_Color   => return RGB (0.00, 0.00, 0.00, 0.68);
+            when Shadow_Color           => return RGB (0.00, 0.00, 0.00, 0.70);
+            when Overlay_Color          => return RGB (0.00, 0.00, 0.00);
+         end case;
+      end High_Contrast_Color;
    begin
       case Theme is
          when Theme_Dark          => return Dark_Color;
-         when Theme_High_Contrast => return Dark_Color;
+         when Theme_High_Contrast => return High_Contrast_Color;
          when Theme_Light         => return Light_Color;
       end case;
    end Color_For;

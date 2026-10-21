@@ -4,6 +4,7 @@ with AUnit.Test_Cases;
 
 with Ada.Strings.Unbounded;
 
+with Guikit.Draw;
 with Guikit.Palette;
 
 --  Search/ranking tests for Guikit.Palette.Search: an empty query keeps every
@@ -14,6 +15,8 @@ package body Guikit_Suite.Palette is
 
    use AUnit.Assertions;
    use Ada.Strings.Unbounded;
+   use Guikit.Draw;
+   use type Guikit.Draw.Palette_Color;
    use type Guikit.Palette.Item_Vectors.Vector;
 
    type Palette_Test_Case is new AUnit.Test_Cases.Test_Case with null record;
@@ -26,6 +29,8 @@ package body Guikit_Suite.Palette is
    procedure Test_Ranks_By_Relevance (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Stable_Tiebreaker (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Whitespace_Tokenizing (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_High_Contrast_Colors (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Modal_Backdrop_Colors (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function Item
      (Id          : Natural;
@@ -69,6 +74,10 @@ package body Guikit_Suite.Palette is
         (T, Test_Stable_Tiebreaker'Access, "equally scored items keep their input order");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Whitespace_Tokenizing'Access, "a query splits on ASCII and Unicode whitespace into tokens");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_High_Contrast_Colors'Access, "high contrast strengthens text and panel boundaries");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Modal_Backdrop_Colors'Access, "modal backdrops dim without becoming opaque");
    end Register_Tests;
 
    procedure Test_Empty_Query_Keeps_All (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -140,6 +149,49 @@ package body Guikit_Suite.Palette is
       Assert (Split.Element (1).Id = 10, "both tokens match the Open command's fields");
       Assert (Natural (Joined.Length) = 0, "the un-separated concatenation matches no field");
    end Test_Whitespace_Tokenizing;
+
+   procedure Test_High_Contrast_Colors (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      Dark_Text       : constant Palette_Color := Color_For (Text_Color, Theme_Dark);
+      Contrast_Text   : constant Palette_Color := Color_For (Text_Color, Theme_High_Contrast);
+      Dark_Muted      : constant Palette_Color := Color_For (Muted_Text_Color, Theme_Dark);
+      Contrast_Muted  : constant Palette_Color := Color_For (Muted_Text_Color, Theme_High_Contrast);
+      Dark_Border     : constant Palette_Color := Color_For (Border_Color, Theme_Dark);
+      Contrast_Border : constant Palette_Color := Color_For (Border_Color, Theme_High_Contrast);
+   begin
+      Assert (Contrast_Text /= Dark_Text and then Contrast_Text.R > Dark_Text.R,
+              "high-contrast primary text is brighter than dark text");
+      Assert (Contrast_Muted.R > Dark_Muted.R,
+              "high-contrast secondary text remains readily legible");
+      Assert (Contrast_Border.R > Dark_Border.R,
+              "high-contrast borders separate adjacent surfaces");
+   end Test_High_Contrast_Colors;
+
+   procedure Test_Modal_Backdrop_Colors (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+   begin
+      for Theme in Theme_Kind loop
+         declare
+            Backdrop : constant Palette_Color := Color_For (Modal_Backdrop_Color, Theme);
+            Shadow   : constant Palette_Color := Color_For (Shadow_Color, Theme);
+            Surface  : constant Palette_Color := Color_For (Overlay_Color, Theme);
+         begin
+            Assert
+              (Backdrop.A > 0.0 and then Backdrop.A < 1.0,
+               "a modal backdrop dims the underlying view without hiding it");
+            Assert
+              (Shadow.A > 0.0 and then Shadow.A < 1.0,
+               "a drop shadow remains translucent");
+            Assert
+              (Surface.A = 1.0,
+               "an interactive overlay surface is opaque over underlying text");
+         end;
+      end loop;
+      Assert
+        (Color_For (Modal_Backdrop_Color, Theme_High_Contrast).A
+           > Color_For (Modal_Backdrop_Color, Theme_Light).A,
+         "high contrast uses the strongest modal separation");
+   end Test_Modal_Backdrop_Colors;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

@@ -6,6 +6,7 @@ with AUnit.Test_Cases;
 
 with Guikit.Settings_Panel;
 with Guikit.Draw;
+with Guikit.Layout;
 
 --  Exercises the settings-panel state machine (typed field editing, change
 --  emission, focus navigation) and a headless Build_Frame that emits draw
@@ -108,6 +109,54 @@ package body Guikit_Suite.Settings_Panel is
       return V;
    end Two_Sections;
 
+   function Seven_Sections return SP.Field_Vectors.Vector is
+      V : SP.Field_Vectors.Vector;
+      Labels : constant array (Positive range 1 .. 7) of Unbounded_String :=
+        [U ("View"), U ("Sort"), U ("Appearance"), U ("Behavior"),
+         U ("Details"), U ("Filetypes"), U ("Shortcuts")];
+   begin
+      for Index in Labels'Range loop
+         V.Append
+           (SP.Field'
+              (Key => U ("section" & Integer'Image (Index)),
+               Label => Labels (Index),
+               Kind => SP.Section,
+               others => <>));
+         V.Append
+           (SP.Field'
+              (Key => U ("field" & Integer'Image (Index)),
+               Label => U ("Field"),
+               Kind => SP.Toggle,
+               Value => U ("false"),
+               others => <>));
+      end loop;
+      return V;
+   end Seven_Sections;
+
+   function Seven_Long_Sections return SP.Field_Vectors.Vector is
+      V : SP.Field_Vectors.Vector;
+      Labels : constant array (Positive range 1 .. 7) of Unbounded_String :=
+        [U ("Ansicht"), U ("Sortierung"), U ("Darstellung"), U ("Verhalten"),
+         U ("Details"), U ("Dateitypen"), U ("Tastenkurzel")];
+   begin
+      for Index in Labels'Range loop
+         V.Append
+           (SP.Field'
+              (Key => U ("long_section" & Integer'Image (Index)),
+               Label => Labels (Index),
+               Kind => SP.Section,
+               others => <>));
+         V.Append
+           (SP.Field'
+              (Key => U ("long_field" & Integer'Image (Index)),
+               Label => U ("Dateiendungen anzeigen"),
+               Kind => SP.Toggle,
+               Value => U ("false"),
+               others => <>));
+      end loop;
+      return V;
+   end Seven_Long_Sections;
+
    procedure Test_Edit_And_Emit (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);
       P : SP.Panel;
@@ -190,6 +239,78 @@ package body Guikit_Suite.Settings_Panel is
       SP.Build_Frame (P, 0, 0, 400, 400, 400, 400, True, -1, -1, Rects, Text, Nodes);
       Assert (SP.Click (P, 370, 50), "a click in the switcher row lands");
       Assert (SP.Active_Section (P) = 2, "clicking the right tab switches to section 2");
+
+      --  Dense tab sets wrap at compact widths, keeping full labels legible and
+      --  every cell clickable instead of collapsing them to two-letter fragments.
+      SP.Set_Fields (P, Seven_Sections);
+      SP.Build_Frame (P, 0, 0, 440, 300, 440, 300, True, -1, -1, Rects, Text, Nodes);
+      declare
+         Found_Shortcuts : Boolean := False;
+      begin
+         for Command of Text loop
+            if To_String (Command.Text) = "Shortcuts" then
+               Found_Shortcuts := True;
+            end if;
+         end loop;
+         Assert (Found_Shortcuts, "compact wrapped tabs retain the full Shortcuts label");
+      end;
+      Assert (SP.Click (P, 400, 75), "a click in the second compact tab row lands");
+      Assert (SP.Active_Section (P) = 7, "the second-row tab maps back to its original section");
+
+      --  Longer localized labels need a third row at the same width.  Every
+      --  emitted label box must retain its natural text width, and the final
+      --  row must map back to the original seventh section.
+      SP.Set_Fields (P, Seven_Long_Sections);
+      SP.Build_Frame (P, 0, 0, 440, 300, 440, 300, True, -1, -1, Rects, Text, Nodes);
+      declare
+         Cell_W : constant Natural := Guikit.Layout.Caret_Advance_Width (20);
+         Seen_Ansicht, Seen_Sortierung, Seen_Darstellung, Seen_Verhalten : Boolean := False;
+         Seen_Details, Seen_Dateitypen, Seen_Tastenkurzel : Boolean := False;
+         Seen_Long_Field : Boolean := False;
+      begin
+         for Command of Text loop
+            declare
+               Label : constant String := To_String (Command.Text);
+            begin
+               if Label = "Ansicht" or else Label = "Sortierung"
+                 or else Label = "Darstellung" or else Label = "Verhalten"
+                 or else Label = "Details" or else Label = "Dateitypen"
+                 or else Label = "Tastenkurzel"
+               then
+                  Assert
+                    (Command.Width >= Guikit.Layout.Label_Pixel_Width (Label, Cell_W),
+                     "a localized compact tab retains its natural label width");
+                  if Label = "Ansicht" then
+                     Seen_Ansicht := True;
+                  elsif Label = "Sortierung" then
+                     Seen_Sortierung := True;
+                  elsif Label = "Darstellung" then
+                     Seen_Darstellung := True;
+                  elsif Label = "Verhalten" then
+                     Seen_Verhalten := True;
+                  elsif Label = "Details" then
+                     Seen_Details := True;
+                  elsif Label = "Dateitypen" then
+                     Seen_Dateitypen := True;
+                  else
+                     Seen_Tastenkurzel := True;
+                  end if;
+               elsif Label = "Dateiendungen anzeigen" then
+                  Seen_Long_Field := True;
+                  Assert
+                    (Command.Width >= Guikit.Layout.Label_Pixel_Width (Label, Cell_W),
+                     "a compact toggle label uses the blank value-column space");
+               end if;
+            end;
+         end loop;
+         Assert
+           (Seen_Ansicht and then Seen_Sortierung and then Seen_Darstellung
+            and then Seen_Verhalten and then Seen_Details and then Seen_Dateitypen
+            and then Seen_Tastenkurzel and then Seen_Long_Field,
+            "all localized compact tabs are rendered");
+      end;
+      Assert (SP.Click (P, 220, 100), "a click in the third localized tab row lands");
+      Assert (SP.Active_Section (P) = 7, "the third-row tab maps to the final section");
    end Test_Sections;
 
    --  A Toggle then a Shortcut field (no section), to exercise press-to-capture.
@@ -294,6 +415,28 @@ package body Guikit_Suite.Settings_Panel is
          Assert (Over > Off, "hovering the tab switcher draws the tooltip (extra rectangles)");
          Assert (Rect_Count (100, 300) = Off,
                  "hovering a field row (not the switcher) draws no tooltip");
+      end;
+
+      --  With wrapped compact tabs, the tooltip clears every tab row instead
+      --  of obscuring the second row's labels.
+      SP.Set_Fields (P, Seven_Sections);
+      declare
+         Rects     : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         Text      : Guikit.Draw.Text_Command_Vectors.Vector;
+         Nodes     : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+         Last_Tab_Y : Natural := 0;
+         Tooltip_Y  : Natural := 0;
+      begin
+         SP.Build_Frame (P, 0, 0, 440, 300, 440, 300, True, 50, 50, Rects, Text, Nodes);
+         for Command of Text loop
+            if To_String (Command.Text) = "Ctrl+Tab switches sections" then
+               Tooltip_Y := Command.Y;
+            elsif To_String (Command.Text) = "Shortcuts" then
+               Last_Tab_Y := Command.Y;
+            end if;
+         end loop;
+         Assert (Last_Tab_Y > 0 and then Tooltip_Y >= Last_Tab_Y + Cfg.Line_Height,
+                 "the compact tab tooltip is positioned below the wrapped tab labels");
       end;
    end Test_Switch_Tooltip;
 

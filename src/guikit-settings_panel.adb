@@ -447,13 +447,57 @@ package body Guikit.Settings_Panel is
       Cell_W    : constant Natural  := Guikit.Layout.Caret_Advance_Width (LH);
       N         : constant Natural  := Natural (P.Fields.Length);
       Tab_Count : constant Natural  := Section_Count (P);
-      Switch_H  : constant Natural  := (if Tab_Count > 1 then Row_H else 0);
       Content_X : constant Natural  := Region_X + Pad;
       --  Equal padding on both sides. The scrollbar (Bar_W, narrower than Pad) sits
       --  within the right padding at the panel edge, so the content still clears it
       --  without reserving extra width on the right.
       Content_W : constant Natural  :=
         (if Region_Width > 2 * Pad then Region_Width - 2 * Pad else 0);
+
+      --  Return the last section that fits naturally beside First_Ord.  The
+      --  segmented control already measures localized labels and their padding;
+      --  using that same measurement here prevents translated tabs from being
+      --  scaled down into clipped fragments.
+      function Last_Tab_In_Row (First_Ord : Positive) return Positive is
+         Segments : Guikit.Segmented.Segment_Vectors.Vector;
+         Last     : Positive := First_Ord;
+      begin
+         for Ord in First_Ord .. Positive (Tab_Count) loop
+            Segments.Append
+              (Guikit.Segmented.Segment'
+                 (Label => Section_Label (P, Ord), others => <>));
+            if Ord > First_Ord
+              and then Guikit.Segmented.Natural_Width (Segments, LH) > Content_W
+            then
+               return Ord - 1;
+            end if;
+            Last := Ord;
+         end loop;
+         return Last;
+      end Last_Tab_In_Row;
+
+      function Required_Tab_Rows return Natural is
+         First_Ord : Positive := 1;
+         Rows      : Natural := 0;
+         Last_Ord  : Positive;
+      begin
+         if Tab_Count <= 1 then
+            return 0;
+         end if;
+
+         loop
+            Last_Ord := Last_Tab_In_Row (First_Ord);
+            Rows := Rows + 1;
+            exit when Last_Ord >= Tab_Count;
+            First_Ord := Last_Ord + 1;
+         end loop;
+         return Rows;
+      end Required_Tab_Rows;
+
+      --  Extra tab rows are naturally accounted for by the scrolling body.
+      Tab_Rows : constant Natural := Required_Tab_Rows;
+      Switch_H  : constant Natural :=
+        Guikit.Layout.Saturating_Multiply (Tab_Rows, Row_H);
       --  Align the title header with the close icon (same top inset), forming a
       --  title bar at the very top of the panel; keep its text clear of the icon.
       Title_Y   : constant Natural  := Region_Y + Natural'Max (4, LH / 4);
@@ -634,7 +678,7 @@ package body Guikit.Settings_Panel is
       --  Panel chrome: shadow, panel, accent bar, dialog role, title, close.
       Guikit.Widgets.Draw_Drop_Shadow
         (Rectangles, Clip_Width, Clip_Height, Region_X, Region_Y, Region_Width, Region_Height,
-         Guikit.Draw.Overlay_Color);
+         Guikit.Draw.Shadow_Color);
       Guikit.Widgets.Draw_Menu_Panel
         (Rectangles, Clip_Width, Clip_Height, Region_X, Region_Y, Region_Width, Region_Height,
          Guikit.Draw.Pane_Color, Guikit.Draw.Border_Color);
@@ -649,37 +693,57 @@ package body Guikit.Settings_Panel is
       --  the active one highlighted, each cell clickable to switch section.
       if Tab_Count > 1 then
          declare
-            Segs    : Guikit.Segmented.Segment_Vectors.Vector;
-            S_Rects : Guikit.Draw.Rectangle_Command_Vectors.Vector;
-            S_Text  : Guikit.Draw.Text_Command_Vectors.Vector;
-            S_Tips  : Guikit.Draw.Tooltip_Command_Vectors.Vector;
-            S_Nodes : Guikit.Draw.Accessibility_Node_Vectors.Vector;
-            CX, CW  : Natural;
+            First_Ord : Positive := 1;
+            Last_Ord  : Positive;
          begin
-            for Ord in 1 .. Tab_Count loop
-               Segs.Append
-                 (Guikit.Segmented.Segment'(Label => Section_Label (P, Ord), others => <>));
-            end loop;
-            Guikit.Segmented.Build_Frame
-              (Segments => Segs, Active => P.Active,
-               Region_X => Content_X, Region_Y => Switch_Y + 2, Region_Width => Content_W,
-               --  Fill the tab band (leaving a small margin) rather than a short
-               --  line-height strip, so the tabs are comfortably tall.
-               Region_Height => Ctrl_H, Clip_Width => Clip_Width, Clip_Height => Clip_Height,
-               Line_Height => LH, Hover_X => Hover_X, Hover_Y => Hover_Y,
-               Rectangles => S_Rects, Text => S_Text, Tooltips => S_Tips, Accessibility => S_Nodes);
-            for C of S_Rects loop
-               Rectangles.Append (C);
-            end loop;
-            for C of S_Text loop
-               Text.Append (C);
-            end loop;
-            for Node of S_Nodes loop
-               Accessibility.Append (Node);
-            end loop;
-            for Ord in 1 .. Tab_Count loop
-               Guikit.Segmented.Cell_Bounds (Segs, Content_X, Content_W, LH, Ord, CX, CW);
-               Add_Hit (Hit_Tab, 0, Ord, CX, Switch_Y, CW, Row_H);
+            for Tab_Row in 0 .. Tab_Rows - 1 loop
+               Last_Ord := Last_Tab_In_Row (First_Ord);
+               declare
+                  Row_Y     : constant Natural := Switch_Y + Tab_Row * Row_H;
+                  Segs      : Guikit.Segmented.Segment_Vectors.Vector;
+                  S_Rects   : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+                  S_Text    : Guikit.Draw.Text_Command_Vectors.Vector;
+                  S_Tips    : Guikit.Draw.Tooltip_Command_Vectors.Vector;
+                  S_Nodes   : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+                  CX, CW    : Natural;
+                  Local_Active : constant Natural :=
+                    (if P.Active in First_Ord .. Last_Ord
+                     then P.Active - First_Ord + 1
+                     else 0);
+               begin
+                  for Ord in First_Ord .. Last_Ord loop
+                     Segs.Append
+                       (Guikit.Segmented.Segment'
+                          (Label => Section_Label (P, Ord), others => <>));
+                  end loop;
+                  Guikit.Segmented.Build_Frame
+                    (Segments => Segs, Active => Local_Active,
+                     Region_X => Content_X, Region_Y => Row_Y + 2, Region_Width => Content_W,
+                     --  Fill each tab band (leaving a small margin) rather than a
+                     --  short line-height strip, so the tabs are comfortably tall.
+                     Region_Height => Ctrl_H, Clip_Width => Clip_Width, Clip_Height => Clip_Height,
+                     Line_Height => LH, Hover_X => Hover_X, Hover_Y => Hover_Y,
+                     Rectangles => S_Rects, Text => S_Text, Tooltips => S_Tips,
+                     Accessibility => S_Nodes);
+                  for C of S_Rects loop
+                     Rectangles.Append (C);
+                  end loop;
+                  for C of S_Text loop
+                     Text.Append (C);
+                  end loop;
+                  for Node of S_Nodes loop
+                     Accessibility.Append (Node);
+                  end loop;
+                  for Ord in First_Ord .. Last_Ord loop
+                     Guikit.Segmented.Cell_Bounds
+                       (Segs, Content_X, Content_W, LH, Ord - First_Ord + 1, CX, CW);
+                     Add_Hit (Hit_Tab, 0, Ord, CX, Row_Y, CW, Row_H);
+                  end loop;
+               end;
+
+               if Last_Ord < Tab_Count then
+                  First_Ord := Last_Ord + 1;
+               end if;
             end loop;
          end;
       end if;
@@ -699,6 +763,14 @@ package body Guikit.Settings_Panel is
                then Group_Gap else 0);
             Row_Y : constant Natural := Rows_Top + (R - P.Offset) * Row_H + Extra;
             Mid_Y : constant Natural := Row_Y + (Row_H - LH) / 2;
+            --  A toggle occupies only the far-right end of the shared value
+            --  column. Let its label use the otherwise blank space up to that
+            --  switch, which keeps localized labels legible without moving the
+            --  aligned controls used by the other field kinds.
+            Field_Label_W : constant Natural :=
+              (if F.Kind = Toggle and then Content_W > 2 * LH + Pad
+               then Content_W - 2 * LH - Pad
+               else Label_W);
          begin
             exit when not Vis and then R >= P.Offset + P.Visible_Rows;
             if Vis then
@@ -721,7 +793,7 @@ package body Guikit.Settings_Panel is
                         Width => Content_W, Height => Row_H, Name => F.Label, others => <>));
                else
                   Add_Text
-                    (Content_X, Mid_Y, Label_W, F.Label,
+                    (Content_X, Mid_Y, Field_Label_W, F.Label,
                      (if F.Enabled then Guikit.Draw.Text_Color else Guikit.Draw.Disabled_Text_Color));
                   Add_Hit (Hit_Focus, I, 0, Region_X, Row_Y, Region_Width, Row_H);
 
@@ -965,7 +1037,7 @@ package body Guikit.Settings_Panel is
       --  enough because the switcher sits near the top of the pane.
       if Tab_Count > 1 and then Length (P.Config.Switch_Tooltip) > 0
         and then Hover_X >= Content_X and then Hover_X < Content_X + Content_W
-        and then Hover_Y >= Switch_Y and then Hover_Y < Switch_Y + Row_H
+        and then Hover_Y >= Switch_Y and then Hover_Y < Switch_Y + Switch_H
       then
          declare
             Tip_Pad : constant Natural := 6;
@@ -975,7 +1047,16 @@ package body Guikit.Settings_Panel is
             Tip_H   : constant Natural := LH + 2 * Tip_Pad;
             Tip_X   : constant Natural :=
               (if Clip_Width > Tip_W then Natural'Min (Natural'Max (Hover_X, 0), Clip_Width - Tip_W) else 0);
-            Tip_Y   : constant Natural := Natural'Max (Hover_Y, 0) + LH;
+            Below_Switch : constant Natural :=
+              Guikit.Layout.Saturating_Add
+                (Guikit.Layout.Saturating_Add (Switch_Y, Switch_H), 4);
+            Tip_Y   : constant Natural :=
+              (if Below_Switch <= Clip_Height
+                 and then Tip_H <= Clip_Height - Below_Switch
+               then Below_Switch
+               elsif Switch_Y >= Tip_H + 4
+               then Switch_Y - Tip_H - 4
+               else 0);
          begin
             Guikit.Widgets.Draw_Tooltip
               (Rectangles      => Rectangles,
@@ -986,7 +1067,10 @@ package body Guikit.Settings_Panel is
                Box_Y           => Tip_Y,
                Box_Width       => Tip_W,
                Box_Height      => Tip_H,
-               Fill_Color      => Guikit.Draw.Overlay_Color,
+               --  Tooltips cover live controls in compact layouts, so use an
+               --  opaque surface: a translucent overlay lets labels beneath
+               --  bleed into the tooltip text and become unreadable.
+               Fill_Color      => Guikit.Draw.Pane_Color,
                Border_Color    => Guikit.Draw.Border_Color,
                Label_X         => Tip_X + Tip_Pad,
                Label_Y         => Tip_Y + Tip_Pad,

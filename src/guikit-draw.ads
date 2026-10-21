@@ -54,12 +54,13 @@ package Guikit.Draw is
       Label_Purple_Color,
       Label_Gray_Color,
       Marquee_Color,
+      Modal_Backdrop_Color,
+      Shadow_Color,
       Overlay_Color);
 
    --  Selectable color palettes. Theme_Dark is the default. Theme_High_Contrast
-   --  keeps the dark base color values (its extra emphasis is applied through
-   --  Render_Theme) and takes precedence over Theme_Light when both the
-   --  high-contrast and light preferences are enabled.
+   --  uses a dedicated dark, strongly separated palette and takes precedence
+   --  over Theme_Light when both preferences are enabled.
    type Theme_Kind is (Theme_Dark, Theme_Light, Theme_High_Contrast);
 
    --  Resolved sRGB color with straight alpha. Channels are in 0.0 .. 1.0.

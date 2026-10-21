@@ -627,7 +627,29 @@ package body Guikit.Widgets is
    is
       Draw_W : constant Natural := Clipped_Size (Label_X, Label_Width, Clip_Width);
       Draw_H : constant Natural := Clipped_Size (Label_Y, Label_Height, Clip_Height);
+      Box_W  : constant Natural := Clipped_Size (Box_X, Box_Width, Clip_Width);
+      Box_H  : constant Natural := Clipped_Size (Box_Y, Box_Height, Clip_Height);
    begin
+      --  Rectangles and text are rendered in separate passes.  Merely adding
+      --  the tooltip fill last therefore does not hide labels already queued
+      --  beneath it; remove those covered labels before appending the tooltip
+      --  label, preserving the expected overlay stacking order.
+      if Box_W > 0 and then Box_H > 0 and then not Text.Is_Empty then
+         for Index in reverse Text.First_Index .. Text.Last_Index loop
+            declare
+               Command : constant Text_Command := Text (Index);
+            begin
+               if Command.X < Saturating_Add (Box_X, Box_W)
+                 and then Box_X < Saturating_Add (Command.X, Command.Width)
+                 and then Command.Y < Saturating_Add (Box_Y, Box_H)
+                 and then Box_Y < Saturating_Add (Command.Y, Command.Height)
+               then
+                  Text.Delete (Index);
+               end if;
+            end;
+         end loop;
+      end if;
+
       Add_Clipped_Rect
         (Rectangles, Clip_Width, Clip_Height, Box_X, Box_Y, Box_Width, Box_Height, Fill_Color);
       Add_Border

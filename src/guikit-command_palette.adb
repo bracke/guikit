@@ -275,7 +275,7 @@ package body Guikit.Command_Palette is
       if P.Config.Overlay then
          Guikit.Widgets.Draw_Drop_Shadow
            (Rectangles, Clip_Width, Clip_Height, Layout.X, Layout.Y, Layout.Width, Layout.Height,
-            Guikit.Draw.Overlay_Color);
+            Guikit.Draw.Shadow_Color);
       end if;
       Guikit.Widgets.Draw_Menu_Panel
         (Rectangles, Clip_Width, Clip_Height, Layout.X, Layout.Y, Layout.Width, Layout.Height,
