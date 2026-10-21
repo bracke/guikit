@@ -214,6 +214,32 @@ package body Guikit_Suite.Settings_Panel is
 
       --  A click on the toggle row hits a laid-out field.
       Assert (SP.Click (P, 250, 75), "a click inside the panel hits a laid-out field");
+
+      --  A click on the toggle's switch flips it, rather than only focusing
+      --  the row the switch sits in. Sweep the "Hidden" row from the right
+      --  edge until the switch is under the pointer.
+      declare
+         Flipped : Boolean := False;
+      begin
+         for Node of Nodes loop
+            if Ada.Strings.Unbounded.To_String (Node.Name) = "Hidden" then
+               for X in reverse Node.X .. Node.X + Node.Width - 1 loop
+                  declare
+                     Hit    : constant Boolean := SP.Click (P, X, Node.Y + Node.Height / 2);
+                     Change : constant SP.Change := SP.Take_Change (P);
+                  begin
+                     if Hit and then Change.Kind = SP.Value_Changed
+                       and then Ada.Strings.Unbounded.To_String (Change.Key) = "hidden"
+                     then
+                        Flipped := True;
+                        exit;
+                     end if;
+                  end;
+               end loop;
+            end if;
+         end loop;
+         Assert (Flipped, "a click on a toggle's switch flips the toggle");
+      end;
    end Test_Build_Frame;
 
    --  German sort options are wider than the shared value column (capped at

@@ -369,7 +369,10 @@ package body Guikit.Settings_Panel is
 
    function Click (P : in out Panel; X : Integer; Y : Integer) return Boolean is
    begin
-      for H of P.Hits loop
+      --  Latest first: a control's box (toggle, choice cell, stepper) is
+      --  registered after the row it sits in and must win over that row's
+      --  focus hit, or a click on the control only focuses the row.
+      for H of reverse P.Hits loop
          if X >= H.X and then X < H.X + H.W and then Y >= H.Y and then Y < H.Y + H.H then
             if H.Kind = Hit_Tab then
                Set_Active_Section (P, H.Option);
