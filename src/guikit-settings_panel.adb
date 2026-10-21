@@ -454,48 +454,60 @@ package body Guikit.Settings_Panel is
       Content_W : constant Natural  :=
         (if Region_Width > 2 * Pad then Region_Width - 2 * Pad else 0);
 
-      --  Return the last section that fits naturally beside First_Ord.  The
-      --  segmented control already measures localized labels and their padding;
-      --  using that same measurement here prevents translated tabs from being
-      --  scaled down into clipped fragments.
-      function Last_Tab_In_Row (First_Ord : Positive) return Positive is
+      --  Whether sections First_Ord .. Last_Ord fit on one row at their natural
+      --  widths. The segmented control already measures localized labels and
+      --  their padding; using that same measurement here prevents translated
+      --  tabs from being scaled down into clipped fragments. A lone section
+      --  always "fits": there is nowhere narrower to put it.
+      function Tabs_Fit (First_Ord, Last_Ord : Positive) return Boolean is
          Segments : Guikit.Segmented.Segment_Vectors.Vector;
-         Last     : Positive := First_Ord;
       begin
-         for Ord in First_Ord .. Positive (Tab_Count) loop
+         if First_Ord = Last_Ord then
+            return True;
+         end if;
+         for Ord in First_Ord .. Last_Ord loop
             Segments.Append
               (Guikit.Segmented.Segment'
                  (Label => Section_Label (P, Ord), others => <>));
-            if Ord > First_Ord
-              and then Guikit.Segmented.Natural_Width (Segments, LH) > Content_W
-            then
-               return Ord - 1;
-            end if;
-            Last := Ord;
          end loop;
-         return Last;
-      end Last_Tab_In_Row;
+         return Guikit.Segmented.Natural_Width (Segments, LH) <= Content_W;
+      end Tabs_Fit;
 
-      function Required_Tab_Rows return Natural is
-         First_Ord : Positive := 1;
-         Rows      : Natural := 0;
-         Last_Ord  : Positive;
+      --  How many sections row Row (0-based) of Rows holds: the sections split
+      --  as evenly as they go, any extra one going to the earlier rows.
+      function Row_Size (Row, Rows : Natural) return Natural is
+        (Tab_Count / Rows + (if Row < Tab_Count mod Rows then 1 else 0));
+
+      --  The fewest tab rows in which every row fits, with the sections split
+      --  evenly. Filling each row greedily left a last row holding one tab
+      --  stretched across the whole panel, which read as a button.
+      function Balanced_Tab_Rows return Natural is
       begin
          if Tab_Count <= 1 then
             return 0;
          end if;
-
-         loop
-            Last_Ord := Last_Tab_In_Row (First_Ord);
-            Rows := Rows + 1;
-            exit when Last_Ord >= Tab_Count;
-            First_Ord := Last_Ord + 1;
+         for Rows in 1 .. Tab_Count loop
+            declare
+               First_Ord : Positive := 1;
+               All_Fit   : Boolean := True;
+            begin
+               for Row in 0 .. Rows - 1 loop
+                  if not Tabs_Fit (First_Ord, First_Ord + Row_Size (Row, Rows) - 1) then
+                     All_Fit := False;
+                     exit;
+                  end if;
+                  First_Ord := First_Ord + Row_Size (Row, Rows);
+               end loop;
+               if All_Fit then
+                  return Rows;
+               end if;
+            end;
          end loop;
-         return Rows;
-      end Required_Tab_Rows;
+         return Tab_Count;
+      end Balanced_Tab_Rows;
 
       --  Extra tab rows are naturally accounted for by the scrolling body.
-      Tab_Rows : constant Natural := Required_Tab_Rows;
+      Tab_Rows : constant Natural := Balanced_Tab_Rows;
       Switch_H  : constant Natural :=
         Guikit.Layout.Saturating_Multiply (Tab_Rows, Row_H);
       --  Align the title header with the close icon (same top inset), forming a
@@ -697,7 +709,7 @@ package body Guikit.Settings_Panel is
             Last_Ord  : Positive;
          begin
             for Tab_Row in 0 .. Tab_Rows - 1 loop
-               Last_Ord := Last_Tab_In_Row (First_Ord);
+               Last_Ord := First_Ord + Row_Size (Tab_Row, Tab_Rows) - 1;
                declare
                   Row_Y     : constant Natural := Switch_Y + Tab_Row * Row_H;
                   Segs      : Guikit.Segmented.Segment_Vectors.Vector;
@@ -807,8 +819,10 @@ package body Guikit.Settings_Panel is
                         begin
                            Guikit.Widgets.Draw_Toggle
                              (Rectangles, Clip_Width, Clip_Height, TX, TY, TW, TH, Is_True (F.Value),
+                              --  Muted text is the faintest colour that still
+                              --  clears 3:1 against the panel in every theme.
                               Guikit.Draw.Selection_Color, Guikit.Draw.Input_Color,
-                              Guikit.Draw.Border_Color, Guikit.Draw.Pane_Color);
+                              Guikit.Draw.Muted_Text_Color, Guikit.Draw.Text_Color);
                            Add_Hit (Hit_Toggle, I, 0, TX, TY, TW, TH);
                         end;
 
@@ -927,14 +941,40 @@ package body Guikit.Settings_Panel is
                         begin
                            if Count > 0 and then Ctrl_W > 0 then
                               declare
-                                 BW : constant Natural := (Ctrl_W - (Count - 1) * 4) / Count;
+                                 Even_W : constant Natural := (Ctrl_W - (Count - 1) * 4) / Count;
                                  BH : constant Natural := Ctrl_H;
                                  BY : constant Natural := Row_Y + (Row_H - BH) / 2;
+
+                                 --  A row with no label of its own is a row of
+                                 --  actions: its buttons take their natural width
+                                 --  and line up at the right edge, as dialog
+                                 --  buttons do, rather than stretching across the
+                                 --  value column beside an empty label.
+                                 function Natural_W (J : Positive) return Natural is
+                                   (Guikit.Layout.Label_Pixel_Width
+                                      (To_String (F.Option_Labels.Element (J)), Cell_W) + 2 * 6);
+
+                                 function Total_W return Natural is
+                                    Sum : Natural := (Count - 1) * 4;
+                                 begin
+                                    for J in 1 .. Count loop
+                                       Sum := Sum + Natural_W (J);
+                                    end loop;
+                                    return Sum;
+                                 end Total_W;
+
+                                 Compact : constant Boolean :=
+                                   Length (F.Label) = 0 and then Total_W <= Content_W;
+                                 Next_X  : Natural :=
+                                   (if Compact then Content_X + Content_W - Total_W else Ctrl_X);
                               begin
                                  for J in 1 .. Count loop
                                     declare
-                                       BX : constant Natural := Ctrl_X + (J - 1) * (BW + 4);
+                                       This_W : constant Natural := (if Compact then Natural_W (J) else Even_W);
+                                       BX     : constant Natural := Next_X;
+                                       BW     : constant Natural := This_W;
                                     begin
+                                       Next_X := Next_X + This_W + 4;
                                        Guikit.Widgets.Draw_Button
                                          (Rectangles, Text, Clip_Width, Clip_Height, BX, BY, BW, BH,
                                           Guikit.Draw.Input_Color, Guikit.Draw.Border_Color, 6,

@@ -118,11 +118,13 @@ package body Guikit_Suite.Widgets is
       Rects : Rectangle_Command_Vectors.Vector;
    begin
       Draw_Drop_Shadow (Rects, Big, Big, 10, 10, 20, 15, Shadow_Color);
-      Assert (Count (Rects) = 2, "a drop shadow is a horizontal and a vertical band");
-      Assert (Rects (1).X = 13 and then Rects (1).Y = 25, "the bottom band is offset below the box");
-      Assert (Rects (1).Width = 20 and then Rects (1).Height = 3, "the bottom band spans the box width");
-      Assert (Rects (2).X = 30 and then Rects (2).Y = 13, "the right band is offset beside the box");
-      Assert (Rects (2).Width = 3 and then Rects (2).Height = 15, "the right band spans the box height");
+      Assert (Count (Rects) = 8, "a drop shadow is four bands, each a horizontal and a vertical strip");
+      Assert (Rects (1).X = 13 and then Rects (1).Y = 25, "the bottom strip is offset below the box");
+      Assert (Rects (1).Width = 19 and then Rects (1).Height = 2,
+              "the innermost bottom strip runs to the corner it shares with the right strip");
+      Assert (Rects (2).X = 30 and then Rects (2).Y = 13, "the right strip is offset beside the box");
+      Assert (Rects (2).Width = 2 and then Rects (2).Height = 12, "the right strip stops where the bottom begins");
+      Assert (Rects (7).Height = 8 and then Rects (8).Width = 8, "the outermost band reaches eight pixels out");
 
       --  Both bands fall outside a tiny clip window and are dropped.
       Rects.Clear;
@@ -294,6 +296,7 @@ package body Guikit_Suite.Widgets is
       Assert (Count (Rects) = 6, "a toggle is a track, four border edges and a knob");
       Assert (Rects (1).Color = Selection_Color, "the on track uses the on colour");
       Assert (Rects (Rects.Last_Index).X > 120, "the on knob sits toward the right of the track");
+      Assert (Rects (Rects.Last_Index).Color = Text_Color, "the on knob uses the knob colour");
 
       --  An "off" toggle: track uses the off colour and the knob sits left.
       Rects.Clear;
@@ -303,6 +306,8 @@ package body Guikit_Suite.Widgets is
          Border_Color => Border_Color, Knob_Color => Text_Color);
       Assert (Rects (1).Color = Input_Color, "the off track uses the off colour");
       Assert (Rects (Rects.Last_Index).X < 110, "the off knob sits toward the left of the track");
+      Assert (Rects (Rects.Last_Index).Color = Border_Color,
+              "the off knob takes the border colour, so it never matches the track");
    end Test_Toggle;
 
    procedure Test_Number_Stepper (T : in out AUnit.Test_Cases.Test_Case'Class) is

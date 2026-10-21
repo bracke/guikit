@@ -184,29 +184,36 @@ package body Guikit.Widgets is
       Color       : Render_Color)
    is
       Shadow_Offset : constant Natural := 3;
+      Band_Step     : constant Natural := 2;
+      Bands         : constant Positive := 4;
    begin
       if Width = 0 or else Height = 0 then
          return;
       end if;
 
-      Add_Clipped_Rect
-        (Rectangles,
-         Clip_Width,
-         Clip_Height,
-         Saturating_Add (X, Shadow_Offset),
-         Saturating_Add (Y, Height),
-         Width,
-         Shadow_Offset,
-         Color);
-      Add_Clipped_Rect
-        (Rectangles,
-         Clip_Width,
-         Clip_Height,
-         Saturating_Add (X, Width),
-         Saturating_Add (Y, Shadow_Offset),
-         Shadow_Offset,
-         Height,
-         Color);
+      --  Nested L-shaped bands of the same translucent colour, each reaching
+      --  one step further out. They overlap most at the box edge and least at
+      --  the rim, so the shadow fades out instead of ending in a hard line --
+      --  and is wide enough to read against a dark, dimmed backdrop, where the
+      --  former three-pixel band could not be seen at all.
+      for Band in 1 .. Bands loop
+         declare
+            Reach : constant Natural := Band * Band_Step;
+         begin
+            --  Below the box, running on past its right edge to meet the
+            --  vertical band, so the corner is filled once per band.
+            Add_Clipped_Rect
+              (Rectangles, Clip_Width, Clip_Height,
+               Saturating_Add (X, Shadow_Offset), Saturating_Add (Y, Height),
+               (if Width > Shadow_Offset then Width - Shadow_Offset else 0) + Reach, Reach,
+               Color);
+            Add_Clipped_Rect
+              (Rectangles, Clip_Width, Clip_Height,
+               Saturating_Add (X, Width), Saturating_Add (Y, Shadow_Offset),
+               Reach, (if Height > Shadow_Offset then Height - Shadow_Offset else 0),
+               Color);
+         end;
+      end loop;
    end Draw_Drop_Shadow;
 
    procedure Draw_Close_Button
@@ -493,9 +500,12 @@ package body Guikit.Widgets is
         (Rectangles, Clip_Width, Clip_Height, X, Y, Width, Height,
          (if Is_On then On_Color else Off_Color));
       Add_Border (Rectangles, Clip_Width, Clip_Height, X, Y, Width, Height, Border_Color);
+      --  Off, the knob takes the border colour, so the off state reads by
+      --  shape against any track fill instead of vanishing into it.
       Add_Clipped_Rect
         (Rectangles, Clip_Width, Clip_Height,
-         Knob_X, Saturating_Add (Y, Knob_Pad), Knob_Size, Knob_Size, Knob_Color);
+         Knob_X, Saturating_Add (Y, Knob_Pad), Knob_Size, Knob_Size,
+         (if Is_On then Knob_Color else Border_Color));
    end Draw_Toggle;
 
    procedure Draw_Number_Stepper

@@ -89,9 +89,10 @@ package Guikit.Widgets is
       Track_Color : Guikit.Draw.Render_Color;
       Fill_Color  : Guikit.Draw.Render_Color);
 
-   --  Draw a drop shadow along the bottom and right edges of a box: a
-   --  horizontal band below it and a vertical band to its right, both offset by
-   --  three pixels.
+   --  Draw a soft drop shadow along the bottom and right edges of a box,
+   --  starting three pixels in from its corner: four nested L-shaped bands of
+   --  Color, two pixels apart, so the shadow is darkest at the box and fades
+   --  out over eight pixels.
    --
    --  @param Rectangles Rectangle command vector to append the shadow to.
    --  @param Clip_Width Drawable window width in pixels.
@@ -399,8 +400,8 @@ package Guikit.Widgets is
    --  @param Is_On Whether the toggle is set.
    --  @param On_Color Track fill when Is_On.
    --  @param Off_Color Track fill when not Is_On.
-   --  @param Border_Color Track border colour.
-   --  @param Knob_Color Knob fill colour.
+   --  @param Border_Color Track border colour, and the knob's when not Is_On.
+   --  @param Knob_Color Knob fill colour when Is_On.
    procedure Draw_Toggle
      (Rectangles   : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
       Clip_Width   : Natural;

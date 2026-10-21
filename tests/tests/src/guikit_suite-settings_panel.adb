@@ -1,3 +1,4 @@
+with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with AUnit;
@@ -217,6 +218,40 @@ package body Guikit_Suite.Settings_Panel is
       Rects : Guikit.Draw.Rectangle_Command_Vectors.Vector;
       Text  : Guikit.Draw.Text_Command_Vectors.Vector;
       Nodes : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+
+      --  Wrapped tabs are split evenly: no row is left holding a single tab,
+      --  which stretched across the whole panel and read as a button.
+      function Every_Tab_Row_Shared (Tab_Labels : String) return Boolean is
+         Rows : array (1 .. 7) of Natural := [others => 0];
+         Ys   : array (1 .. 7) of Natural := [others => Natural'Last];
+         Used : Natural := 0;
+      begin
+         for Command of Text loop
+            if Ada.Strings.Fixed.Index (Tab_Labels, "|" & To_String (Command.Text) & "|") > 0 then
+               declare
+                  Slot : Natural := 0;
+               begin
+                  for Row in 1 .. Used loop
+                     if Ys (Row) = Command.Y then
+                        Slot := Row;
+                     end if;
+                  end loop;
+                  if Slot = 0 then
+                     Used := Used + 1;
+                     Slot := Used;
+                     Ys (Slot) := Command.Y;
+                  end if;
+                  Rows (Slot) := Rows (Slot) + 1;
+               end;
+            end if;
+         end loop;
+         for Row in 1 .. Used loop
+            if Used > 1 and then Rows (Row) < 2 then
+               return False;
+            end if;
+         end loop;
+         return Used > 0;
+      end Every_Tab_Row_Shared;
    begin
       SP.Set_Fields (P, Two_Sections);
       Assert (SP.Section_Count (P) = 2, "two Section fields make two tabs");
@@ -254,6 +289,8 @@ package body Guikit_Suite.Settings_Panel is
          end loop;
          Assert (Found_Shortcuts, "compact wrapped tabs retain the full Shortcuts label");
       end;
+      Assert (Every_Tab_Row_Shared ("|View|Sort|Appearance|Behavior|Details|Filetypes|Shortcuts|"),
+              "wrapped tabs are split evenly, with no tab alone on a row");
       Assert (SP.Click (P, 400, 75), "a click in the second compact tab row lands");
       Assert (SP.Active_Section (P) = 7, "the second-row tab maps back to its original section");
 
@@ -309,6 +346,9 @@ package body Guikit_Suite.Settings_Panel is
             and then Seen_Tastenkurzel and then Seen_Long_Field,
             "all localized compact tabs are rendered");
       end;
+      Assert (Every_Tab_Row_Shared
+                ("|Ansicht|Sortierung|Darstellung|Verhalten|Details|Dateitypen|Tastenkurzel|"),
+              "three rows of localized tabs are split evenly too");
       Assert (SP.Click (P, 220, 100), "a click in the third localized tab row lands");
       Assert (SP.Active_Section (P) = 7, "the third-row tab maps to the final section");
    end Test_Sections;
