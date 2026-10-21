@@ -51,6 +51,9 @@ package Guikit.Settings_Panel is
       Max           : Integer := 0;
       Enabled       : Boolean := True;
       Help          : UString;
+      --  Shortcut: how Value reads to a person (localized modifier names, say),
+      --  shown in its place when not empty. Value stays what is reported back.
+      Display       : UString;
    end record;
 
    package Field_Vectors is new Ada.Containers.Vectors

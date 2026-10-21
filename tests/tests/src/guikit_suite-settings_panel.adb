@@ -31,6 +31,7 @@ package body Guikit_Suite.Settings_Panel is
    procedure Test_Shortcut_Capture (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Switch_Tooltip (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Field_Help (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Choice_Fits_Options (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function U (S : String) return Unbounded_String renames To_Unbounded_String;
 
@@ -82,6 +83,9 @@ package body Guikit_Suite.Settings_Panel is
         (T, Test_Edit_And_Emit'Access, "editing each field kind emits the right change; focus skips sections");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Build_Frame'Access, "Build_Frame emits draw commands and lays out clickable hit rects");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Choice_Fits_Options'Access,
+         "a choice too wide for the value column widens instead of clipping its options");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Sections'Access, "sections act as tabs: focus stays in the active section, a tab click switches");
       AUnit.Test_Cases.Registration.Register_Routine
@@ -211,6 +215,44 @@ package body Guikit_Suite.Settings_Panel is
       --  A click on the toggle row hits a laid-out field.
       Assert (SP.Click (P, 250, 75), "a click inside the panel hits a laid-out field");
    end Test_Build_Frame;
+
+   --  German sort options are wider than the shared value column (capped at
+   --  55% of the panel). Squeezed into it they clipped to "Dateity", "Größ";
+   --  the row now takes the room its short label leaves.
+   procedure Test_Choice_Fits_Options (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      P       : SP.Panel;
+      Fields  : SP.Field_Vectors.Vector;
+      Toks, Labels : SP.UString_Vectors.Vector;
+      Rects   : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text    : Guikit.Draw.Text_Command_Vectors.Vector;
+      Nodes   : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+      Cell_W  : constant Natural := Guikit.Layout.Caret_Advance_Width (20);
+      Options : constant array (1 .. 5) of Unbounded_String :=
+        [U ("Name"), U ("Dateityp"), U ("Größe"), U ("Erstellt"), U ("Geändert")];
+      Seen    : Natural := 0;
+   begin
+      for Option of Options loop
+         Toks.Append (Option);
+         Labels.Append (Option);
+      end loop;
+      Fields.Append
+        (SP.Field'(Key => U ("sort"), Label => U ("Sortieren nach"), Kind => SP.Choice,
+                   Value => U ("Name"), Option_Values => Toks, Option_Labels => Labels, others => <>));
+      SP.Set_Fields (P, Fields);
+      SP.Build_Frame (P, 0, 0, 800, 300, 800, 300, True, -1, -1, Rects, Text, Nodes);
+      for Command of Text loop
+         for Option of Options loop
+            if Command.Text = Option then
+               Seen := Seen + 1;
+               Assert
+                 (Command.Width >= Guikit.Layout.Label_Pixel_Width (To_String (Option), Cell_W),
+                  "the option " & To_String (Option) & " keeps its full width");
+            end if;
+         end loop;
+      end loop;
+      Assert (Seen = 5, "every option is drawn");
+   end Test_Choice_Fits_Options;
 
    procedure Test_Sections (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);
@@ -505,6 +547,37 @@ package body Guikit_Suite.Settings_Panel is
       SP.Build_Frame (P, 0, 0, 500, 400, 500, 400, True, -1, -1, Rects, Text, Nodes);
       Assert (Has_Text ("Toggle this to change behaviour."),
               "the focused field's help is drawn as footer text");
+
+      --  Help wider than the panel wraps at spaces instead of being cut off.
+      Fields.Clear;
+      Fields.Append
+        (SP.Field'(Key => U ("flag"), Label => U ("Flag"), Kind => SP.Toggle, Value => U ("false"),
+                   Help => U ("Left and right switch between every one of the available views here."),
+                   others => <>));
+      SP.Set_Fields (P, Fields);
+      Rects.Clear;
+      Text.Clear;
+      SP.Build_Frame (P, 0, 0, 400, 400, 400, 400, True, -1, -1, Rects, Text, Nodes);
+      declare
+         Cell_W : constant Natural := Guikit.Layout.Caret_Advance_Width (20);
+         Joined : Unbounded_String;
+         Lines  : Natural := 0;
+      begin
+         for C of Text loop
+            if Ada.Strings.Fixed.Index (To_String (C.Text), "views") > 0
+              or else Ada.Strings.Fixed.Index (To_String (C.Text), "Left and") = 1
+              or else Ada.Strings.Fixed.Index (To_String (C.Text), "every") > 0
+            then
+               Lines := Lines + 1;
+               Append (Joined, C.Text & " ");
+               Assert (Guikit.Layout.Label_Pixel_Width (To_String (C.Text), Cell_W) <= C.Width,
+                       "each wrapped help line fits the footer width");
+            end if;
+         end loop;
+         Assert (Lines >= 2, "long help wraps onto more than one line");
+         Assert (Ada.Strings.Fixed.Index (To_String (Joined), "views here.") > 0,
+                 "no word of the help is lost to clipping");
+      end;
    end Test_Field_Help;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is

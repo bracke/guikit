@@ -536,7 +536,49 @@ package body Guikit.Settings_Panel is
          then P.Fields.Element (P.Focused).Help else Null_Unbounded_String);
       Has_Status : constant Boolean := Length (P.Config.Status) > 0;
       Has_Help   : constant Boolean := (not Has_Status) and then Length (Focused_Help) > 0;
-      Foot_H    : constant Natural  := (if Has_Status or else Has_Help then Row_H else 0);
+
+      --  The footer text broken at spaces into lines that fit the content width,
+      --  at most Max_Foot_Lines of them; the last takes whatever remains and is
+      --  clipped there. One line used to cut off any longer help mid-word.
+      Max_Foot_Lines : constant := 3;
+      function Footer_Lines (Value : String) return UString_Vectors.Vector is
+         Fit_Units : constant Natural := (if Cell_W > 0 then Content_W / Cell_W else 0);
+         Lines     : UString_Vectors.Vector;
+         Line      : UString;
+         First     : Natural := Value'First;
+      begin
+         while First <= Value'Last loop
+            declare
+               Space : constant Natural := Ada.Strings.Fixed.Index (Value (First .. Value'Last), " ");
+               Last  : constant Natural := (if Space = 0 then Value'Last else Space - 1);
+               Word  : constant String := Value (First .. Last);
+               Joined : constant String := (if Length (Line) = 0 then Word else To_String (Line) & " " & Word);
+            begin
+               if Length (Line) = 0
+                 or else Guikit.Utf8.Display_Units (Joined) <= Fit_Units
+                 or else Natural (Lines.Length) = Max_Foot_Lines - 1
+               then
+                  Line := To_Unbounded_String (Joined);
+               else
+                  Lines.Append (Line);
+                  Line := To_Unbounded_String (Word);
+               end if;
+               First := (if Space = 0 then Value'Last + 1 else Space + 1);
+            end;
+         end loop;
+         if Length (Line) > 0 then
+            Lines.Append (Line);
+         end if;
+         return Lines;
+      end Footer_Lines;
+
+      Foot_Lines : constant UString_Vectors.Vector :=
+        (if Has_Status then Footer_Lines (To_String (P.Config.Status))
+         elsif Has_Help then Footer_Lines (To_String (Focused_Help))
+         else UString_Vectors.Empty_Vector);
+      Foot_H    : constant Natural  :=
+        (if Foot_Lines.Is_Empty then 0
+         else Row_H + (Natural (Foot_Lines.Length) - 1) * LH);
       Rows_Bot  : constant Natural  :=
         (if Region_Height > Pad + Foot_H then Region_Y + Region_Height - Pad - Foot_H else Region_Y);
       Avail_H   : constant Natural  := (if Rows_Bot > Rows_Top then Rows_Bot - Rows_Top else 0);
@@ -581,7 +623,9 @@ package body Guikit.Settings_Panel is
                --  An input field grows with its value but keeps a sensible minimum.
                return Natural'Max
                         (16 * Cell_W,
-                         Guikit.Utf8.Display_Units (To_String (F.Value)) * Cell_W + 8);
+                         Guikit.Utf8.Display_Units
+                           (To_String (if F.Kind = Shortcut and then Length (F.Display) > 0
+                                       then F.Display else F.Value)) * Cell_W + 8);
             when Section =>
                return 0;
          end case;
@@ -842,6 +886,20 @@ package body Guikit.Settings_Panel is
                                  Tips  : Guikit.Draw.Tooltip_Command_Vectors.Vector;
                                  Nodes : Guikit.Draw.Accessibility_Node_Vectors.Vector;
                                  CX, CW : Natural;
+
+                                 --  A choice whose options do not fit the shared value
+                                 --  column grows to the left, as far as its own label's
+                                 --  text leaves room, instead of squeezing its options
+                                 --  into clipped fragments ("Dateity", "Größ").
+                                 Need       : constant Natural := Control_Width (F);
+                                 Label_Need : constant Natural :=
+                                   Guikit.Layout.Label_Pixel_Width (To_String (F.Label), Cell_W) + Pad;
+                                 Room       : constant Natural :=
+                                   (if Content_W > Label_Need then Content_W - Label_Need else 0);
+                                 Row_W      : constant Natural :=
+                                   (if Need > Ctrl_W then Natural'Min (Need, Natural'Max (Ctrl_W, Room))
+                                    else Ctrl_W);
+                                 Row_X      : constant Natural := Content_X + Content_W - Row_W;
                               begin
                                  for J in 1 .. Count loop
                                     Segs.Append
@@ -853,7 +911,7 @@ package body Guikit.Settings_Panel is
                                  --  (empty) tooltips are dropped.
                                  Guikit.Segmented.Build_Frame
                                    (Segments => Segs, Active => Option_Index (F),
-                                    Region_X => Ctrl_X, Region_Y => SY, Region_Width => Ctrl_W,
+                                    Region_X => Row_X, Region_Y => SY, Region_Width => Row_W,
                                     Region_Height => SH, Clip_Width => Clip_Width, Clip_Height => Clip_Height,
                                     Line_Height => LH, Hover_X => Hover_X, Hover_Y => Hover_Y,
                                     Rectangles => R, Text => T, Tooltips => Tips, Accessibility => Nodes);
@@ -864,7 +922,7 @@ package body Guikit.Settings_Panel is
                                     Text.Append (C);
                                  end loop;
                                  for J in 1 .. Count loop
-                                    Guikit.Segmented.Cell_Bounds (Segs, Ctrl_X, Ctrl_W, LH, J, CX, CW);
+                                    Guikit.Segmented.Cell_Bounds (Segs, Row_X, Row_W, LH, J, CX, CW);
                                     Add_Hit (Hit_Choice, I, J, CX, SY, CW, SH);
                                  end loop;
                               end;
@@ -919,18 +977,19 @@ package body Guikit.Settings_Panel is
                            TH : constant Natural := Ctrl_H;
                            TY : constant Natural := Row_Y + (Row_H - TH) / 2;
                            VY : constant Natural := Row_Y + (Row_H - LH) / 2;
+                           Shown : constant UString := (if Length (F.Display) > 0 then F.Display else F.Value);
                         begin
                            Guikit.Widgets.Draw_Input_Field
                              (Rectangles, Clip_Width, Clip_Height, Ctrl_X, TY, Ctrl_W, TH,
                               Guikit.Draw.Input_Color,
                               (if Armed then Guikit.Draw.Selection_Color else Guikit.Draw.Border_Color));
-                           Add_Text (Ctrl_X + 4, VY, (if Ctrl_W > 8 then Ctrl_W - 8 else 0), F.Value,
+                           Add_Text (Ctrl_X + 4, VY, (if Ctrl_W > 8 then Ctrl_W - 8 else 0), Shown,
                                      (if F.Enabled then Guikit.Draw.Text_Color
                                       else Guikit.Draw.Disabled_Text_Color));
                            if Armed then
                               Guikit.Widgets.Draw_Caret
                                 (Rectangles, Clip_Width, Clip_Height,
-                                 Ctrl_X + 4 + Guikit.Utf8.Display_Units (To_String (F.Value)) * Cell_W, VY,
+                                 Ctrl_X + 4 + Guikit.Utf8.Display_Units (To_String (Shown)) * Cell_W, VY,
                                  Natural'Max (1, Cell_W / 6), LH, Guikit.Draw.Selection_Color);
                            end if;
                         end;
@@ -994,7 +1053,11 @@ package body Guikit.Settings_Panel is
                     (Guikit.Draw.Accessibility_Node'
                        (Role => (if F.Kind = Buttons then Guikit.Draw.Role_Button else Guikit.Draw.Role_Text_Input),
                         X => Region_X, Y => Row_Y, Width => Region_Width, Height => Row_H,
-                        Name => F.Label, Description => (if Length (F.Help) > 0 then F.Help else F.Value),
+                        Name => F.Label,
+                        Description =>
+                          (if Length (F.Help) > 0 then F.Help
+                           elsif Length (F.Display) > 0 then F.Display
+                           else F.Value),
                         Enabled => F.Enabled, Selected => I = P.Focused, others => <>));
                end if;
             end if;
@@ -1003,15 +1066,17 @@ package body Guikit.Settings_Panel is
 
       --  Footer: the status line, else the focused field's help.
       declare
-         Foot_Y : constant Natural := Rows_Bot + (Foot_H - LH) / 2;
+         Text_H : constant Natural := Natural (Foot_Lines.Length) * LH;
+         Foot_Y : constant Natural := Rows_Bot + (if Foot_H > Text_H then (Foot_H - Text_H) / 2 else 0);
+         Colour : constant Guikit.Draw.Render_Color :=
+           (if Has_Status and then P.Config.Status_Is_Error then Guikit.Draw.Error_Text_Color
+            else Guikit.Draw.Muted_Text_Color);
+         Line_Y : Natural := Foot_Y;
       begin
-         if Has_Status then
-            Add_Text (Content_X, Foot_Y, Content_W, P.Config.Status,
-                      (if P.Config.Status_Is_Error then Guikit.Draw.Error_Text_Color
-                       else Guikit.Draw.Muted_Text_Color));
-         elsif Has_Help then
-            Add_Text (Content_X, Foot_Y, Content_W, Focused_Help, Guikit.Draw.Muted_Text_Color);
-         end if;
+         for Line of Foot_Lines loop
+            Add_Text (Content_X, Line_Y, Content_W, Line, Colour);
+            Line_Y := Line_Y + LH;
+         end loop;
       end;
 
       --  Scrollbar.
