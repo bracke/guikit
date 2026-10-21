@@ -413,7 +413,8 @@ package body Guikit.Vulkan is
    function Host_Visible_Memory_Type
      (Renderer         : Vulkan_Renderer;
       Memory_Type_Bits : Interfaces.Unsigned_32;
-      Memory_Type      : out Interfaces.Unsigned_32)
+      Memory_Type      : out Interfaces.Unsigned_32;
+      Prefer_Cached    : Boolean := False)
       return Boolean;
 
    function Any_Memory_Type
@@ -510,29 +511,39 @@ package body Guikit.Vulkan is
          Texture  => 0.0);
    end Color_To_Vertex;
 
+   --  Prefer_Cached asks first for memory the CPU reads through its cache.
+   --  Memory that is only host-visible is uncached on a real GPU, where
+   --  reading a frame back from it byte by byte takes over a second.
    function Host_Visible_Memory_Type
      (Renderer         : Vulkan_Renderer;
       Memory_Type_Bits : Interfaces.Unsigned_32;
-      Memory_Type      : out Interfaces.Unsigned_32)
+      Memory_Type      : out Interfaces.Unsigned_32;
+      Prefer_Cached    : Boolean := False)
       return Boolean
    is
       Properties : aliased Vk.Physical_Device_Memory_Properties_T;
       Required   : constant Interfaces.Unsigned_32 :=
         Vk.MEMORY_PROPERTY_HOST_VISIBLE_BIT or Vk.MEMORY_PROPERTY_HOST_COHERENT_BIT;
+      Cached     : constant Interfaces.Unsigned_32 := Required or Vk.MEMORY_PROPERTY_HOST_CACHED_BIT;
+      type Flag_List is array (Positive range <>) of Interfaces.Unsigned_32;
+      Wanted_Flags : constant Flag_List := (if Prefer_Cached then [Cached, Required] else [1 => Required]);
    begin
       Vk.Get_Physical_Device_Memory_Properties
         (physical_Device     => Renderer.Physical_Device,
          p_Memory_Properties => Properties'Address);
 
-      for Index in 0 .. Natural (Properties.memory_Type_Count) - 1 loop
-         if (Memory_Type_Bits and Interfaces.Shift_Left (Interfaces.Unsigned_32'(1), Index)) /= 0
-           and then (Properties.memory_Types (Index).property_Flags and Required) = Required
-         then
-            Memory_Type := Interfaces.Unsigned_32 (Index);
-            return True;
-         end if;
+      for Wanted of Wanted_Flags loop
+         for Index in 0 .. Natural (Properties.memory_Type_Count) - 1 loop
+            if (Memory_Type_Bits and Interfaces.Shift_Left (Interfaces.Unsigned_32'(1), Index)) /= 0
+              and then (Properties.memory_Types (Index).property_Flags and Wanted) = Wanted
+            then
+               Memory_Type := Interfaces.Unsigned_32 (Index);
+               return True;
+            end if;
+         end loop;
       end loop;
 
+      Memory_Type := 0;
       return False;
    exception
       when others =>
@@ -1857,7 +1868,8 @@ package body Guikit.Vulkan is
          buffer                => Buffer_Handle,
          p_Memory_Requirements => Requirements'Address);
 
-      if not Host_Visible_Memory_Type (Renderer, Requirements.memory_Type_Bits, Memory_Type) then
+      if not Host_Visible_Memory_Type (Renderer, Requirements.memory_Type_Bits, Memory_Type, Prefer_Cached => True)
+      then
          Vk.Destroy_Buffer (Renderer.Device, Buffer_Handle, System.Null_Address);
          return False;
       end if;
