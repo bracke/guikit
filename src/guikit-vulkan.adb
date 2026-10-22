@@ -396,7 +396,8 @@ package body Guikit.Vulkan is
 
    function Record_Command_Buffers
      (Renderer     : in out Vulkan_Renderer;
-      Vertex_Count : Natural)
+      Vertex_Count : Natural;
+      Only_Image   : Natural := 0)
       return Boolean;
 
    function Create_Swapchain_Resources
@@ -2778,16 +2779,22 @@ package body Guikit.Vulkan is
       end if;
    end Icon_Upload_Texture_Format;
 
+   --  Only_Image names the one buffer a frame will submit; 0 records them all.
    function Record_Command_Buffers
      (Renderer     : in out Vulkan_Renderer;
-      Vertex_Count : Natural)
-      return Boolean is
+      Vertex_Count : Natural;
+      Only_Image   : Natural := 0)
+      return Boolean
+   is
+      First : constant Positive := (if Only_Image = 0 then 1 else Only_Image);
+      Last  : constant Natural :=
+        (if Only_Image = 0 then Natural (Renderer.Command_Buffer_Count) else Only_Image);
    begin
       if Vk.Reset_Command_Pool (Renderer.Device, Renderer.Command_Pool, 0) /= Vk.SUCCESS then
          return False;
       end if;
 
-      for Index in 1 .. Natural (Renderer.Command_Buffer_Count) loop
+      for Index in First .. Last loop
          declare
             Vertex_Buffers : aliased Buffer_Array_C (1 .. 1) := [1 => Renderer.Vertex_Buffer];
             Vertex_Offsets : aliased Buffer_Offset_Array_C (1 .. 1) := [1 => 0];
@@ -5036,7 +5043,9 @@ package body Guikit.Vulkan is
                elsif Present_Result /= Vk.SUCCESS and then Present_Result /= Suboptimal_KHR then
                   Renderer.Last_Vk_Result := Interfaces.Integer_32 (Present_Result);
                   Renderer.Last_Status := Vulkan_Present_Failed;
-               elsif not Record_Command_Buffers (Renderer, Natural (Batch.Vertices.Length)) then
+               elsif not Record_Command_Buffers
+                 (Renderer, Natural (Batch.Vertices.Length), Only_Image => Positive (Image_Index + 1))
+               then
                   Renderer.Last_Status := Vulkan_Command_Record_Failed;
                else
                   Renderer.Last_Vk_Result := -10_040;
