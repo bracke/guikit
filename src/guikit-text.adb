@@ -13,9 +13,11 @@ package body Guikit.Text is
 
    function Loaded (R : Renderer) return Boolean is (R.Is_Loaded);
 
-   --  How tall the glyph atlas may grow: eight times its usual height, a
-   --  texture every Vulkan device takes.
-   Atlas_Max_Height : constant := 8_192;
+   --  How tall the glyph atlas may grow: four times its usual height, which
+   --  at its usual 1024 columns is the 4 MiB the Vulkan backend uploads
+   --  (Guikit.Vulkan's Max_Atlas_Bytes). Past that the atlas is emptied
+   --  and refilled instead.
+   Atlas_Max_Height : constant := 4_096;
 
    function Initialize
      (R              : in out Renderer;
@@ -62,8 +64,11 @@ package body Guikit.Text is
       end loop;
 
       --  A screen of text in many scripts outgrows any fixed atlas; let it
-      --  grow taller rather than drop glyphs.
+      --  grow taller rather than drop glyphs, and once it is as tall as it
+      --  may be, empty it for the glyphs asked for now. Build_Glyphs starts a
+      --  frame over when that happens partway through it.
       Textrender.Set_Atlas_Growth (R.Backend, Max_Height => Atlas_Max_Height);
+      Textrender.Set_Atlas_Eviction (R.Backend, Enabled => True);
 
       R.Is_Loaded    := True;
       R.Cell_Width   := Cell_Width;
@@ -383,10 +388,25 @@ package body Guikit.Text is
          return Result;
       end if;
 
-      Result.Status       := Text_Render_Success;
+      declare
+         Generation : constant Natural := Textrender.Atlas_Generation (R.Backend);
+      begin
+         Result.Status := Text_Render_Success;
+         Append_Glyphs (Commands, Result.Glyphs, Overlay => False);
+         Append_Glyphs (Overlay, Result.Overlay_Glyphs, Overlay => True);
 
-      Append_Glyphs (Commands, Result.Glyphs, Overlay => False);
-      Append_Glyphs (Overlay, Result.Overlay_Glyphs, Overlay => True);
+         --  The atlas was emptied to make room partway through: the glyphs
+         --  placed before that point sit at places now reused. Build the
+         --  frame again; it fits the emptied atlas unless one frame needs
+         --  more than the whole atlas holds.
+         if Textrender.Atlas_Generation (R.Backend) /= Generation then
+            Result := (others => <>);
+            Carried.Clear;
+            Result.Status := Text_Render_Success;
+            Append_Glyphs (Commands, Result.Glyphs, Overlay => False);
+            Append_Glyphs (Overlay, Result.Overlay_Glyphs, Overlay => True);
+         end if;
+      end;
 
       --  The atlas as it is once this text's glyphs are in: packing them may
       --  have made it taller.

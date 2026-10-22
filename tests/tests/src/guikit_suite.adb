@@ -9,6 +9,7 @@ with Guikit_Suite.Settings_Panel;
 with Guikit_Suite.Segmented;
 with Guikit_Suite.Item_Grid;
 with Guikit_Suite.Tree_Panel;
+with Guikit_Suite.Text;
 
 package body Guikit_Suite is
 
@@ -26,6 +27,7 @@ package body Guikit_Suite is
       Result.Add_Test (Guikit_Suite.Segmented.Suite);
       Result.Add_Test (Guikit_Suite.Item_Grid.Suite);
       Result.Add_Test (Guikit_Suite.Tree_Panel.Suite);
+      Result.Add_Test (Guikit_Suite.Text.Suite);
       return Result;
    end Suite;
 
