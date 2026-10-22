@@ -4,7 +4,16 @@ project Guikit is
    for Library_Name use "Guikit";
    for Library_Version use Project'Library_Name & ".so." & Guikit_Config.Crate_Version;
 
-   for Source_Dirs use ("src/", "config/");
+   --  One body per window system for what only it has (the native window
+   --  handle behind a GLFW window).
+   case Guikit_Config.Alire_Host_OS is
+      when "windows" =>
+         for Source_Dirs use ("src/", "config/", "src/platform/windows");
+      when "macos" =>
+         for Source_Dirs use ("src/", "config/", "src/platform/macos");
+      when others =>
+         for Source_Dirs use ("src/", "config/", "src/platform/other");
+   end case;
    for Object_Dir use "obj/" & Guikit_Config.Build_Profile;
    for Create_Missing_Dirs use "True";
    for Library_Dir use "lib";
