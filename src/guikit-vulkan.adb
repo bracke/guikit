@@ -4114,6 +4114,18 @@ package body Guikit.Vulkan is
       Text               : Guikit.Draw.Text_Render_Result)
       return Submission_Batch
    is
+      --  A glyph's texture coordinates from its pixel rectangle and the atlas
+      --  as this frame has it: the atlas grows taller, and a glyph command
+      --  kept from an earlier frame still has the U and V of the old height.
+      --  Glyphs without a rectangle (0 wide) keep the U and V they came with.
+      function Glyph_U (Pixel, Known_Width : Natural; Given : Float) return Float is
+        (if Known_Width = 0 or else Text.Atlas_Width = 0 then Given
+         else Float (Pixel) / Float (Text.Atlas_Width));
+
+      function Glyph_V (Pixel, Known_Width : Natural; Given : Float) return Float is
+        (if Known_Width = 0 or else Text.Atlas_Height = 0 then Given
+         else Float (Pixel) / Float (Text.Atlas_Height));
+
       Result : Submission_Batch;
 
       function Clip_X (Pixel_X : Float) return Float is
@@ -4725,10 +4737,10 @@ package body Guikit.Vulkan is
                   Y        => Glyph.Y,
                   Width    => Glyph.Width,
                   Height   => Glyph.Height,
-                  U0       => Glyph.U0,
-                  V0       => Glyph.V0,
-                  U1       => Glyph.U1,
-                  V1       => Glyph.V1,
+                  U0       => Glyph_U (Glyph.Atlas_X, Glyph.Atlas_W, Glyph.U0),
+                  V0       => Glyph_V (Glyph.Atlas_Y, Glyph.Atlas_W, Glyph.V0),
+                  U1       => Glyph_U (Glyph.Atlas_X + Glyph.Atlas_W, Glyph.Atlas_W, Glyph.U1),
+                  V1       => Glyph_V (Glyph.Atlas_Y + Glyph.Atlas_H, Glyph.Atlas_W, Glyph.V1),
                   Color    => Glyph.Color,
                   Textured => True,
                   Texture  => Texture_Text_Atlas);
@@ -4811,10 +4823,10 @@ package body Guikit.Vulkan is
                   Y        => Glyph.Y,
                   Width    => Glyph.Width,
                   Height   => Glyph.Height,
-                  U0       => Glyph.U0,
-                  V0       => Glyph.V0,
-                  U1       => Glyph.U1,
-                  V1       => Glyph.V1,
+                  U0       => Glyph_U (Glyph.Atlas_X, Glyph.Atlas_W, Glyph.U0),
+                  V0       => Glyph_V (Glyph.Atlas_Y, Glyph.Atlas_W, Glyph.V0),
+                  U1       => Glyph_U (Glyph.Atlas_X + Glyph.Atlas_W, Glyph.Atlas_W, Glyph.U1),
+                  V1       => Glyph_V (Glyph.Atlas_Y + Glyph.Atlas_H, Glyph.Atlas_W, Glyph.V1),
                   Color    => Glyph.Color,
                   Textured => True,
                   Texture  => Texture_Text_Atlas);

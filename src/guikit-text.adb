@@ -13,6 +13,10 @@ package body Guikit.Text is
 
    function Loaded (R : Renderer) return Boolean is (R.Is_Loaded);
 
+   --  How tall the glyph atlas may grow: eight times its usual height, a
+   --  texture every Vulkan device takes.
+   Atlas_Max_Height : constant := 8_192;
+
    function Initialize
      (R              : in out Renderer;
       Font_Path      : String;
@@ -56,6 +60,10 @@ package body Guikit.Text is
             null;
          end;
       end loop;
+
+      --  A screen of text in many scripts outgrows any fixed atlas; let it
+      --  grow taller rather than drop glyphs.
+      Textrender.Set_Atlas_Growth (R.Backend, Max_Height => Atlas_Max_Height);
 
       R.Is_Loaded    := True;
       R.Cell_Width   := Cell_Width;
@@ -353,7 +361,11 @@ package body Guikit.Text is
                                  U1        => Metrics.U1,
                                  V1        => Metrics.V1,
                                  Color     => Text.Color,
-                                 Codepoint => Natural (Codepoint)));
+                                 Codepoint => Natural (Codepoint),
+                                 Atlas_X   => Metrics.X,
+                                 Atlas_Y   => Metrics.Y,
+                                 Atlas_W   => Metrics.W,
+                                 Atlas_H   => Metrics.H));
                         end;
                      end if;
 
@@ -372,12 +384,17 @@ package body Guikit.Text is
       end if;
 
       Result.Status       := Text_Render_Success;
-      Result.Atlas_Width  := R.Atlas_Width;
-      Result.Atlas_Height := R.Atlas_Height;
-      Result.Atlas_Bytes  := Sat_Mul (R.Atlas_Width, R.Atlas_Height);
 
       Append_Glyphs (Commands, Result.Glyphs, Overlay => False);
       Append_Glyphs (Overlay, Result.Overlay_Glyphs, Overlay => True);
+
+      --  The atlas as it is once this text's glyphs are in: packing them may
+      --  have made it taller.
+      R.Atlas_Width  := Textrender.Atlas_Width (R.Backend);
+      R.Atlas_Height := Textrender.Atlas_Height (R.Backend);
+      Result.Atlas_Width  := R.Atlas_Width;
+      Result.Atlas_Height := R.Atlas_Height;
+      Result.Atlas_Bytes  := Sat_Mul (R.Atlas_Width, R.Atlas_Height);
 
       Result.Atlas_Dirty := Textrender.Atlas_Dirty (R.Backend);
       if Textrender.Atlas_Pixels (R.Backend) /= null then

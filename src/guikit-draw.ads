@@ -279,6 +279,13 @@ package Guikit.Draw is
       V1        : Float := 0.0;
       Color     : Render_Color := Text_Color;
       Codepoint : Natural := 0;
+      --  Where the glyph sits in the atlas, in its pixels; 0 wide when not
+      --  known. The atlas can grow taller, so a backend takes U and V from
+      --  this and the atlas's size when it draws, not from U0 .. V1.
+      Atlas_X   : Natural := 0;
+      Atlas_Y   : Natural := 0;
+      Atlas_W   : Natural := 0;
+      Atlas_H   : Natural := 0;
    end record;
 
    package Glyph_Command_Vectors is new Ada.Containers.Vectors
