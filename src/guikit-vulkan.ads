@@ -626,6 +626,11 @@ private
       Command_Pool          : Vk.Command_Pool_T := System.Null_Address;
       Vertex_Buffer         : Vk.Buffer_T := System.Null_Address;
       Vertex_Memory         : Vk.Device_Memory_T := System.Null_Address;
+      --  What the vertex memory holds since it was last written, so a frame
+      --  that draws the same vertices in the same theme skips the copy.
+      Uploaded_Vertices       : Vertex_Vectors.Vector;
+      Uploaded_Theme          : Guikit.Draw.Theme_Kind := Guikit.Draw.Theme_Dark;
+      Uploaded_Vertices_Valid : Boolean := False;
       Atlas_Image           : Vk.Image_T := System.Null_Address;
       Atlas_Memory          : Vk.Device_Memory_T := System.Null_Address;
       Atlas_View            : Vk.Image_View_T := System.Null_Address;

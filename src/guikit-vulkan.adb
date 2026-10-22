@@ -751,6 +751,7 @@ package body Guikit.Vulkan is
                memory      => Renderer.Vertex_Memory,
                p_Allocator => System.Null_Address);
             Renderer.Vertex_Memory := System.Null_Address;
+            Renderer.Uploaded_Vertices_Valid := False;
          end if;
 
          if Renderer.Atlas_Staging_Buffer /= System.Null_Address then
@@ -992,6 +993,7 @@ package body Guikit.Vulkan is
          Renderer.Texture_Binding_Count := 0;
          Renderer.Vertex_Buffer := System.Null_Address;
          Renderer.Vertex_Memory := System.Null_Address;
+         Renderer.Uploaded_Vertices_Valid := False;
          Renderer.Atlas_Image := System.Null_Address;
          Renderer.Atlas_Memory := System.Null_Address;
          Renderer.Atlas_View := System.Null_Address;
@@ -1680,6 +1682,7 @@ package body Guikit.Vulkan is
             memory      => Renderer.Vertex_Memory,
             p_Allocator => System.Null_Address);
          Renderer.Vertex_Memory := System.Null_Address;
+         Renderer.Uploaded_Vertices_Valid := False;
       end if;
 
       Renderer.Vertex_Buffer_Live := False;
@@ -1737,6 +1740,7 @@ package body Guikit.Vulkan is
 
       Renderer.Vertex_Buffer := Buffer_Handle;
       Renderer.Vertex_Memory := Memory_Handle;
+      Renderer.Uploaded_Vertices_Valid := False;
       Renderer.Vertex_Buffer_Capacity := Max_Batch_Vertices;
       Renderer.Vertex_Buffer_Live := True;
       return True;
@@ -1750,6 +1754,8 @@ package body Guikit.Vulkan is
       Batch    : Submission_Batch)
       return Boolean
    is
+      use type Guikit.Draw.Theme_Kind;
+      use type Vertex_Vectors.Vector;
       Count       : constant Natural := Natural (Batch.Vertices.Length);
       Mapped_Data : aliased System.Address := System.Null_Address;
       Result      : Vk.Result_T;
@@ -1758,7 +1764,16 @@ package body Guikit.Vulkan is
          return False;
       elsif Count = 0 then
          return True;
+      elsif Renderer.Uploaded_Vertices_Valid
+        and then Renderer.Uploaded_Theme = Batch.Palette_Theme
+        and then Renderer.Uploaded_Vertices = Batch.Vertices
+      then
+         --  The memory holds this frame's vertices already: a present that
+         --  changed nothing drawn, which comparing costs a fraction of what
+         --  writing them to the device does.
+         return True;
       end if;
+      Renderer.Uploaded_Vertices_Valid := False;
 
       Result :=
         Vk.Map_Memory
@@ -1797,6 +1812,9 @@ package body Guikit.Vulkan is
       Vk.Unmap_Memory
         (device => Renderer.Device,
          memory => Renderer.Vertex_Memory);
+      Renderer.Uploaded_Vertices := Batch.Vertices;
+      Renderer.Uploaded_Theme := Batch.Palette_Theme;
+      Renderer.Uploaded_Vertices_Valid := True;
       return True;
    exception
       when others =>

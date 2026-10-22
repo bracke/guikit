@@ -69,6 +69,9 @@ package body Guikit.Text is
       --  frame over when that happens partway through it.
       Textrender.Set_Atlas_Growth (R.Backend, Max_Height => Atlas_Max_Height);
       Textrender.Set_Atlas_Eviction (R.Backend, Enabled => True);
+      --  Colour pictures are copied out of their sheet as each is drawn, so a
+      --  full sheet can simply be emptied rather than leave emoji out.
+      Textrender.Set_Colour_Sheet_Eviction (R.Backend, Enabled => True);
 
       R.Is_Loaded    := True;
       R.Cell_Width   := Cell_Width;
