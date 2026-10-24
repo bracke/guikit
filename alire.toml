@@ -7,7 +7,12 @@ maintainers = ["Bent Bracke <bent@bracke.dk>"]
 maintainers-logins = ["bracke"]
 licenses = "MIT OR Apache-2.0 WITH LLVM-exception"
 website = "https://github.com/bracke/files"
-long-description = "An app-independent, immediate-mode GUI toolkit for Ada 2022, backed by Vulkan + GLFW (dfvulkan, opengladaglfw) with text rasterization via textrender. Extracted from the files desktop file manager so it can be reused by other applications; the launcher app is its second consumer."
+long-description = """
+An app-independent, immediate-mode GUI toolkit for Ada 2022, backed by Vulkan + GLFW
+(dfvulkan, opengladaglfw) with text rasterization via textrender. Extracted from the files
+desktop file manager so it can be reused by other applications; the launcher app is its
+second consumer.
+"""
 tags = ["gui", "vulkan", "glfw"]
 
 [[depends-on]]

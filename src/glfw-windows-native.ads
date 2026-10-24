@@ -8,6 +8,9 @@ package Glfw.Windows.Native is
    --  The HWND on Windows, the NSWindow on macOS; null where the window
    --  system needs no handle for that (X11 and Wayland reach the screen
    --  reader over the accessibility bus).
+   --
+   --  @param Window GLFW window whose native handle is wanted.
+   --  @return The native window handle, or null where none is needed.
    function Handle (Window : not null access Glfw.Windows.Window) return System.Address;
 
 end Glfw.Windows.Native;

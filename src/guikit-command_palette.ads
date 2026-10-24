@@ -61,54 +61,100 @@ package Guikit.Command_Palette is
    type Palette is private;
 
    --  Replace the presentation/behaviour configuration.
+   --
+   --  @param P Palette to update.
+   --  @param Config New configuration.
    procedure Set_Configuration (P : in out Palette; Config : Configuration);
 
    --  Replace the command list and re-clamp the selection to the new results.
+   --
+   --  @param P Palette to update.
+   --  @param Commands New command list.
    procedure Set_Commands (P : in out Palette; Commands : Command_Vectors.Vector);
 
    --  Append typed text to the query (resets the selection to the first result).
+   --
+   --  @param P Palette to update.
+   --  @param Text UTF-8 text to append.
    procedure Insert (P : in out Palette; Text : String);
 
    --  Delete the last query character (UTF-8 aware) and reset the selection.
+   --
+   --  @param P Palette to update.
    procedure Backspace (P : in out Palette);
 
    --  Replace the whole query (e.g. from a controller's own text editing) and
    --  reset the selection.
+   --
+   --  @param P Palette to update.
+   --  @param Query New query text.
    procedure Set_Query (P : in out Palette; Query : String);
 
    --  Reset the query, selection and scroll (e.g. when closing the palette).
+   --
+   --  @param P Palette to reset.
    procedure Reset (P : in out Palette);
 
    --  Move the highlighted result by Delta_Rows, clamped (or wrapped when
    --  Wrap_Selection is set) to the result range.
+   --
+   --  @param P Palette to update.
+   --  @param Delta_Rows Rows to move; negative moves up.
    procedure Move_Selection (P : in out Palette; Delta_Rows : Integer);
 
-   --  Highlight the first / last result (or clear when there are none).
+   --  Highlight the first result (or clear when there are none).
+   --
+   --  @param P Palette to update.
    procedure Select_First (P : in out Palette);
+
+   --  Highlight the last result (or clear when there are none).
+   --
+   --  @param P Palette to update.
    procedure Select_Last (P : in out Palette);
 
    --  Move by a page (the last-rendered visible row count), clamped.
+   --
+   --  @param P Palette to update.
+   --  @param Down True to move down, False to move up.
    procedure Page (P : in out Palette; Down : Boolean);
 
    --  Select the result at a window coordinate, using the most recent layout.
    --
+   --  @param P Palette to update.
+   --  @param X Horizontal window coordinate in pixels.
+   --  @param Y Vertical window coordinate in pixels.
    --  @return True when a result row was hit (and is now selected).
    function Click (P : in out Palette; X : Integer; Y : Integer) return Boolean;
 
    --  The current query text.
+   --
+   --  @param P Palette to inspect.
+   --  @return The query.
    function Query (P : Palette) return String;
 
    --  One-based index of the highlighted result (0 when none).
+   --
+   --  @param P Palette to inspect.
+   --  @return The highlighted result's index, or 0.
    function Selected_Index (P : Palette) return Natural;
 
    --  Number of results matching the current query.
+   --
+   --  @param P Palette to inspect.
+   --  @return The result count.
    function Result_Count (P : Palette) return Natural;
 
    --  The Id of the highlighted command, or 0 when nothing is selected.
+   --
+   --  @param P Palette to inspect.
+   --  @return The highlighted command's Id, or 0.
    function Selected_Id (P : Palette) return Natural;
 
    --  The current query's matching commands, ranked best-first (for a caller
    --  that maintains its own snapshot/tests of the result set).
+   --
+   --  @param P Palette to inspect.
+   --  @return The matching commands, best first.
    function Results (P : Palette) return Command_Vectors.Vector;
 
    --  Render the palette within a region and remember the row layout for Click.

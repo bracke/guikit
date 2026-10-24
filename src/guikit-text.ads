@@ -50,18 +50,6 @@ package Guikit.Text is
       Atlas_Height   : Positive := 1024)
       return Guikit.Draw.Text_Render_Status;
 
-   --  Rasterize a frame's text into glyph quads and atlas upload data.
-   --
-   --  Commands become the primary glyph layer and Overlay the overlay layer.
-   --  Each command's glyphs advance one monospace cell per display unit, clipped
-   --  to the command's box; Scale_To_Box fits and centres a single glyph in its
-   --  box; Truncated/Italic follow the command's flags. Missing glyphs fall back
-   --  to a '?' and are counted.
-   --
-   --  @param R A loaded renderer.
-   --  @param Commands The primary text commands.
-   --  @param Overlay The overlay text commands.
-   --  @return Glyph quads plus the shared atlas the backend uploads.
    --  Teach this renderer to decode the pictures some fonts hold instead of
    --  outlines, so emoji can be drawn in colour.
    --
@@ -78,6 +66,18 @@ package Guikit.Text is
       Extent : Textrender.Image_Extent_Reader;
       Decode : Textrender.Image_Decoder);
 
+   --  Rasterize a frame's text into glyph quads and atlas upload data.
+   --
+   --  Commands become the primary glyph layer and Overlay the overlay layer.
+   --  Each command's glyphs advance one monospace cell per display unit, clipped
+   --  to the command's box; Scale_To_Box fits and centres a single glyph in its
+   --  box; Truncated/Italic follow the command's flags. Missing glyphs fall back
+   --  to a '?' and are counted.
+   --
+   --  @param R A loaded renderer.
+   --  @param Commands The primary text commands.
+   --  @param Overlay The overlay text commands.
+   --  @return Glyph quads plus the shared atlas the backend uploads.
    function Build_Glyphs
      (R        : in out Renderer;
       Commands : Guikit.Draw.Text_Command_Vectors.Vector;

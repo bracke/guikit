@@ -42,6 +42,26 @@ package Guikit.List_Panel is
    --  should be drawn. The widget handles the shared list geometry, optional
    --  title row, optional empty-state row, and accessibility nodes for the
    --  container, title, empty state, and each row.
+   --
+   --  @param Rectangles Rectangle draw commands to append to.
+   --  @param Text Text draw commands to append to.
+   --  @param Accessibility Accessibility nodes to append to.
+   --  @param Clip_Width Width of the clip area in pixels.
+   --  @param Clip_Height Height of the clip area in pixels.
+   --  @param Region_X Left edge of the panel region.
+   --  @param Region_Y Top edge of the panel region.
+   --  @param Region_Width Width of the panel region.
+   --  @param Region_Height Height of the panel region.
+   --  @param Config Title, empty state, line height and row options.
+   --  @param Rows Rows to draw, in order.
+   --  @param Draw_Chrome Whether to draw the panel chrome.
+   --  @param Row_Height Height of each row. 0 (or less than Config.Line_Height) keeps one
+   --    Line_Height per row; a larger value gives taller rows with the label vertically
+   --    centred (the padded root/drive selector). A defaulted parameter rather than a
+   --    Config field, so callers' full List_Panel_Configuration aggregates still compile.
+   --  @param Leading_Icon_Width Width of a reserved column left of the label for a
+   --    caller-drawn icon; 0 for none. The widget draws nothing there and only shifts
+   --    the label right by it.
    procedure Draw_Frame
      (Rectangles    : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
       Text          : in out Guikit.Draw.Text_Command_Vectors.Vector;
@@ -55,15 +75,7 @@ package Guikit.List_Panel is
       Config        : List_Panel_Configuration;
       Rows          : List_Panel_Row_Vectors.Vector;
       Draw_Chrome   : Boolean := True;
-      --  Height of each row. 0 keeps the historic behaviour (one Line_Height per
-      --  row); a larger value gives taller rows with the label vertically centred
-      --  (used by the padded root/drive selector). Passed as a defaulted parameter
-      --  rather than a Config field so adding it does not break callers' full
-      --  List_Panel_Configuration aggregates.
       Row_Height         : Natural := 0;
-      --  Width of a reserved leading column (left of the label) for a caller-drawn
-      --  icon. 0 keeps the historic text-only layout; the widget draws nothing in
-      --  the column and only shifts the label right by it.
       Leading_Icon_Width : Natural := 0);
 
 end Guikit.List_Panel;

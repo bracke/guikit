@@ -73,12 +73,20 @@ package Guikit.Settings_Panel is
    type Panel is private;
 
    --  Replace the presentation configuration.
+   --
+   --  @param P Panel to update.
+   --  @param Config New configuration.
    procedure Set_Configuration (P : in out Panel; Config : Configuration);
 
    --  Replace the field list (keeping the focused row and scroll where possible).
+   --
+   --  @param P Panel to update.
+   --  @param Fields New field list.
    procedure Set_Fields (P : in out Panel; Fields : Field_Vectors.Vector);
 
    --  Clear the focus, scroll and any pending change (e.g. when opening).
+   --
+   --  @param P Panel to update.
    procedure Reset (P : in out Panel);
 
    --  The Section fields act as tabs: the panel shows a segmented switcher of the
@@ -86,26 +94,50 @@ package Guikit.Settings_Panel is
    --  fields that precede the first Section, which stay always visible).
 
    --  How many Section fields there are (the number of tabs).
+   --
+   --  @param P Panel to query.
+   --  @return The number of Section fields.
    function Section_Count (P : Panel) return Natural;
 
    --  The one-based ordinal of the currently shown section.
+   --
+   --  @param P Panel to query.
+   --  @return The one-based ordinal of the active section.
    function Active_Section (P : Panel) return Natural;
 
    --  Show the Ordinal-th section (clamped to 1 .. Section_Count), moving focus
    --  to its first focusable field and resetting the scroll.
+   --
+   --  @param P Panel to update.
+   --  @param Ordinal One-based ordinal of the section to show.
    procedure Set_Active_Section (P : in out Panel; Ordinal : Natural);
 
    --  Move keyboard focus by Delta_Rows over the focusable (non-Section) fields,
    --  clamped. Produces no change.
+   --
+   --  @param P Panel to update.
+   --  @param Delta_Rows Number of focusable fields to move by (negative moves up).
    procedure Move_Focus (P : in out Panel; Delta_Rows : Integer);
 
    --  Advance/retreat the focused Toggle or Choice to the next/previous value,
    --  or step a focused Number. Emits Value_Changed.
+   --
+   --  @param P Panel to update.
+   --  @param Forward True for the next value, False for the previous one.
    procedure Cycle_Choice (P : in out Panel; Forward : Boolean);
+
+   --  Step the focused Number up or down by one, clamped to [Min .. Max]. Emits
+   --  Value_Changed when the value changes.
+   --
+   --  @param P Panel to update.
+   --  @param Up True to increment, False to decrement.
    procedure Step_Number (P : in out Panel; Up : Boolean);
 
    --  Replace the whole value of the focused Text field (the caller does the text
    --  editing). Emits Value_Changed. A no-op unless a Text field is focused.
+   --
+   --  @param P Panel to update.
+   --  @param Text New value for the focused Text field.
    procedure Set_Focused_Value (P : in out Panel; Text : String);
 
    --  Press-to-capture for Shortcut fields. Clicking a Shortcut row arms it; the
@@ -117,36 +149,68 @@ package Guikit.Settings_Panel is
    --  Arm the currently-focused field for capture when it is an enabled Shortcut
    --  field (the keyboard-activation path, e.g. Enter on a focused Shortcut row;
    --  clicking the row arms it too). A no-op otherwise.
+   --
+   --  @param P Panel to update.
    procedure Begin_Capture (P : in out Panel);
 
    --  Whether a Shortcut field is currently armed for capture.
+   --
+   --  @param P Panel to query.
+   --  @return True when a Shortcut field is armed.
    function Is_Capturing (P : Panel) return Boolean;
 
    --  The Key of the armed Shortcut field, or an empty string when none is armed.
+   --
+   --  @param P Panel to query.
+   --  @return The armed field's Key, or "" when none is armed.
    function Capturing_Key (P : Panel) return String;
 
    --  Commit a captured chord to the armed Shortcut field: set its Value to Text
    --  (empty for an unbind), disarm, and emit Value_Changed. A no-op when no
    --  field is armed.
+   --
+   --  @param P Panel to update.
+   --  @param Text Captured chord text (empty for an unbind).
    procedure Set_Captured_Shortcut (P : in out Panel; Text : String);
 
    --  Disarm capture without changing any field (e.g. on Escape). Produces no
    --  change.
+   --
+   --  @param P Panel to update.
    procedure Cancel_Capture (P : in out Panel);
 
    --  Scroll the content by whole rows (positive scrolls down).
+   --
+   --  @param P Panel to update.
+   --  @param Lines Number of rows to scroll (positive scrolls down).
    procedure Scroll (P : in out Panel; Lines : Integer);
 
    --  Hit-test a window coordinate using the most recent render: focus a row,
    --  flip a toggle, pick a choice cell, step a number, or press a button. Emits
    --  the corresponding change.
    --
+   --  @param P Panel to update.
+   --  @param X Window X coordinate in pixels.
+   --  @param Y Window Y coordinate in pixels.
    --  @return True when a hit landed on the panel (focus and/or a change).
    function Click (P : in out Panel; X : Integer; Y : Integer) return Boolean;
 
-   --  The kind / key / value of the focused field (Section and "" when none).
+   --  The kind of the focused field (Section when none).
+   --
+   --  @param P Panel to query.
+   --  @return The focused field's kind, or Section when none is focused.
    function Focused_Kind (P : Panel) return Field_Kind;
+
+   --  The key of the focused field ("" when none).
+   --
+   --  @param P Panel to query.
+   --  @return The focused field's Key, or "" when none is focused.
    function Focused_Key (P : Panel) return String;
+
+   --  The value of the focused field ("" when none).
+   --
+   --  @param P Panel to query.
+   --  @return The focused field's Value, or "" when none is focused.
    function Focused_Value (P : Panel) return String;
 
    --  The change produced by the most recent input, if any. A change kind of
@@ -160,6 +224,10 @@ package Guikit.Settings_Panel is
       Value : UString;
    end record;
 
+   --  Return the change produced by the most recent input and clear it.
+   --
+   --  @param P Panel to read the pending change from.
+   --  @return The pending change (Kind = No_Change when there is none).
    function Take_Change (P : in out Panel) return Change;
 
    --  Render the panel within a region and remember the row layout for Click.

@@ -34,6 +34,19 @@ package Guikit.Tree_Panel is
    --  is drawn. This package paints the shared list geometry via
    --  Guikit.List_Panel and, when enabled, overlays indentation guides for the
    --  visible tree depth.
+   --
+   --  @param Rectangles Rectangle draw commands to append to.
+   --  @param Text Text draw commands to append to.
+   --  @param Accessibility Accessibility nodes to append to.
+   --  @param Clip_Width Width of the clip area in pixels.
+   --  @param Clip_Height Height of the clip area in pixels.
+   --  @param Region_X Left edge of the panel region.
+   --  @param Region_Y Top edge of the panel region.
+   --  @param Region_Width Width of the panel region.
+   --  @param Region_Height Height of the panel region.
+   --  @param Config List options plus indentation and guide settings.
+   --  @param Rows Rows to draw, each with its tree depth.
+   --  @param Draw_Chrome Whether to draw the shared list chrome.
    procedure Draw_Frame
      (Rectangles   : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
       Text         : in out Guikit.Draw.Text_Command_Vectors.Vector;

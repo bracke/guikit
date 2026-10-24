@@ -69,6 +69,20 @@ package Guikit.Menu_Tree is
    --  When Draw_Chrome is True the box (right drop-shadow, fill, border) and the
    --  title band are drawn; pass False to reuse a cached body and only repaint
    --  the rows/buttons. Rows and buttons are always drawn.
+   --
+   --  @param Rectangles Rectangle draw commands to append to.
+   --  @param Text Text draw commands to append to.
+   --  @param Clip_Width Width of the clip area in pixels.
+   --  @param Clip_Height Height of the clip area in pixels.
+   --  @param Region_X Left edge of the panel region.
+   --  @param Region_Y Top edge of the panel region.
+   --  @param Region_Width Width of the panel region.
+   --  @param Region_Height Height of the panel region.
+   --  @param Title Text shown in the title band.
+   --  @param Config Line height, padding, title height and expand glyphs.
+   --  @param Rows Visible tree rows with caller-computed geometry and state.
+   --  @param Buttons Footer buttons with caller-computed geometry and state.
+   --  @param Draw_Chrome Whether to draw the box and title band.
    procedure Draw_Frame
      (Rectangles    : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
       Text          : in out Guikit.Draw.Text_Command_Vectors.Vector;
