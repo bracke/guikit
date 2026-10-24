@@ -157,6 +157,12 @@ package Guikit.Vulkan is
       Framebuffer_Readback_Ready : Boolean := False;
       Last_Framebuffer_Hash : Interfaces.Unsigned_32 := 0;
       Last_Framebuffer_Bytes : Natural := 0;
+      --  Frames submitted so far, and which of them the last readback read:
+      --  the readback trails its frame, so a caller that must judge a frame
+      --  it drew waits until Last_Framebuffer_Frame passes the count it saw
+      --  before drawing.
+      Submitted_Frames      : Natural := 0;
+      Last_Framebuffer_Frame : Natural := 0;
       Framebuffer_Analysis  : Guikit.Frame_Analysis.Frame_Metrics;
       Framebuffer_Passed    : Boolean := False;
       Frame_Width           : Natural := 0;
@@ -697,6 +703,9 @@ private
       Readback_Pending     : Boolean := False;
       Readback_Ready       : Boolean := False;
       Last_Readback_Hash   : Interfaces.Unsigned_32 := 0;
+      Submitted_Frames     : Natural := 0;
+      Readback_Pending_Frame : Natural := 0;
+      Last_Readback_Frame  : Natural := 0;
       Last_Frame_Metrics   : Guikit.Frame_Analysis.Frame_Metrics;
       Last_Frame_Passed    : Boolean := False;
       Readback_Copy        : Retained_Frame_Access := null;

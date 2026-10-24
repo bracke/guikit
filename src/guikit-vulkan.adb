@@ -2001,6 +2001,7 @@ package body Guikit.Vulkan is
 
       Vk.Unmap_Memory (Renderer.Device, Renderer.Readback_Memory);
       Renderer.Last_Readback_Hash := Hash;
+      Renderer.Last_Readback_Frame := Renderer.Readback_Pending_Frame;
       Renderer.Readback_Ready := True;
       Renderer.Readback_Pending := False;
    exception
@@ -4111,6 +4112,8 @@ package body Guikit.Vulkan is
          Framebuffer_Readback_Ready => Renderer.Readback_Ready,
          Last_Framebuffer_Hash => Renderer.Last_Readback_Hash,
          Last_Framebuffer_Bytes => Renderer.Readback_Bytes,
+         Submitted_Frames      => Renderer.Submitted_Frames,
+         Last_Framebuffer_Frame => Renderer.Last_Readback_Frame,
          Framebuffer_Analysis  => Renderer.Last_Frame_Metrics,
          Framebuffer_Passed    => Renderer.Last_Frame_Passed,
          Frame_Width           => Renderer.Frame_Width_Value,
@@ -5105,7 +5108,9 @@ package body Guikit.Vulkan is
                         Renderer.Last_Vk_Result := Interfaces.Integer_32 (Present_Result);
                         Renderer.Last_Status := Vulkan_Submit_Failed;
                      else
+                        Renderer.Submitted_Frames := Renderer.Submitted_Frames + 1;
                         Renderer.Readback_Pending := Renderer.Readback_Enabled;
+                        Renderer.Readback_Pending_Frame := Renderer.Submitted_Frames;
                         Renderer.Last_Vk_Result := -10_070;
                         Present_Result :=
                           Vk.Queue_Present_KHR
