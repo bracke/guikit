@@ -113,7 +113,11 @@ package body Guikit.Item_Grid is
            (if Large then Add (Inner_X, (if Inner_W > Padded_Icon then (Inner_W - Padded_Icon) / 2 else 0))
             else Inner_X);
          Icon_Y       : constant Natural := Inner_Y;
-         Name_Units   : constant Natural := Guikit.Utf8.Display_Units (To_String (Items.Element (Index).Label));
+         --  Off screen there is no area to fit the name into; measuring every
+         --  hidden label made each layout O(all items) in UTF-8 decoding.
+         Name_Units   : constant Natural :=
+           (if Cell_Height = 0 then 0
+            else Guikit.Utf8.Display_Units (To_String (Items.Constant_Reference (Index).Label)));
          Name_Pixels  : constant Natural := Mul (Name_Units, Mul (Line_Height, 12) / 20);
          Large_Text_W : constant Natural := Natural'Min (Inner_W, Name_Pixels);
          Text_X       : constant Natural :=
@@ -153,7 +157,7 @@ package body Guikit.Item_Grid is
                end;
             when Details =>
                declare
-                  It          : constant Layout_Item := Items.Element (Positive (Index));
+                  It          : Layout_Item renames Items.Constant_Reference (Positive (Index)).Element.all;
                   Metrics     : constant Cell_Metrics := Cell_Metrics_For (View, Content_W, Line_Height);
                   Row_Step    : constant Natural := Metrics.Height;
                   Header_H    : constant Natural :=
