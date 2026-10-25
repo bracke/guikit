@@ -93,6 +93,8 @@ private
       Cell_Height  : Positive := 20;
       Atlas_Width  : Positive := 1024;
       Atlas_Height : Positive := 1024;
+      --  Which content the atlas holds; see Text_Render_Result.Atlas_Version.
+      Atlas_Version : Natural := 0;
    end record;
 
 end Guikit.Text;

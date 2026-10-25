@@ -1,7 +1,6 @@
 with Ada.Containers.Hashed_Maps;
 with Ada.Numerics.Elementary_Functions;
 with Ada.Strings.Hash;
-with Ada.Strings.Unbounded;
 with Ada.Unchecked_Deallocation;
 
 with Interfaces.C;
@@ -2071,7 +2070,7 @@ package body Guikit.Vulkan is
       Use_Batch_Atlas : constant Boolean :=
         Batch.Text_Atlas_Used
         and then
-          (Batch.Atlas_Dirty
+          (Batch.Atlas_Version /= Renderer.Uploaded_Atlas_Version
            or else not Renderer.Atlas_Texture_Live
            or else Renderer.Atlas_Width_Value /= Batch.Atlas_Width
            or else Renderer.Atlas_Height_Value /= Batch.Atlas_Height
@@ -2431,6 +2430,9 @@ package body Guikit.Vulkan is
       end;
 
       Renderer.Atlas_Upload_Pending := True;
+      --  The text atlas texture now holds this version, or icons (version 0
+      --  is never handed out, so the next text frame uploads again).
+      Renderer.Uploaded_Atlas_Version := (if Use_Batch_Atlas then Batch.Atlas_Version else 0);
       return True;
    exception
       when others =>
@@ -2453,7 +2455,12 @@ package body Guikit.Vulkan is
         or else Renderer.Icon_Atlas_Format_Value /= Upload_Format;
       Result : Vk.Result_T;
    begin
-      if not Batch.Icon_Atlas_Dirty and then Renderer.Icon_Atlas_Texture_Live then
+      if Renderer.Icon_Atlas_Texture_Live
+        and then (not Batch.Icon_Atlas_Dirty
+                  or else (Length (Batch.Icon_Atlas_Signature) > 0
+                           and then Batch.Icon_Atlas_Signature = Renderer.Uploaded_Icon_Signature
+                           and then not Needs_New_Texture))
+      then
          return True;
       elsif not Batch.Icon_Atlas_Dirty
         or else Upload_Format = Atlas_Texture_None
@@ -2762,6 +2769,7 @@ package body Guikit.Vulkan is
       end;
 
       Renderer.Icon_Atlas_Upload_Pending := True;
+      Renderer.Uploaded_Icon_Signature := Batch.Icon_Atlas_Signature;
       return True;
    exception
       when others =>
@@ -4125,6 +4133,11 @@ package body Guikit.Vulkan is
          Physical_Device_Count => Renderer.Last_Physical_Devices);
    end Diagnostics;
 
+   --  The last icon atlas Build_Submission built, which an identical one
+   --  reuses. Frames are built on one task.
+   Last_Icon_Atlas_Signature : Unbounded_String;
+   Last_Icon_Atlas_Pixels    : Icon_Atlas_Pixel_Vectors.Vector;
+
    function Build_Submission
      (Rectangles         : Guikit.Draw.Rectangle_Command_Vectors.Vector;
       Triangles          : Guikit.Draw.Triangle_Command_Vectors.Vector;
@@ -4526,6 +4539,8 @@ package body Guikit.Vulkan is
             function Rasterize_Thumbnail return Boolean is
                Source_Width  : constant Natural := Icon.Thumbnail_Width;
                Source_Height : constant Natural := Icon.Thumbnail_Height;
+               --  One copy out of the shared buffer, then plain indexing.
+               Pixels        : constant Guikit.Draw.Byte_Vectors.Vector := Icon.Thumbnail_Pixels.To_Vector;
             begin
                if Source_Width = 0
                  or else Source_Height = 0
@@ -4545,10 +4560,10 @@ package body Guikit.Vulkan is
                         Put_Pixel
                           (Tile.X + X,
                            Tile.Y + Y,
-                           Icon.Thumbnail_Pixels.Element (Offset),
-                           Icon.Thumbnail_Pixels.Element (Offset + 1),
-                           Icon.Thumbnail_Pixels.Element (Offset + 2),
-                           Icon.Thumbnail_Pixels.Element (Offset + 3));
+                           Pixels.Element (Offset),
+                           Pixels.Element (Offset + 1),
+                           Pixels.Element (Offset + 2),
+                           Pixels.Element (Offset + 3));
                      end;
                   end loop;
                end loop;
@@ -4630,6 +4645,52 @@ package body Guikit.Vulkan is
          Result.Icon_Atlas_Bytes :=
            Result.Icon_Atlas_Width * Result.Icon_Atlas_Height * Result.Icon_Atlas_Channels;
          Result.Icon_Atlas_Dirty := True;
+
+         --  The atlas this frame needs, by what each tile shows and where: a
+         --  vector icon by its identity, a picture by its shared buffer's
+         --  serial. The same atlas as the last one built is not rebuilt (no
+         --  parsing, no copying pictures in), and a renderer that has it
+         --  uploads nothing.
+         declare
+            Signature : Unbounded_String :=
+              To_Unbounded_String (Natural'Image (Atlas_W) & Natural'Image (Atlas_H));
+            Tile_Number : Natural := 0;
+         begin
+            for Rep of Slot_Rep loop
+               Tile_Number := Tile_Number + 1;
+               declare
+                  Icon : Guikit.Draw.Icon_Command renames All_Icons.Constant_Reference (Rep).Element.all;
+                  Key  : constant Unbounded_String := Tile_Key (Icon);
+                  Tile : constant Icon_Tile_Rect := Icon_Tile_Layout.Element (Tile_Number);
+               begin
+                  Append (Signature, ASCII.LF);
+                  if Length (Key) > 0 then
+                     Append (Signature, Key);
+                     --  The asset text too: its source can change under one id.
+                     if Icon.Thumbnail_Pixels.Is_Empty then
+                        Append
+                          (Signature,
+                           Ada.Containers.Hash_Type'Image
+                             (Ada.Strings.Hash
+                                (Guikit.Draw.Icon_Asset_Text
+                                   (To_String (Icon.Icon_Id), To_String (Icon.Theme_Name)))));
+                     else
+                        Append (Signature, "#" & Natural'Image (Icon.Thumbnail_Pixels.Serial));
+                     end if;
+                  else
+                     Append (Signature, "#" & Natural'Image (Icon.Thumbnail_Pixels.Serial)
+                             & Natural'Image (Icon.Thumbnail_Width) & Natural'Image (Icon.Thumbnail_Height));
+                  end if;
+                  Append (Signature, Natural'Image (Tile.X) & Natural'Image (Tile.Y)
+                          & Natural'Image (Tile.W) & Natural'Image (Tile.H));
+               end;
+            end loop;
+            Result.Icon_Atlas_Signature := Signature;
+            if Signature = Last_Icon_Atlas_Signature then
+               Result.Icon_Atlas_Pixels := Last_Icon_Atlas_Pixels;
+               return;
+            end if;
+         end;
          Append_Clear_Pixels (Result.Icon_Atlas_Bytes);
 
          --  Once per tile: a shared tile is rasterized from the first icon that
@@ -4638,6 +4699,8 @@ package body Guikit.Vulkan is
             Rasterize_Asset (Tile_Index, All_Icons (Rep));
             Tile_Index := Tile_Index + 1;
          end loop;
+         Last_Icon_Atlas_Signature := Result.Icon_Atlas_Signature;
+         Last_Icon_Atlas_Pixels := Result.Icon_Atlas_Pixels;
       end Build_Icon_Atlas;
    begin
       Result.Width := Layout.Width;
@@ -4648,6 +4711,7 @@ package body Guikit.Vulkan is
       Result.Atlas_Pixels := Text.Atlas_Pixels;
       Result.Atlas_Bytes := Text.Atlas_Bytes;
       Result.Atlas_Dirty := Text.Atlas_Dirty;
+      Result.Atlas_Version := Text.Atlas_Version;
       Result.Text_Atlas_Used :=
         Text.Status = Guikit.Draw.Text_Render_Success
         and then
@@ -5217,6 +5281,12 @@ package body Guikit.Vulkan is
          if Status = Vulkan_Swapchain_Ready then
             Status := Present (Renderer, Batch);
          end if;
+      end if;
+      --  A frame not presented may not have committed its uploads: send the
+      --  atlases again next time rather than trust they arrived.
+      if Status /= Vulkan_Presented then
+         Renderer.Uploaded_Atlas_Version := 0;
+         Renderer.Uploaded_Icon_Signature := Null_Unbounded_String;
       end if;
       return Status;
    end Present_Frame;

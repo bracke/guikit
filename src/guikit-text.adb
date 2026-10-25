@@ -12,6 +12,16 @@ package body Guikit.Text is
 
    use type Textrender.Status_Code;
 
+   --  The last atlas version handed out, across every renderer, so a version
+   --  names one atlas content however renderers are reloaded.
+   Last_Atlas_Version : Natural := 0;
+
+   function New_Atlas_Version return Natural is
+   begin
+      Last_Atlas_Version := (if Last_Atlas_Version = Natural'Last then 1 else Last_Atlas_Version + 1);
+      return Last_Atlas_Version;
+   end New_Atlas_Version;
+
    function Loaded (R : Renderer) return Boolean is (R.Is_Loaded);
 
    --  How tall the glyph atlas may grow: four times its usual height, which
@@ -75,6 +85,7 @@ package body Guikit.Text is
       Textrender.Set_Colour_Sheet_Eviction (R.Backend, Enabled => True);
 
       R.Is_Loaded    := True;
+      R.Atlas_Version := New_Atlas_Version;
       R.Cell_Width   := Cell_Width;
       R.Cell_Height  := Cell_Height;
       R.Atlas_Width  := Atlas_Width;
@@ -425,7 +436,14 @@ package body Guikit.Text is
       Result.Atlas_Height := R.Atlas_Height;
       Result.Atlas_Bytes  := Sat_Mul (R.Atlas_Width, R.Atlas_Height);
 
+      --  New glyphs packed: a new atlas version, which every window uploads
+      --  once (each remembers the version it has).
       Result.Atlas_Dirty := Textrender.Atlas_Dirty (R.Backend);
+      if Result.Atlas_Dirty then
+         R.Atlas_Version := New_Atlas_Version;
+         Textrender.Clear_Atlas_Dirty (R.Backend);
+      end if;
+      Result.Atlas_Version := R.Atlas_Version;
       if Textrender.Atlas_Pixels (R.Backend) /= null then
          Result.Atlas_Pixels := Textrender.Atlas_Pixels (R.Backend).all'Address;
       end if;

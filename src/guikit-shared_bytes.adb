@@ -4,13 +4,33 @@ package body Guikit.Shared_Bytes is
 
    procedure Free is new Ada.Unchecked_Deallocation (Payload, Payload_Access);
 
+   --  Hands out serials; buffers are made from more than one task.
+   protected Serials is
+      procedure Next (Value : out Natural);
+   private
+      Last : Natural := 0;
+   end Serials;
+
+   protected body Serials is
+      procedure Next (Value : out Natural) is
+      begin
+         Last := (if Last = Natural'Last then 1 else Last + 1);
+         Value := Last;
+      end Next;
+   end Serials;
+
    function To_Shared (Value : Byte_Vectors.Vector) return Bytes is
    begin
       if Value.Is_Empty then
          return Empty;
       end if;
-      --  A new Atomic_Counter starts at one: this value is the only holder.
-      return (Ada.Finalization.Controlled with Ref => new Payload'(Count => <>, Data => Value));
+      declare
+         Number : Natural;
+      begin
+         Serials.Next (Number);
+         --  A new Atomic_Counter starts at one: this value is the only holder.
+         return (Ada.Finalization.Controlled with Ref => new Payload'(Count => <>, Serial => Number, Data => Value));
+      end;
    end To_Shared;
 
    function To_Vector (Value : Bytes) return Byte_Vectors.Vector is
@@ -23,6 +43,9 @@ package body Guikit.Shared_Bytes is
 
    function Length (Value : Bytes) return Natural is
      (if Value.Ref = null then 0 else Natural (Value.Ref.Data.Length));
+
+   function Serial (Value : Bytes) return Natural is
+     (if Value.Ref = null then 0 else Value.Ref.Serial);
 
    function Element (Value : Bytes; Index : Positive) return Interfaces.Unsigned_8 is
      (Value.Ref.Data.Element (Index));

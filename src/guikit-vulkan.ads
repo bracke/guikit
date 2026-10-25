@@ -1,3 +1,4 @@
+with Ada.Strings.Unbounded;
 with Interfaces;
 with System;
 
@@ -84,6 +85,8 @@ package Guikit.Vulkan is
       Atlas_Pixels           : System.Address := System.Null_Address;
       Atlas_Bytes            : Natural := 0;
       Atlas_Dirty            : Boolean := False;
+      --  Guikit.Draw.Text_Render_Result.Atlas_Version of the glyphs drawn.
+      Atlas_Version          : Natural := 0;
       Text_Atlas_Used        : Boolean := False;
       Texture_Count          : Natural := 0;
       Uses_Separate_Text_And_Icon_Textures : Boolean := False;
@@ -94,6 +97,9 @@ package Guikit.Vulkan is
       Icon_Atlas_Pixels      : Icon_Atlas_Pixel_Vectors.Vector;
       Icon_Atlas_Bytes       : Natural := 0;
       Icon_Atlas_Dirty       : Boolean := False;
+      --  What the icon atlas holds -- each tile's identity and place -- so
+      --  an atlas a renderer already has is neither rebuilt nor uploaded.
+      Icon_Atlas_Signature   : Ada.Strings.Unbounded.Unbounded_String;
    end record;
 
    type Gpu_Screenshot_Comparison is record
@@ -637,6 +643,10 @@ private
       Uploaded_Vertices       : Vertex_Vectors.Vector;
       Uploaded_Theme          : Guikit.Draw.Theme_Kind := Guikit.Draw.Theme_Dark;
       Uploaded_Vertices_Valid : Boolean := False;
+      --  The text atlas version and icon atlas signature this renderer's
+      --  textures hold, cleared when a present fails.
+      Uploaded_Atlas_Version  : Natural := 0;
+      Uploaded_Icon_Signature : Ada.Strings.Unbounded.Unbounded_String;
       Atlas_Image           : Vk.Image_T := System.Null_Address;
       Atlas_Memory          : Vk.Device_Memory_T := System.Null_Address;
       Atlas_View            : Vk.Image_View_T := System.Null_Address;

@@ -52,6 +52,14 @@ package Guikit.Shared_Bytes is
    function Element (Value : Bytes; Index : Positive) return Interfaces.Unsigned_8
      with Pre => Index <= Length (Value);
 
+   --  Which buffer Value is: every To_Shared makes a new number, and copies
+   --  of a value keep it, so equal serials mean the same bytes without
+   --  comparing them (a cache can key on it).
+   --
+   --  @param Value Buffer to identify.
+   --  @return Its serial, or 0 for the empty buffer.
+   function Serial (Value : Bytes) return Natural;
+
    --  Equal when both share one buffer or hold the same bytes.
    --
    --  @param Left First buffer.
@@ -62,8 +70,9 @@ package Guikit.Shared_Bytes is
 private
 
    type Payload is record
-      Count : System.Atomic_Counters.Atomic_Counter;
-      Data  : Byte_Vectors.Vector;
+      Count  : System.Atomic_Counters.Atomic_Counter;
+      Serial : Natural := 0;
+      Data   : Byte_Vectors.Vector;
    end record;
 
    type Payload_Access is access Payload;

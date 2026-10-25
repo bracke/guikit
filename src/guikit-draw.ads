@@ -339,6 +339,12 @@ package Guikit.Draw is
       Atlas_Pixels : System.Address := System.Null_Address;
       Atlas_Bytes  : Natural := 0;
       Atlas_Dirty  : Boolean := False;
+      --  The atlas content these glyphs index: it changes whenever glyphs
+      --  are packed or the font is reloaded. A renderer uploads the atlas
+      --  when this differs from the version it holds, so a result reused
+      --  for an unchanged frame uploads nothing, and one a failed present
+      --  never uploaded is sent again.
+      Atlas_Version : Natural := 0;
    end record;
 
 end Guikit.Draw;
