@@ -4529,7 +4529,7 @@ package body Guikit.Vulkan is
             begin
                if Source_Width = 0
                  or else Source_Height = 0
-                 or else Natural (Icon.Thumbnail_Pixels.Length) /= Source_Width * Source_Height * 4
+                 or else Icon.Thumbnail_Pixels.Length /= Source_Width * Source_Height * 4
                then
                   return False;
                end if;

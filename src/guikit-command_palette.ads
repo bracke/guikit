@@ -2,6 +2,7 @@ with Ada.Containers.Vectors;
 with Ada.Strings.Unbounded;
 
 with Guikit.Draw;
+with Guikit.Shared_Bytes;
 
 --  A stateful, searchable command-palette component built on top of the pure
 --  guikit widget/layout/search tiers. The caller supplies a list of commands and
@@ -22,7 +23,8 @@ package Guikit.Command_Palette is
    type Command_Icon is record
       Width  : Natural := 0;
       Height : Natural := 0;
-      Pixels : Guikit.Draw.Byte_Vectors.Vector;
+      --  Shared, so a command list rebuilt each frame does not copy it.
+      Pixels : Guikit.Shared_Bytes.Bytes;
    end record;
 
    No_Icon : constant Command_Icon := (Width => 0, Height => 0, Pixels => <>);

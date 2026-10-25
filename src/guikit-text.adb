@@ -5,6 +5,7 @@ with Ada.Strings.Unbounded;
 with Interfaces;
 
 with Guikit.Layout;
+with Guikit.Shared_Bytes;
 with Guikit.Utf8;
 
 package body Guikit.Text is
@@ -202,25 +203,30 @@ package body Guikit.Text is
             --  Only the first of an identity needs to carry the picture; the
             --  rest are drawn from the tile it produced.
             if not Already_Carried (Code) then
-               Icon.Thumbnail_Pixels.Reserve_Capacity
-                 (Ada.Containers.Count_Type (Colour.Width * Colour.Height * 4));
+               declare
+                  Picture : Guikit.Draw.Byte_Vectors.Vector;
+               begin
+                  Picture.Reserve_Capacity
+                    (Ada.Containers.Count_Type (Colour.Width * Colour.Height * 4));
 
-               --  Copied out of the sheet: this backend has no binding to spare
-               --  for one, so the picture rides the icon atlas instead.
-               for Row in 0 .. Colour.Height - 1 loop
-                  for Column in 0 .. Colour.Width - 1 loop
-                     declare
-                        At_Sheet : constant Natural :=
-                          ((Colour.Y + Row) * Textrender.Colour_Sheet_Width (R.Backend)
-                           + Colour.X + Column) * 4;
-                     begin
-                        for Channel in 0 .. 3 loop
-                           Icon.Thumbnail_Pixels.Append
-                             (Interfaces.Unsigned_8 (Pixels (At_Sheet + Channel)));
-                        end loop;
-                     end;
+                  --  Copied out of the sheet: this backend has no binding to spare
+                  --  for one, so the picture rides the icon atlas instead.
+                  for Row in 0 .. Colour.Height - 1 loop
+                     for Column in 0 .. Colour.Width - 1 loop
+                        declare
+                           At_Sheet : constant Natural :=
+                             ((Colour.Y + Row) * Textrender.Colour_Sheet_Width (R.Backend)
+                              + Colour.X + Column) * 4;
+                        begin
+                           for Channel in 0 .. 3 loop
+                              Picture.Append
+                                (Interfaces.Unsigned_8 (Pixels (At_Sheet + Channel)));
+                           end loop;
+                        end;
+                     end loop;
                   end loop;
-               end loop;
+                  Icon.Thumbnail_Pixels := Guikit.Shared_Bytes.To_Shared (Picture);
+               end;
 
                Carried.Append (Natural (Code));
             end if;

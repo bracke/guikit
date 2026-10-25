@@ -846,7 +846,8 @@ procedure Check_All is
    --  Guikit.* units listed in its allowlist; the shared helper raises when a
    --  package imports a disallowed sibling. Allowlists are derived from the
    --  current internal withs, so the gate passes as-is and locks the layering:
-   --    * Guikit.Draw / Frame_Analysis / Input / Utf8 are leaves (no deps).
+   --    * Guikit.Shared_Bytes / Frame_Analysis / Input / Utf8 are leaves (no deps).
+   --    * Guikit.Draw    -> Guikit.Shared_Bytes (the pixels its icons carry)
    --    * Guikit.Layout  -> Guikit.Utf8
    --    * Guikit.Widgets -> Guikit.Draw, Guikit.Layout (label text metrics)
    --    * Guikit.Vulkan  -> Guikit.Draw, Guikit.Frame_Analysis
@@ -871,7 +872,8 @@ procedure Check_All is
          end if;
       end Require_Layer;
    begin
-      Require_Layer ("guikit-draw", No_Deps);
+      Require_Layer ("guikit-shared_bytes", No_Deps);
+      Require_Layer ("guikit-draw", [1 => To_Unbounded_String ("Guikit.Shared_Bytes")]);
       Require_Layer ("guikit-frame_analysis", No_Deps);
       Require_Layer ("guikit-input", No_Deps);
       Require_Layer ("guikit-utf8", No_Deps);

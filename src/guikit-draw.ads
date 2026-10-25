@@ -3,6 +3,8 @@ with Ada.Strings.Unbounded;
 with Interfaces;
 with System;
 
+with Guikit.Shared_Bytes;
+
 --  Renderer-agnostic draw model.
 --
 --  This package holds the generic visual primitives a frame is built from
@@ -16,13 +18,9 @@ package Guikit.Draw is
    --  stays independent of any application domain package.
    subtype UString is Ada.Strings.Unbounded.Unbounded_String;
 
-   --  Raw pixel/byte buffer for thumbnails carried in draw commands. Defined
-   --  here to keep the draw model self-contained; the application re-exports
-   --  this instance as Files.Types.Byte_Vectors.
-   package Byte_Vectors is new Ada.Containers.Vectors
-     (Index_Type   => Positive,
-      Element_Type => Interfaces.Unsigned_8,
-      "="          => Interfaces."=");
+   --  Raw pixel/byte buffer, for building image bytes before they are shared
+   --  (Guikit.Shared_Bytes) into a draw command.
+   package Byte_Vectors renames Guikit.Shared_Bytes.Byte_Vectors;
 
    type Render_Color is
      (Canvas_Color,
@@ -216,7 +214,8 @@ package Guikit.Draw is
       Asset_Path : UString;
       Thumbnail_Width  : Natural := 0;
       Thumbnail_Height : Natural := 0;
-      Thumbnail_Pixels : Byte_Vectors.Vector;
+      --  Shared: a frame rebuild passes an item's thumbnail on, not a copy.
+      Thumbnail_Pixels : Guikit.Shared_Bytes.Bytes;
       --  When True, the icon is composited in the overlay layer (after the main
       --  grid's icons and text), so it sits on top of an opaque overlay panel
       --  such as Quick Look rather than under the grid content.

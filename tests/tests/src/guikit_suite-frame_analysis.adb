@@ -1,3 +1,4 @@
+with Ada.Containers;
 with Interfaces;
 
 with AUnit;
@@ -7,6 +8,7 @@ with AUnit.Test_Cases;
 with Ada.Strings.Unbounded;
 
 with Guikit.Draw;
+with Guikit.Shared_Bytes;
 with Guikit.Frame_Analysis;
 with Guikit.Vulkan;
 
@@ -146,9 +148,9 @@ package body Guikit_Suite.Frame_Analysis is
          Icon.Thumbnail_Height := Picture;
          Icon.Shared_Tile_Id := To_Unbounded_String (Identity);
 
-         for Byte in 1 .. Picture * Picture * 4 loop
-            Icon.Thumbnail_Pixels.Append (200);
-         end loop;
+         Icon.Thumbnail_Pixels :=
+           Guikit.Shared_Bytes.To_Shared
+             (Guikit.Draw.Byte_Vectors.To_Vector (200, Ada.Containers.Count_Type (Picture * Picture * 4)));
 
          return Icon;
       end With_Pixels;
