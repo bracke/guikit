@@ -85,7 +85,7 @@ procedure Check_All is
           (Label   => "GNAT 15 version check",
            Dir     => Root,
            Program => Alr,
-           Args    =>
+           Args    => GNAT.OS_Lib.Argument_List'
              [1 => new String'("exec"),
               2 => new String'("--"),
               3 => new String'("gnatls"),
@@ -848,7 +848,7 @@ procedure Check_All is
    --  current internal withs, so the gate passes as-is and locks the layering:
    --    * Guikit.Draw / Frame_Analysis / Input / Utf8 are leaves (no deps).
    --    * Guikit.Layout  -> Guikit.Utf8
-   --    * Guikit.Widgets -> Guikit.Draw
+   --    * Guikit.Widgets -> Guikit.Draw, Guikit.Layout (label text metrics)
    --    * Guikit.Vulkan  -> Guikit.Draw, Guikit.Frame_Analysis
    procedure Check_Layering is
       No_Deps : constant Project_Tools.Ada_Source.String_List (1 .. 0) :=
@@ -876,7 +876,10 @@ procedure Check_All is
       Require_Layer ("guikit-input", No_Deps);
       Require_Layer ("guikit-utf8", No_Deps);
       Require_Layer ("guikit-layout", [1 => To_Unbounded_String ("Guikit.Utf8")]);
-      Require_Layer ("guikit-widgets", [1 => To_Unbounded_String ("Guikit.Draw")]);
+      Require_Layer
+        ("guikit-widgets",
+         [To_Unbounded_String ("Guikit.Draw"),
+          To_Unbounded_String ("Guikit.Layout")]);
       Require_Layer
         ("guikit-vulkan",
          [To_Unbounded_String ("Guikit.Draw"),
