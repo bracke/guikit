@@ -56,7 +56,7 @@ package body Guikit.Menu_Tree is
    is
       Line_Height : constant Positive := Config.Line_Height;
       Cell_W      : constant Positive :=
-        Positive'Max (1, Guikit.Layout.Saturating_Multiply (Line_Height, 12) / 20);
+        Guikit.Layout.Caret_Advance_Width (Line_Height);
 
       function Clipped (Start, Size, Limit : Natural) return Natural is
         (if Start >= Limit or else Size = 0 then 0 else Natural'Min (Size, Limit - Start));

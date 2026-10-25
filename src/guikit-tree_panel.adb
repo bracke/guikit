@@ -29,7 +29,7 @@ package body Guikit.Tree_Panel is
       List_Rows : Guikit.List_Panel.List_Panel_Row_Vectors.Vector;
       Line_Height : constant Positive := Config.Line_Height;
       Cell_W      : constant Positive :=
-        Positive'Max (1, Guikit.Layout.Saturating_Multiply (Line_Height, 12) / 20);
+        Guikit.Layout.Caret_Advance_Width (Line_Height);
       Has_Title : constant Boolean := Length (Config.Title) > 0;
       Title_Rows : constant Natural := (if Has_Title then 1 else 0);
       Max_Rows : constant Natural :=

@@ -118,7 +118,7 @@ package body Guikit.Item_Grid is
          Name_Units   : constant Natural :=
            (if Cell_Height = 0 then 0
             else Guikit.Utf8.Display_Units (To_String (Items.Constant_Reference (Index).Label)));
-         Name_Pixels  : constant Natural := Mul (Name_Units, Mul (Line_Height, 12) / 20);
+         Name_Pixels  : constant Natural := Mul (Name_Units, Guikit.Layout.Caret_Advance_Width (Line_Height));
          Large_Text_W : constant Natural := Natural'Min (Inner_W, Name_Pixels);
          Text_X       : constant Natural :=
            (if Large then Add (Inner_X, (if Inner_W > Large_Text_W then (Inner_W - Large_Text_W) / 2 else 0))
@@ -407,7 +407,7 @@ package body Guikit.Item_Grid is
    is
       Draw_W   : constant Natural := Clip_Extent (X, Width, Clip_Width);
       Draw_H   : constant Natural := Clip_Extent (Y, Height, Clip_Height);
-      Cell_W   : constant Positive := Positive'Max (1, Guikit.Layout.Saturating_Multiply (Line_Height, 12) / 20);
+      Cell_W   : constant Positive := Guikit.Layout.Caret_Advance_Width (Line_Height);
       Capacity : constant Natural := Draw_W / Cell_W;
       Raw      : constant String := To_String (Text);
       Result   : constant Unbounded_String := (if Fit then Fitted_Text (Text, Capacity) else Text);

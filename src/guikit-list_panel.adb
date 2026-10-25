@@ -60,7 +60,7 @@ package body Guikit.List_Panel is
       Eff_Row_Height : constant Positive :=
         (if Row_Height > Line_Height then Row_Height else Line_Height);
       Cell_W      : constant Positive :=
-        Positive'Max (1, Guikit.Layout.Saturating_Multiply (Line_Height, 12) / 20);
+        Guikit.Layout.Caret_Advance_Width (Line_Height);
       Text_Width  : constant Natural :=
         (if Region_Width > Config.Text_Padding then Region_Width - Config.Text_Padding else 0);
       Text_Columns : constant Natural := Text_Width / Cell_W;

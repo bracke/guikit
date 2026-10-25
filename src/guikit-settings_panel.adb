@@ -1124,7 +1124,7 @@ package body Guikit.Settings_Panel is
          Bx    : constant Natural :=
            (if Region_Width > Inset + Btn then Region_X + Region_Width - Inset - Btn else Region_X);
          By    : constant Natural := Region_Y + Inset;
-         Gw    : constant Natural := Natural'Max (1, (LH * 12) / 20);
+         Gw    : constant Natural := Guikit.Layout.Caret_Advance_Width (LH);
          Gx    : constant Natural := (if Btn > Gw then Bx + (Btn - Gw) / 2 else Bx);
       begin
          Guikit.Widgets.Draw_Close_Button
