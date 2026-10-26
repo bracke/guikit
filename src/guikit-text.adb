@@ -24,6 +24,8 @@ package body Guikit.Text is
 
    function Loaded (R : Renderer) return Boolean is (R.Is_Loaded);
 
+   function Atlas_Version (R : Renderer) return Natural is (R.Atlas_Version);
+
    --  How tall the glyph atlas may grow: four times its usual height, which
    --  at its usual 1024 columns is the 4 MiB the Vulkan backend uploads
    --  (Guikit.Vulkan's Max_Atlas_Bytes). Past that the atlas is emptied

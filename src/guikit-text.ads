@@ -26,6 +26,15 @@ package Guikit.Text is
    --  @return True when R has a loaded primary font.
    function Loaded (R : Renderer) return Boolean;
 
+   --  The version of the atlas content R holds now (see
+   --  Guikit.Draw.Text_Render_Result.Atlas_Version). Glyphs built at another
+   --  version index an atlas that has changed -- grown, emptied or reloaded
+   --  -- and must be built again before they are drawn or uploaded.
+   --
+   --  @param R Renderer to inspect.
+   --  @return Its current atlas version.
+   function Atlas_Version (R : Renderer) return Natural;
+
    --  Load the monospace primary font and append the fallback chain into the
    --  same shared atlas. A missing or unloadable fallback is non-fatal (the
    --  primary already renders and the remaining fallbacks still apply).
