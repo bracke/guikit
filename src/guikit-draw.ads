@@ -324,6 +324,11 @@ package Guikit.Draw is
    --  Carries the primary and overlay glyph quads together with the shared
    --  text-atlas pixels a backend uploads. Defined here so a rendering backend
    --  can consume the result without depending on Files.Rendering.
+   --  The most bytes a glyph or icon atlas holds: what the Vulkan backend
+   --  uploads, and what Guikit.Text lets its glyph atlas grow to (1024
+   --  columns by 4096 rows, one byte each).
+   Max_Atlas_Bytes : constant := 4_194_304;
+
    type Text_Render_Result is record
       Status       : Text_Render_Status := Text_Render_Font_Not_Loaded;
       Glyphs       : Glyph_Command_Vectors.Vector;

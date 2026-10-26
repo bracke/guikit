@@ -30,7 +30,7 @@ package body Guikit.Vulkan is
    Image_Layout_Present_Src_KHR : constant Vk.Image_Layout_T := Vk.Image_Layout_T (1_000_001_002);
    Max_Surface_Formats : constant Positive := 32;
    Max_Batch_Vertices : constant Positive := 65_536;
-   Max_Atlas_Bytes : constant Positive := 4_194_304;
+   Max_Atlas_Bytes : constant Positive := Guikit.Draw.Max_Atlas_Bytes;
    Max_Readback_Bytes : constant Positive := 33_554_432;
    Icon_Atlas_Tile_Size : constant Positive := 64;
    Icon_Atlas_Channels : constant Positive := 4;
@@ -2075,21 +2075,18 @@ package body Guikit.Vulkan is
            or else Renderer.Atlas_Width_Value /= Batch.Atlas_Width
            or else Renderer.Atlas_Height_Value /= Batch.Atlas_Height
            or else Renderer.Atlas_Format_Value /= Atlas_Texture_R8);
-      Use_Icon_Atlas  : constant Boolean :=
-        (not Use_Batch_Atlas) and then (not Batch.Text_Atlas_Used) and then Batch.Icon_Atlas_Dirty;
+      --  Without text, the texture only has to be valid (a 1x1 stand-in):
+      --  icons are drawn from their own texture (Upload_Icon_Atlas).
       Upload_Format   : constant Atlas_Texture_Format :=
-        (if Use_Batch_Atlas then Atlas_Texture_R8
-         elsif Use_Icon_Atlas and then Batch.Icon_Atlas_Channels = 4 then Atlas_Texture_RGBA8
-         elsif Use_Icon_Atlas then Atlas_Texture_R8
-         else Atlas_Texture_None);
+        (if Use_Batch_Atlas then Atlas_Texture_R8 else Atlas_Texture_None);
       Vulkan_Format   : constant Vk.Format_T :=
         (if Upload_Format = Atlas_Texture_RGBA8 then Format_R8G8B8A8_Srgb else Vk.FORMAT_R8_UNORM);
       Actual_Width : constant Natural :=
-        (if Use_Batch_Atlas then Batch.Atlas_Width elsif Use_Icon_Atlas then Batch.Icon_Atlas_Width else 1);
+        (if Use_Batch_Atlas then Batch.Atlas_Width else 1);
       Actual_Height : constant Natural :=
-        (if Use_Batch_Atlas then Batch.Atlas_Height elsif Use_Icon_Atlas then Batch.Icon_Atlas_Height else 1);
+        (if Use_Batch_Atlas then Batch.Atlas_Height else 1);
       Bytes : constant Natural :=
-        (if Use_Batch_Atlas then Batch.Atlas_Bytes elsif Use_Icon_Atlas then Batch.Icon_Atlas_Bytes else 1);
+        (if Use_Batch_Atlas then Batch.Atlas_Bytes else 1);
       Pixel_Address : constant System.Address :=
         (if Use_Batch_Atlas then Batch.Atlas_Pixels else Fallback_Atlas_Pixel'Address);
       Needs_New_Texture : constant Boolean :=
@@ -2099,17 +2096,13 @@ package body Guikit.Vulkan is
         or else Renderer.Atlas_Format_Value /= Upload_Format;
       Result : Vk.Result_T;
    begin
-      if not Use_Batch_Atlas
-        and then not Use_Icon_Atlas
-        and then Renderer.Atlas_Texture_Live
-      then
+      if not Use_Batch_Atlas and then Renderer.Atlas_Texture_Live then
          return True;
       elsif Pixel_Address = System.Null_Address
         or else Actual_Width = 0
         or else Actual_Height = 0
         or else Bytes = 0
         or else Bytes > Max_Atlas_Bytes
-        or else (Use_Icon_Atlas and then Natural (Batch.Icon_Atlas_Pixels.Length) /= Bytes)
       then
          return False;
       end if;
@@ -2385,20 +2378,14 @@ package body Guikit.Vulkan is
             Target : constant Byte_Array_Conversions.Object_Pointer :=
               Byte_Array_Conversions.To_Pointer (Mapped_Data);
          begin
-            if Use_Icon_Atlas then
+            declare
+               Source : constant Byte_Array_Conversions.Object_Pointer :=
+                 Byte_Array_Conversions.To_Pointer (Pixel_Address);
+            begin
                for Index in 1 .. Bytes loop
-                  Target.all (Index) := Batch.Icon_Atlas_Pixels.Element (Index);
+                  Target.all (Index) := Source.all (Index);
                end loop;
-            else
-               declare
-                  Source : constant Byte_Array_Conversions.Object_Pointer :=
-                    Byte_Array_Conversions.To_Pointer (Pixel_Address);
-               begin
-                  for Index in 1 .. Bytes loop
-                     Target.all (Index) := Source.all (Index);
-                  end loop;
-               end;
-            end if;
+            end;
          end;
 
          Vk.Unmap_Memory (Renderer.Device, Renderer.Atlas_Staging_Memory);
@@ -2468,7 +2455,7 @@ package body Guikit.Vulkan is
         or else Batch.Icon_Atlas_Height = 0
         or else Bytes = 0
         or else Bytes > Max_Atlas_Bytes
-        or else Natural (Batch.Icon_Atlas_Pixels.Length) /= Bytes
+        or else Guikit.Shared_Bytes.Length (Batch.Icon_Atlas_Pixels) /= Bytes
       then
          return False;
       end if;
@@ -4133,10 +4120,17 @@ package body Guikit.Vulkan is
          Physical_Device_Count => Renderer.Last_Physical_Devices);
    end Diagnostics;
 
-   --  The last icon atlas Build_Submission built, which an identical one
-   --  reuses. Frames are built on one task.
-   Last_Icon_Atlas_Signature : Unbounded_String;
-   Last_Icon_Atlas_Pixels    : Icon_Atlas_Pixel_Vectors.Vector;
+   --  The icon atlases Build_Submission built last, which an identical one
+   --  reuses: one per window showing different icons, so two windows do not
+   --  rebuild each other's atlas every frame. Frames are built on one task.
+   type Cached_Icon_Atlas is record
+      Signature : Unbounded_String;
+      Pixels    : Guikit.Shared_Bytes.Bytes;
+      Used      : Natural := 0;
+   end record;
+
+   Icon_Atlas_Cache : array (1 .. 4) of Cached_Icon_Atlas;
+   Icon_Atlas_Clock : Natural := 0;
 
    function Build_Submission
      (Rectangles         : Guikit.Draw.Rectangle_Command_Vectors.Vector;
@@ -4422,13 +4416,8 @@ package body Guikit.Vulkan is
               and then Atlas_W * Atlas_H * Icon_Atlas_Channels <= Max_Atlas_Bytes;
          end Layout_Tiles;
 
-         procedure Append_Clear_Pixels
-           (Count : Natural) is
-         begin
-            for Index in 1 .. Count loop
-               Result.Icon_Atlas_Pixels.Append (0);
-            end loop;
-         end Append_Clear_Pixels;
+         --  The atlas being built, shared once it is complete.
+         Pixels : Guikit.Shared_Bytes.Byte_Vectors.Vector;
 
          procedure Put_Pixel
            (X : Natural;
@@ -4441,10 +4430,10 @@ package body Guikit.Vulkan is
             Offset : constant Positive :=
               Positive (((Y * Result.Icon_Atlas_Width) + X) * Result.Icon_Atlas_Channels + 1);
          begin
-            Result.Icon_Atlas_Pixels.Replace_Element (Offset, R);
-            Result.Icon_Atlas_Pixels.Replace_Element (Offset + 1, G);
-            Result.Icon_Atlas_Pixels.Replace_Element (Offset + 2, B);
-            Result.Icon_Atlas_Pixels.Replace_Element (Offset + 3, A);
+            Pixels.Replace_Element (Offset, R);
+            Pixels.Replace_Element (Offset + 1, G);
+            Pixels.Replace_Element (Offset + 2, B);
+            Pixels.Replace_Element (Offset + 3, A);
          end Put_Pixel;
 
          procedure Role_Color
@@ -4686,12 +4675,16 @@ package body Guikit.Vulkan is
                end;
             end loop;
             Result.Icon_Atlas_Signature := Signature;
-            if Signature = Last_Icon_Atlas_Signature then
-               Result.Icon_Atlas_Pixels := Last_Icon_Atlas_Pixels;
-               return;
-            end if;
+            Icon_Atlas_Clock := Icon_Atlas_Clock + 1;
+            for Cached of Icon_Atlas_Cache loop
+               if Cached.Signature = Signature then
+                  Result.Icon_Atlas_Pixels := Cached.Pixels;
+                  Cached.Used := Icon_Atlas_Clock;
+                  return;
+               end if;
+            end loop;
          end;
-         Append_Clear_Pixels (Result.Icon_Atlas_Bytes);
+         Pixels := Guikit.Shared_Bytes.Byte_Vectors.To_Vector (0, Ada.Containers.Count_Type (Result.Icon_Atlas_Bytes));
 
          --  Once per tile: a shared tile is rasterized from the first icon that
          --  asked for it, and every other icon with the same identity reads it.
@@ -4699,8 +4692,18 @@ package body Guikit.Vulkan is
             Rasterize_Asset (Tile_Index, All_Icons (Rep));
             Tile_Index := Tile_Index + 1;
          end loop;
-         Last_Icon_Atlas_Signature := Result.Icon_Atlas_Signature;
-         Last_Icon_Atlas_Pixels := Result.Icon_Atlas_Pixels;
+         Result.Icon_Atlas_Pixels := Guikit.Shared_Bytes.To_Shared (Pixels);
+         declare
+            Oldest : Positive := Icon_Atlas_Cache'First;
+         begin
+            for Index in Icon_Atlas_Cache'Range loop
+               if Icon_Atlas_Cache (Index).Used < Icon_Atlas_Cache (Oldest).Used then
+                  Oldest := Index;
+               end if;
+            end loop;
+            Icon_Atlas_Cache (Oldest) :=
+              (Signature => Result.Icon_Atlas_Signature, Pixels => Result.Icon_Atlas_Pixels, Used => Icon_Atlas_Clock);
+         end;
       end Build_Icon_Atlas;
    begin
       Result.Width := Layout.Width;
@@ -5006,9 +5009,9 @@ package body Guikit.Vulkan is
          Mix (Natural_Code (Batch.Icon_Atlas_Height));
          Mix (Natural_Code (Batch.Icon_Atlas_Channels));
          Mix (Natural_Code (Batch.Icon_Atlas_Bytes));
-         Mix (Natural_Code (Natural (Batch.Icon_Atlas_Pixels.Length)));
-         for Pixel of Batch.Icon_Atlas_Pixels loop
-            Mix (Interfaces.Unsigned_32 (Pixel));
+         Mix (Natural_Code (Guikit.Shared_Bytes.Length (Batch.Icon_Atlas_Pixels)));
+         for Index in 1 .. Guikit.Shared_Bytes.Length (Batch.Icon_Atlas_Pixels) loop
+            Mix (Interfaces.Unsigned_32 (Guikit.Shared_Bytes.Element (Batch.Icon_Atlas_Pixels, Index)));
          end loop;
 
          return Hash;

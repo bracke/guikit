@@ -18,6 +18,16 @@ package Guikit.Item_Grid is
    --  or a multi-column table (Details).
    type View_Kind is (Icons_Small, Icons_Large, Details);
 
+   --  The grid's spacing in pixels, for a consumer that lays out or hit-tests
+   --  around it: between cells, inside a cell, between an icon and its
+   --  label, above and below a details row's text, and inside a details
+   --  column.
+   Main_Grid_Gap          : constant Natural := 8;
+   Item_Content_Padding   : constant Natural := 4;
+   Item_Icon_Text_Gap     : constant Natural := 12;
+   Details_Row_Padding    : constant Natural := 4;
+   Details_Column_Padding : constant Natural := 6;
+
    --  The size of one item cell in a given view: the cell box, the icon box
    --  inside it, and whether this is a "large" (icon-above-label) cell.
    type Cell_Metrics is record

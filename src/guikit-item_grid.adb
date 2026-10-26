@@ -6,13 +6,7 @@ package body Guikit.Item_Grid is
 
    use Ada.Strings.Unbounded;
 
-   --  Cell padding/gap constants (pixels), matching the file-manager grid metrics.
-   Main_Grid_Gap          : constant Natural := 8;
-   Item_Content_Padding   : constant Natural := 4;
-   Item_Icon_Text_Gap     : constant Natural := 12;
-   Details_Row_Padding    : constant Natural := 4;
-   Details_Row_Gap        : constant Natural := 0;
-   Details_Column_Padding : constant Natural := 6;
+   Details_Row_Gap : constant Natural := 0;
 
    function Cell_Metrics_For
      (View        : View_Kind;

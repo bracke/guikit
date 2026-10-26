@@ -9,6 +9,7 @@ with Vk;
 
 with Guikit.Draw;
 with Guikit.Frame_Analysis;
+with Guikit.Shared_Bytes;
 
 --  Vulkan renderer lifecycle backed by df_vulkan.
 package Guikit.Vulkan is
@@ -65,10 +66,6 @@ package Guikit.Vulkan is
      (Index_Type   => Positive,
       Element_Type => Vertex);
 
-   package Icon_Atlas_Pixel_Vectors is new Ada.Containers.Vectors
-     (Index_Type   => Positive,
-      Element_Type => Interfaces.Unsigned_8);
-
    type Submission_Batch is record
       Vertices               : Vertex_Vectors.Vector;
       Palette_Theme          : Guikit.Draw.Theme_Kind := Guikit.Draw.Theme_Dark;
@@ -94,7 +91,9 @@ package Guikit.Vulkan is
       Icon_Atlas_Width       : Natural := 0;
       Icon_Atlas_Height      : Natural := 0;
       Icon_Atlas_Channels    : Natural := 0;
-      Icon_Atlas_Pixels      : Icon_Atlas_Pixel_Vectors.Vector;
+      --  Shared, not copied: an atlas reused from frame to frame (and between
+      --  windows) is one buffer.
+      Icon_Atlas_Pixels      : Guikit.Shared_Bytes.Bytes;
       Icon_Atlas_Bytes       : Natural := 0;
       Icon_Atlas_Dirty       : Boolean := False;
       --  What the icon atlas holds -- each tile's identity and place -- so
