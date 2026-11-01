@@ -200,7 +200,7 @@ package body Guikit.List_Panel is
             Background : constant Render_Color :=
               (if Row.Has_Background then Row.Background_Color
                elsif Row.Selected then Selection_Color
-               elsif Config.Show_Alternate_Rows and then I mod 2 = 0 then Detail_Alternate_Color
+               elsif Config.Show_Alternate_Rows and then I mod 2 = 0 then Alternate_Row_Color
                else Pane_Color);
          begin
             Draw_Palette_Row

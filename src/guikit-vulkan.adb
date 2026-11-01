@@ -4799,7 +4799,7 @@ package body Guikit.Vulkan is
                            V0       => (if Atlas_H = 0 then 0.0 else Float (Tile.Y) / Float (Atlas_H)),
                            U1       => (if Atlas_W = 0 then 0.0 else Float (Tile.X + Tile.W) / Float (Atlas_W)),
                            V1       => (if Atlas_H = 0 then 0.0 else Float (Tile.Y + Tile.H) / Float (Atlas_H)),
-                           Color    => Guikit.Draw.Icon_File_Color,
+                           Color    => Guikit.Draw.Icon_Document_Color,
                            Textured => True,
                            Texture  => Texture_Icon_Atlas);
                         Result.Icon_Vertex_Count :=
@@ -4889,7 +4889,7 @@ package body Guikit.Vulkan is
                               V0       => (if Atlas_H = 0 then 0.0 else Float (Tile.Y) / Float (Atlas_H)),
                               U1       => (if Atlas_W = 0 then 0.0 else Float (Tile.X + Tile.W) / Float (Atlas_W)),
                               V1       => (if Atlas_H = 0 then 0.0 else Float (Tile.Y + Tile.H) / Float (Atlas_H)),
-                              Color    => Guikit.Draw.Icon_File_Color,
+                              Color    => Guikit.Draw.Icon_Document_Color,
                               Textured => True,
                               Texture  => Texture_Icon_Atlas);
                            Result.Overlay_Vertex_Count :=
