@@ -54,6 +54,24 @@ package Guikit.Utf8 is
      (Codepoint : Natural)
       return Boolean;
 
+   --  Whether a codepoint takes no cell of its own: a required zero-width
+   --  combining mark, or a variation selector.
+   --
+   --  @param Codepoint A Unicode codepoint.
+   --  @return True when it combines with the codepoint before it.
+   function Is_Combining_Codepoint
+     (Codepoint : Natural)
+      return Boolean;
+
+   --  How many monospace cells a codepoint takes: 0 when it combines, 2 for
+   --  an East Asian wide or emoji codepoint, else 1. Display_Units sums this.
+   --
+   --  @param Codepoint A Unicode codepoint.
+   --  @return Its width in cells.
+   function Codepoint_Display_Units
+     (Codepoint : Natural)
+      return Natural;
+
    --  Encode a Unicode codepoint as its UTF-8 byte sequence (1-4 bytes). A
    --  surrogate (U+D800..U+DFFF) or a value above U+10FFFF has no UTF-8 encoding
    --  and yields the empty string. This is the inverse of Decode_Next_Codepoint.
