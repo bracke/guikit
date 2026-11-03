@@ -112,8 +112,7 @@ package Guikit.Item_Grid is
    --  offset by the scroll. The caller supplies the content rectangle, the
    --  scroll offset in pixels, and -- for Details -- the precomputed column
    --  bounds; the grid does the pure per-item geometry. An item not wholly on
-   --  screen gets an all-zero cell (only its visible index kept) so callers
-   --  skip it.
+   --  screen gets an all-zero cell (its visible index too) so callers skip it.
    --
    --  @param Items The visible items in order (including group-header rows).
    --  @param View The grid view.
