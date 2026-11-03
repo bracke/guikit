@@ -123,7 +123,7 @@ package body Guikit.Item_Grid is
       begin
          Result.Append
            (Item_Layout'
-              (Visible_Index => Items.Element (Index).Visible_Index,
+              (Visible_Index => Items.Constant_Reference (Index).Visible_Index,
                X             => Cell_X,
                Y             => Cell_Y,
                Width         => Cell_Width,
@@ -139,6 +139,7 @@ package body Guikit.Item_Grid is
                others        => 0));
       end Append_Grid_Item;
    begin
+      Result.Reserve_Capacity (Items.Length);
       for Index in 1 .. Natural (Items.Length) loop
          case View is
             when Icons_Small | Icons_Large =>
