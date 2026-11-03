@@ -111,8 +111,9 @@ package Guikit.Item_Grid is
    --  Lay every item into its cell (icon views) or row (Details) rectangle,
    --  offset by the scroll. The caller supplies the content rectangle, the
    --  scroll offset in pixels, and -- for Details -- the precomputed column
-   --  bounds; the grid does the pure per-item geometry. Off-screen items get a
-   --  zero-height rectangle so callers skip them.
+   --  bounds; the grid does the pure per-item geometry. An item not wholly on
+   --  screen gets an all-zero cell (only its visible index kept) so callers
+   --  skip it.
    --
    --  @param Items The visible items in order (including group-header rows).
    --  @param View The grid view.
@@ -134,6 +135,38 @@ package Guikit.Item_Grid is
       Columns       : Detail_Column_Bounds;
       Scroll_Pixels : Natural;
       Line_Height   : Positive := 20)
+      return Item_Layout_Vectors.Vector;
+
+   --  Calculate_Layout over items read through accessors, so a caller with
+   --  its own item list need not copy every label into a Layout_Item vector:
+   --  only the cells on screen read their label.
+   --
+   --  @param Count Number of items (including group-header rows).
+   --  @param Visible_Index_At An item's one-based visible index.
+   --  @param Is_Header_At Whether an item is a group-header row.
+   --  @param Label_At An item's label.
+   --  @param View The grid view.
+   --  @param Content_X Content area left edge in pixels.
+   --  @param Content_Y Content area top edge in pixels.
+   --  @param Content_W Content area width in pixels.
+   --  @param Content_H Content area height in pixels.
+   --  @param Columns Details column bounds (ignored for the icon views).
+   --  @param Scroll_Pixels Vertical scroll offset in pixels.
+   --  @param Line_Height Text line height in pixels.
+   --  @return The per-item layout table, one cell per item in order.
+   function Calculate_Layout
+     (Count            : Natural;
+      Visible_Index_At : not null access function (Position : Positive) return Natural;
+      Is_Header_At     : not null access function (Position : Positive) return Boolean;
+      Label_At         : not null access function (Position : Positive) return String;
+      View             : View_Kind;
+      Content_X        : Natural;
+      Content_Y        : Natural;
+      Content_W        : Natural;
+      Content_H        : Natural;
+      Columns          : Detail_Column_Bounds;
+      Scroll_Pixels    : Natural;
+      Line_Height      : Positive := 20)
       return Item_Layout_Vectors.Vector;
 
    --  One-based visible indices, used to carry hit-test results (e.g. the items

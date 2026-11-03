@@ -155,6 +155,38 @@ package body Guikit_Suite.Item_Grid is
       begin
          Assert (L (1).Height = 0, "a row scrolled fully above the viewport has zero height");
       end;
+
+      --  Through accessors, only the cells on screen read their label, and
+      --  the others are all-zero cells: a large list costs a screenful.
+      declare
+         Labels_Read : Natural := 0;
+
+         function Index_At (Position : Positive) return Natural is (Position);
+         function Header_At (Position : Positive) return Boolean is (False);
+         function Label_At (Position : Positive) return String is
+         begin
+            Labels_Read := Labels_Read + 1;
+            return "item" & Position'Image;
+         end Label_At;
+
+         L : constant IG.Item_Layout_Vectors.Vector :=
+           IG.Calculate_Layout
+             (10_000, Index_At'Access, Header_At'Access, Label_At'Access, IG.Icons_Large,
+              Content_X => 0, Content_Y => 0, Content_W => 400, Content_H => 400, Columns => Cols,
+              Scroll_Pixels => 5_000, Line_Height => 20);
+         On_Screen : Natural := 0;
+      begin
+         Assert (Natural (L.Length) = 10_000, "every item still gets a cell");
+         for Cell of L loop
+            if Cell.Height > 0 then
+               On_Screen := On_Screen + 1;
+            else
+               Assert (Cell.Y = 0 and then Cell.Width = 0, "a cell off screen is all zero");
+            end if;
+         end loop;
+         Assert (On_Screen > 0 and then On_Screen < 20, "only a screenful is on screen");
+         Assert (Labels_Read = On_Screen, "only the cells on screen read their label");
+      end;
    end Test_Calculate_Layout;
 
    procedure Test_Background (T : in out AUnit.Test_Cases.Test_Case'Class) is

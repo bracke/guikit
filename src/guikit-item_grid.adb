@@ -40,18 +40,22 @@ package body Guikit.Item_Grid is
    end Cell_Metrics_For;
 
    function Calculate_Layout
-     (Items         : Layout_Item_Vectors.Vector;
-      View          : View_Kind;
-      Content_X     : Natural;
-      Content_Y     : Natural;
-      Content_W     : Natural;
-      Content_H     : Natural;
-      Columns       : Detail_Column_Bounds;
-      Scroll_Pixels : Natural;
-      Line_Height   : Positive := 20)
+     (Count            : Natural;
+      Visible_Index_At : not null access function (Position : Positive) return Natural;
+      Is_Header_At     : not null access function (Position : Positive) return Boolean;
+      Label_At         : not null access function (Position : Positive) return String;
+      View             : View_Kind;
+      Content_X        : Natural;
+      Content_Y        : Natural;
+      Content_W        : Natural;
+      Content_H        : Natural;
+      Columns          : Detail_Column_Bounds;
+      Scroll_Pixels    : Natural;
+      Line_Height      : Positive := 20)
       return Item_Layout_Vectors.Vector
    is
-      Result : Item_Layout_Vectors.Vector;
+      Result  : Item_Layout_Vectors.Vector;
+      Metrics : constant Cell_Metrics := Cell_Metrics_For (View, Content_W, Line_Height);
 
       function Add (L, R : Natural) return Natural renames Guikit.Layout.Saturating_Add;
       function Mul (V, F : Natural) return Natural renames Guikit.Layout.Saturating_Multiply;
@@ -67,7 +71,7 @@ package body Guikit.Item_Grid is
          end if;
       end Columns_For;
 
-      procedure Append_Grid_Item
+      procedure Place_Grid_Item
         (Index     : Positive;
          Cell_W    : Positive;
          Cell_H    : Positive;
@@ -111,7 +115,7 @@ package body Guikit.Item_Grid is
          --  hidden label made each layout O(all items) in UTF-8 decoding.
          Name_Units   : constant Natural :=
            (if Cell_Height = 0 then 0
-            else Guikit.Utf8.Display_Units (To_String (Items.Constant_Reference (Index).Label)));
+            else Guikit.Utf8.Display_Units (Label_At (Index)));
          Name_Pixels  : constant Natural := Mul (Name_Units, Guikit.Layout.Caret_Advance_Width (Line_Height));
          Large_Text_W : constant Natural := Natural'Min (Inner_W, Name_Pixels);
          Text_X       : constant Natural :=
@@ -121,9 +125,10 @@ package body Guikit.Item_Grid is
            (if Large then Add (Add (Inner_Y, Padded_Icon), Item_Content_Padding) else Inner_Y);
          Text_W       : constant Natural := (if Large then Large_Text_W else Sub (Inner_W, Used_X));
       begin
-         Result.Append
-           (Item_Layout'
-              (Visible_Index => Items.Constant_Reference (Index).Visible_Index,
+         Result.Replace_Element
+           (Index,
+            Item_Layout'
+              (Visible_Index => Visible_Index_At (Index),
                X             => Cell_X,
                Y             => Cell_Y,
                Width         => Cell_Width,
@@ -137,23 +142,64 @@ package body Guikit.Item_Grid is
                Name_X        => Text_X,
                Name_Width    => Text_W,
                others        => 0));
-      end Append_Grid_Item;
-   begin
-      Result.Reserve_Capacity (Items.Length);
-      for Index in 1 .. Natural (Items.Length) loop
+      end Place_Grid_Item;
+
+      --  Whether a position's cell lies wholly inside the viewport. Only those
+      --  are laid out: the others (all but a screenful in a large folder) keep
+      --  the default all-zero cell, as they always had no area.
+      function On_Screen (Index : Positive) return Boolean is
+      begin
          case View is
             when Icons_Small | Icons_Large =>
                declare
-                  Metrics : constant Cell_Metrics := Cell_Metrics_For (View, Content_W, Line_Height);
+                  Row_Offset : constant Natural :=
+                    Mul ((Index - 1) / Columns_For (Content_W, Positive (Metrics.Width)),
+                         Add (Metrics.Height, Main_Grid_Gap));
                begin
-                  Append_Grid_Item
-                    (Positive (Index), Positive (Metrics.Width), Positive (Metrics.Height),
-                     Positive (Metrics.Icon_Size), Metrics.Large);
+                  return Row_Offset >= Scroll_Pixels
+                    and then Content_H >= Add (Row_Offset - Scroll_Pixels, Metrics.Height);
                end;
             when Details =>
                declare
-                  It          : Layout_Item renames Items.Constant_Reference (Positive (Index)).Element.all;
-                  Metrics     : constant Cell_Metrics := Cell_Metrics_For (View, Content_W, Line_Height);
+                  Header_H   : constant Natural :=
+                    Natural'Min (Add (Line_Height, Mul (Details_Row_Padding, 2)), Content_H);
+                  Row_Offset : constant Natural := Mul (Index - 1, Metrics.Height);
+               begin
+                  return Row_Offset >= Scroll_Pixels
+                    and then Sub (Content_H, Header_H) >= Add (Row_Offset - Scroll_Pixels, Metrics.Height);
+               end;
+         end case;
+      end On_Screen;
+
+      --  A cell's offset grows with its position, so the cells on screen are
+      --  one run, starting in the first row not scrolled above the viewport.
+      Per_Row : constant Positive :=
+        (case View is
+            when Details => 1,
+            when Icons_Small | Icons_Large => Columns_For (Content_W, Positive (Metrics.Width)));
+      Stride  : constant Positive :=
+        Positive (case View is
+                     when Details => Metrics.Height,
+                     when Icons_Small | Icons_Large => Add (Metrics.Height, Main_Grid_Gap));
+      First_Row : constant Natural :=
+        Scroll_Pixels / Stride + (if Scroll_Pixels mod Stride = 0 then 0 else 1);
+      First     : constant Long_Long_Integer :=
+        Long_Long_Integer (First_Row) * Long_Long_Integer (Per_Row) + 1;
+      Index     : Positive := 1;
+   begin
+      Result.Set_Length (Ada.Containers.Count_Type (Count));
+      if First > Long_Long_Integer (Count) then
+         return Result;
+      end if;
+      Index := Positive (First);
+      while On_Screen (Index) loop
+         case View is
+            when Icons_Small | Icons_Large =>
+               Place_Grid_Item
+                 (Index, Positive (Metrics.Width), Positive (Metrics.Height),
+                  Positive (Metrics.Icon_Size), Metrics.Large);
+            when Details =>
+               declare
                   Row_Step    : constant Natural := Metrics.Height;
                   Header_H    : constant Natural :=
                     Natural'Min (Add (Line_Height, Mul (Details_Row_Padding, 2)), Content_H);
@@ -178,9 +224,10 @@ package body Guikit.Item_Grid is
                   Header_Name_W : constant Natural :=
                     (if Add (Content_X, Content_W) > Name_X then Add (Content_X, Content_W) - Name_X else 0);
                begin
-                  if It.Group_Header then
-                     Result.Append
-                       (Item_Layout'
+                  if Is_Header_At (Index) then
+                     Result.Replace_Element
+                       (Index,
+                        Item_Layout'
                           (Visible_Index => 0,
                            X             => Content_X,
                            Y             => Row_Y,
@@ -193,9 +240,10 @@ package body Guikit.Item_Grid is
                            Name_Width    => Header_Name_W,
                            others        => 0));
                   else
-                     Result.Append
-                       (Item_Layout'
-                          (Visible_Index     => It.Visible_Index,
+                     Result.Replace_Element
+                       (Index,
+                        Item_Layout'
+                          (Visible_Index     => Visible_Index_At (Index),
                            X                 => Content_X,
                            Y                 => Row_Y,
                            Width             => Content_W,
@@ -221,8 +269,34 @@ package body Guikit.Item_Grid is
                   end if;
                end;
          end case;
+         exit when Index = Count;
+         Index := Index + 1;
       end loop;
       return Result;
+   end Calculate_Layout;
+
+   function Calculate_Layout
+     (Items         : Layout_Item_Vectors.Vector;
+      View          : View_Kind;
+      Content_X     : Natural;
+      Content_Y     : Natural;
+      Content_W     : Natural;
+      Content_H     : Natural;
+      Columns       : Detail_Column_Bounds;
+      Scroll_Pixels : Natural;
+      Line_Height   : Positive := 20)
+      return Item_Layout_Vectors.Vector
+   is
+      function Visible_Index_At (Position : Positive) return Natural is
+        (Items.Constant_Reference (Position).Visible_Index);
+      function Is_Header_At (Position : Positive) return Boolean is
+        (Items.Constant_Reference (Position).Group_Header);
+      function Label_At (Position : Positive) return String is
+        (To_String (Items.Constant_Reference (Position).Label));
+   begin
+      return Calculate_Layout
+        (Natural (Items.Length), Visible_Index_At'Access, Is_Header_At'Access, Label_At'Access,
+         View, Content_X, Content_Y, Content_W, Content_H, Columns, Scroll_Pixels, Line_Height);
    end Calculate_Layout;
 
    --  The visible extent of a span [Start, Start + Size) clamped to [0, Limit).
