@@ -850,7 +850,8 @@ procedure Check_All is
    --    * Guikit.Draw    -> Guikit.Shared_Bytes (the pixels its icons carry)
    --    * Guikit.Layout  -> Guikit.Utf8
    --    * Guikit.Widgets -> Guikit.Draw, Guikit.Layout (label text metrics)
-   --    * Guikit.Vulkan  -> Guikit.Draw, Guikit.Frame_Analysis
+   --    * Guikit.Vulkan  -> Guikit.Draw, Guikit.Frame_Analysis, Guikit.Shared_Bytes
+   --      (an icon atlas is uploaded again only when its pixels' serial moves)
    procedure Check_Layering is
       No_Deps : constant Project_Tools.Ada_Source.String_List (1 .. 0) :=
         [others => <>];
@@ -885,7 +886,8 @@ procedure Check_All is
       Require_Layer
         ("guikit-vulkan",
          [To_Unbounded_String ("Guikit.Draw"),
-          To_Unbounded_String ("Guikit.Frame_Analysis")]);
+          To_Unbounded_String ("Guikit.Frame_Analysis"),
+          To_Unbounded_String ("Guikit.Shared_Bytes")]);
    end Check_Layering;
 
 begin
