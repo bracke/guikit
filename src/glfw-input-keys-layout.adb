@@ -18,21 +18,7 @@ package body Glfw.Input.Keys.Layout is
       if Name = Interfaces.C.Strings.Null_Ptr then
          return Pressed;
       end if;
-      declare
-         Text : constant String := Interfaces.C.Strings.Value (Name);
-      begin
-         if Text'Length = 1 then
-            case Text (Text'First) is
-               when 'a' .. 'z' =>
-                  return Key'Val (Key'Pos (A) + Character'Pos (Text (Text'First)) - Character'Pos ('a'));
-               when 'A' .. 'Z' =>
-                  return Key'Val (Key'Pos (A) + Character'Pos (Text (Text'First)) - Character'Pos ('A'));
-               when others =>
-                  null;
-            end case;
-         end if;
-      end;
-      return Pressed;
+      return Letter_Named (Interfaces.C.Strings.Value (Name), Otherwise => Pressed);
    end Layout_Key;
 
 end Glfw.Input.Keys.Layout;

@@ -2,6 +2,7 @@ with AUnit;
 with AUnit.Assertions;
 with AUnit.Test_Cases;
 
+with Glfw.Input.Keys.Layout;
 with Guikit.Input;
 
 --  Smoke tests for the domain-free input value types. They confirm the empty
@@ -21,6 +22,7 @@ package body Guikit_Suite.Input is
    procedure Test_No_Modifiers (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Modifier_Set_Roundtrip (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Enumerations (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Layout_Letters (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    overriding function Name (T : Input_Test_Case) return AUnit.Message_String is
       pragma Unreferenced (T);
@@ -36,6 +38,8 @@ package body Guikit_Suite.Input is
         (T, Test_Modifier_Set_Roundtrip'Access, "setting one modifier reads back without touching the rest");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Enumerations'Access, "key and navigation enumerations expose the expected ordering");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Layout_Letters'Access, "a layout's letter names its key; other names keep the pressed key");
    end Register_Tests;
 
    procedure Test_No_Modifiers (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -79,5 +83,21 @@ package body Guikit_Suite.Input is
       Result.Add_Test (AUnit.Test_Cases.Test_Case_Access'(new Input_Test_Case));
       return Result;
    end Suite;
+
+   --  QWERTZ: the key GLFW calls Y is named "z" there, so Ctrl+Z is Undo.
+   procedure Test_Layout_Letters (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Glfw.Input.Keys;
+      function Named (Name : String; Pressed : Key) return Key renames Glfw.Input.Keys.Layout.Letter_Named;
+   begin
+      Assert (Named ("z", Y) = Z and then Named ("Z", Y) = Z, "the layout's z is Z, either case");
+      Assert (Named ("a", Q) = A, "a is A");
+      Assert (Named ("1", Key_1) = Key_1, "a digit keeps the pressed key");
+      Assert (Named ("", Y) = Y, "no name keeps it");
+      Assert (Named ("ab", Y) = Y, "a longer name keeps it");
+      Assert (Named ("-", Minus) = Minus, "a sign keeps it");
+      Assert (Named (Character'Val (16#C3#) & Character'Val (16#BC#), Semicolon) = Semicolon,
+              "a letter outside ASCII (u-umlaut) keeps it");
+   end Test_Layout_Letters;
 
 end Guikit_Suite.Input;

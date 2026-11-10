@@ -888,6 +888,15 @@ procedure Check_All is
          [To_Unbounded_String ("Guikit.Draw"),
           To_Unbounded_String ("Guikit.Frame_Analysis"),
           To_Unbounded_String ("Guikit.Shared_Bytes")]);
+      --  The GLFW glue is the bottom layer: it may name only the input
+      --  vocabulary (the modifiers it reports), nothing that draws.
+      Require_Layer ("glfw-input-keys-layout", No_Deps);
+      Require_Layer ("glfw-windows-drop", No_Deps);
+      Require_Layer ("glfw-windows-drop-paths", No_Deps);
+      Require_Layer ("glfw-windows-icon", No_Deps);
+      Require_Layer ("glfw-windows-modifiers", [1 => To_Unbounded_String ("Guikit.Input")]);
+      Require_Layer ("glfw-windows-native", No_Deps);
+      Require_Layer ("glfw-windows-vulkan", No_Deps);
    end Check_Layering;
 
 begin
