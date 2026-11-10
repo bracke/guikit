@@ -14,7 +14,8 @@ package body Guikit.Segmented is
       Cell_W : constant Natural := Guikit.Layout.Caret_Advance_Width (Line_Height);
       Base   : constant Natural := Guikit.Layout.Label_Pixel_Width (To_String (S.Label), Cell_W);
    begin
-      return Positive'Max (Line_Height, Guikit.Layout.Saturating_Add (Base, 2 * Segment_Padding));
+      return Positive'Max
+        (Line_Height, Guikit.Layout.Saturating_Add (Base, 2 * Guikit.Layout.Scaled (Segment_Padding, Line_Height)));
    end Desired_Width;
 
    --  Sum of the desired widths of the first Upto cells (0 .. length), saturating
@@ -169,14 +170,15 @@ package body Guikit.Segmented is
                --  clips, exactly as before.
                Cell_Adv : constant Natural := Guikit.Layout.Caret_Advance_Width (Line_Height);
                Text_W   : constant Natural := Guikit.Layout.Label_Pixel_Width (To_String (S.Label), Cell_Adv);
-               Centred  : constant Boolean := Text_W + 2 * Label_Padding <= CW;
+               Inner    : constant Natural := Guikit.Layout.Scaled (Label_Padding, Line_Height);
+               Centred  : constant Boolean := Text_W + 2 * Inner <= CW;
                Label_X : constant Natural :=
                  (if Centred then Guikit.Layout.Saturating_Add (CX, (CW - Text_W) / 2)
-                  else Guikit.Layout.Saturating_Add (CX, Label_Padding));
+                  else Guikit.Layout.Saturating_Add (CX, Inner));
                Label_Y : constant Natural := Region_Y + Inset;
                Label_W : constant Natural :=
                  (if Centred then Text_W
-                  elsif CW > 2 * Label_Padding then CW - 2 * Label_Padding else 0);
+                  elsif CW > 2 * Inner then CW - 2 * Inner else 0);
                Draw_W  : constant Natural := Clip_Extent (Label_X, Label_W, Clip_Width);
                Draw_H  : constant Natural := Clip_Extent (Label_Y, Label_H, Clip_Height);
             begin

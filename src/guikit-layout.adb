@@ -161,7 +161,7 @@ package body Guikit.Layout is
       Min_Input  : constant Natural := Saturating_Multiply (Line_Height, 2);
       Required   : constant Natural :=
         Saturating_Add
-          (Saturating_Add (Chip_Width, Min_Input), Saturating_Multiply (Scope_Chip_Margin, 3));
+          (Saturating_Add (Chip_Width, Min_Input), Saturating_Multiply (Scaled (Scope_Chip_Margin, Line_Height), 3));
    begin
       if Chip_Width = 0 or else Toolbar.Right_Width < Required then
          return (Visible => False, others => 0);
@@ -170,7 +170,7 @@ package body Guikit.Layout is
       return
         (Visible => True,
          X       => Saturating_Add (Toolbar.Right_X, Toolbar.Right_Width)
-                      - Scope_Chip_Margin - Chip_Width,
+                      - Scaled (Scope_Chip_Margin, Line_Height) - Chip_Width,
          Y       => Toolbar_Input_Y (Line_Height),
          Width   => Chip_Width,
          Height  => Toolbar_Input_Height (Line_Height));
@@ -184,16 +184,16 @@ package body Guikit.Layout is
    is
       Chip : constant Scope_Chip_Region :=
         Filter_Scope_Chip_Region_Of (Toolbar, Chip_Width, Line_Height);
-      Both_Margins : constant Natural := Saturating_Multiply (Scope_Chip_Margin, 2);
+      Both_Margins : constant Natural := Saturating_Multiply (Scaled (Scope_Chip_Margin, Line_Height), 2);
    begin
       if not Chip.Visible then
          return (if Toolbar.Right_Width > Both_Margins then Toolbar.Right_Width - Both_Margins else 0);
       end if;
 
       declare
-         Filter_X : constant Natural := Saturating_Add (Toolbar.Right_X, Scope_Chip_Margin);
-         Field_End : constant Natural :=
-           (if Chip.X > Scope_Chip_Margin then Chip.X - Scope_Chip_Margin else 0);
+         Margin    : constant Natural := Scaled (Scope_Chip_Margin, Line_Height);
+         Filter_X  : constant Natural := Saturating_Add (Toolbar.Right_X, Margin);
+         Field_End : constant Natural := (if Chip.X > Margin then Chip.X - Margin else 0);
       begin
          return (if Field_End > Filter_X then Field_End - Filter_X else 0);
       end;
@@ -288,7 +288,7 @@ package body Guikit.Layout is
       Line_Height         : Positive := 20)
       return Bottom_Bar_Layout
    is
-      Button_Padding : constant Natural := Saturating_Multiply (Bottom_Bar_Padding, 3);
+      Button_Padding : constant Natural := Saturating_Multiply (Scaled (Bottom_Bar_Padding, Line_Height), 3);
       Minimum_Button : constant Natural := Saturating_Multiply (Line_Height, 2);
       Small_Needed   : constant Natural :=
         Natural'Max (Minimum_Button, Saturating_Add (Small_Label_Width, Button_Padding));
@@ -301,13 +301,14 @@ package body Guikit.Layout is
           (Minimum_Button,
            Saturating_Add
              (Sort_Label_Width,
-              Saturating_Multiply (Input_Field_Padding, 2)));
+              Saturating_Multiply (Scaled (Input_Field_Padding, Line_Height), 2)));
       --  The info-pane toggle hugs its label: two paddings (matching the
       --  renderer's per-side text inset), not the wider three-padding button
       --  spacing, so it is no wider than the "Info" text needs.
       Info_Needed    : constant Natural :=
         Natural'Max
-          (Minimum_Button, Saturating_Add (Info_Label_Width, Saturating_Multiply (Bottom_Bar_Padding, 2)));
+          (Minimum_Button,
+           Saturating_Add (Info_Label_Width, Saturating_Multiply (Scaled (Bottom_Bar_Padding, Line_Height), 2)));
       Preferred_View : constant Natural :=
         Saturating_Add (Small_Needed, Saturating_Add (Large_Needed, Details_Needed));
       Preferred_Sort : constant Natural := Sort_Needed;
@@ -345,24 +346,25 @@ package body Guikit.Layout is
      (Pane_X             : Natural;
       Pane_Width         : Natural;
       Add_Label_Width    : Natural;
-      Remove_Label_Width : Natural)
+      Remove_Label_Width : Natural;
+      Line_Height        : Positive := Reference_Line_Height)
       return Settings_Entry_Button_Layout
    is
-      Edge_Padding   : constant Natural := Settings_Pane_Padding;
-      Button_Gap     : constant Natural := 4;
-      Minimum_Button : constant Natural := 34;
+      Edge_Padding   : constant Natural := Scaled (Settings_Pane_Padding, Line_Height);
+      Button_Gap     : constant Natural := Scaled (4, Line_Height);
+      Minimum_Button : constant Natural := Scaled (34, Line_Height);
       Add_Wanted     : constant Natural :=
         Natural'Max
           (Minimum_Button,
            Saturating_Add
              (Add_Label_Width,
-              Saturating_Multiply (Input_Field_Padding, 2)));
+              Saturating_Multiply (Scaled (Input_Field_Padding, Line_Height), 2)));
       Remove_Wanted  : constant Natural :=
         Natural'Max
           (Minimum_Button,
            Saturating_Add
              (Remove_Label_Width,
-              Saturating_Multiply (Input_Field_Padding, 2)));
+              Saturating_Multiply (Scaled (Input_Field_Padding, Line_Height), 2)));
       Available      : constant Natural :=
         (if Pane_Width > Saturating_Multiply (Edge_Padding, 2)
          then Pane_Width - Saturating_Multiply (Edge_Padding, 2)
@@ -407,11 +409,12 @@ package body Guikit.Layout is
    end Calculate_Settings_Entry_Button_Layout;
 
    function Calculate_Settings_Action_Button_Layout
-     (Text_X     : Natural;
-      Text_Width : Natural)
+     (Text_X      : Natural;
+      Text_Width  : Natural;
+      Line_Height : Positive := Reference_Line_Height)
       return Settings_Action_Button_Layout
    is
-      Gap      : constant Natural := 4;
+      Gap      : constant Natural := Scaled (4, Line_Height);
       First_W  : constant Natural := (if Text_Width > Gap then (Text_Width - Gap) / 2 else 0);
       Offset   : constant Natural := Saturating_Add (First_W, Gap);
       Second_W : constant Natural := (if Text_Width > Offset then Text_Width - Offset else 0);
@@ -444,10 +447,10 @@ package body Guikit.Layout is
       Content_H : constant Natural :=
         Saturating_Add
           (Saturating_Multiply (Line_Height, Section_Rows),
-           Saturating_Multiply (Settings_Row_Gap, Section_Rows - 1));
+           Saturating_Multiply (Scaled (Settings_Row_Gap, Line_Height), Section_Rows - 1));
       Wanted_H : constant Natural :=
         Natural'Max
-          (Saturating_Add (Content_H, Saturating_Multiply (Settings_Pane_Padding, 2)),
+          (Saturating_Add (Content_H, Saturating_Multiply (Scaled (Settings_Pane_Padding, Line_Height), 2)),
            Height / 3);
       Top_Margin : constant Natural :=
         Natural'Max (Saturating_Add (Toolbar_Height, 8), Height / 6);
@@ -457,11 +460,11 @@ package body Guikit.Layout is
       Pane_X : constant Natural := (if Width > Pane_W then (Width - Pane_W) / 2 else 0);
       Pane_Y : constant Natural :=
         (if Available_H > 0 then Top_Margin else Toolbar_Height);
-      Text_X : constant Natural := Saturating_Add (Pane_X, Settings_Pane_Padding);
-      Text_Y : constant Natural := Saturating_Add (Pane_Y, Settings_Pane_Padding);
+      Text_X : constant Natural := Saturating_Add (Pane_X, Scaled (Settings_Pane_Padding, Line_Height));
+      Text_Y : constant Natural := Saturating_Add (Pane_Y, Scaled (Settings_Pane_Padding, Line_Height));
       Text_W : constant Natural :=
-        (if Pane_W > Saturating_Multiply (Settings_Pane_Padding, 2)
-         then Pane_W - Saturating_Multiply (Settings_Pane_Padding, 2)
+        (if Pane_W > Saturating_Multiply (Scaled (Settings_Pane_Padding, Line_Height), 2)
+         then Pane_W - Saturating_Multiply (Scaled (Settings_Pane_Padding, Line_Height), 2)
          else 0);
    begin
       return
@@ -486,26 +489,26 @@ package body Guikit.Layout is
       Search_H  : constant Natural :=
         Natural'Min
           (Saturating_Add (Line_Height, Saturating_Multiply (Scaled (Input_Field_Padding, Line_Height), 2)),
-           (if Command_Height > Saturating_Multiply (Palette_Padding, 2)
-            then Command_Height - Saturating_Multiply (Palette_Padding, 2)
+           (if Command_Height > Saturating_Multiply (Scaled (Palette_Padding, Line_Height), 2)
+            then Command_Height - Saturating_Multiply (Scaled (Palette_Padding, Line_Height), 2)
             else Command_Height));
-      Content_X : constant Natural := Saturating_Add (Command_X, Palette_Padding);
-      Content_Y : constant Natural := Saturating_Add (Command_Y, Palette_Padding);
+      Content_X : constant Natural := Saturating_Add (Command_X, Scaled (Palette_Padding, Line_Height));
+      Content_Y : constant Natural := Saturating_Add (Command_Y, Scaled (Palette_Padding, Line_Height));
       Content_W : constant Natural :=
-        (if Command_Width > Saturating_Multiply (Palette_Padding, 2)
-         then Command_Width - Saturating_Multiply (Palette_Padding, 2)
+        (if Command_Width > Saturating_Multiply (Scaled (Palette_Padding, Line_Height), 2)
+         then Command_Width - Saturating_Multiply (Scaled (Palette_Padding, Line_Height), 2)
          else Command_Width);
       Content_H : constant Natural :=
-        (if Command_Height > Saturating_Multiply (Palette_Padding, 2)
-         then Command_Height - Saturating_Multiply (Palette_Padding, 2)
+        (if Command_Height > Saturating_Multiply (Scaled (Palette_Padding, Line_Height), 2)
+         then Command_Height - Saturating_Multiply (Scaled (Palette_Padding, Line_Height), 2)
          else Command_Height);
       --  A title band (Title_Height, 0 for none) reserved at the top of the
       --  content pushes the search box and results down below it.
       Search_Y  : constant Natural := Saturating_Add (Content_Y, Title_Height);
       Results_Y : constant Natural :=
-        Saturating_Add (Search_Y, Saturating_Add (Search_H, Palette_Padding));
+        Saturating_Add (Search_Y, Saturating_Add (Search_H, Scaled (Palette_Padding, Line_Height)));
       Used_H    : constant Natural :=
-        Saturating_Add (Title_Height, Saturating_Add (Search_H, Palette_Padding));
+        Saturating_Add (Title_Height, Saturating_Add (Search_H, Scaled (Palette_Padding, Line_Height)));
    begin
       return
         (X              => Command_X,
@@ -523,7 +526,7 @@ package body Guikit.Layout is
          Row_Height     =>
            Saturating_Add
              (Saturating_Multiply (Line_Height, 2),
-              Saturating_Multiply (Palette_Result_Row_Padding, 2)));
+              Saturating_Multiply (Scaled (Palette_Result_Row_Padding, Line_Height), 2)));
    end Calculate_Palette_Layout;
 
    function Calculate_Palette_Result_Rows

@@ -2,6 +2,7 @@ with Ada.Containers.Vectors;
 with Ada.Strings.Unbounded;
 
 with Guikit.Draw;
+with Guikit.Layout;
 
 --  A reusable item grid: the file-listing surface shared by a file manager and
 --  similar list/grid views. This is the geometry and hit-testing foundation;
@@ -27,6 +28,31 @@ package Guikit.Item_Grid is
    Item_Icon_Text_Gap     : constant Natural := 12;
    Details_Row_Padding    : constant Natural := 4;
    Details_Column_Padding : constant Natural := 6;
+
+   --  The spacing above at a line height, as the grid draws it: it grows
+   --  with the text past Guikit.Layout.Reference_Line_Height (a 2x display,
+   --  a larger font).
+   --
+   --  @param Line_Height The line height in use.
+   --  @return The scaled spacing.
+   function Grid_Gap (Line_Height : Positive) return Natural is
+     (Guikit.Layout.Scaled (Main_Grid_Gap, Line_Height));
+   --  @param Line_Height The line height in use.
+   --  @return The padding inside a cell.
+   function Content_Padding (Line_Height : Positive) return Natural is
+     (Guikit.Layout.Scaled (Item_Content_Padding, Line_Height));
+   --  @param Line_Height The line height in use.
+   --  @return The gap between an icon and its label.
+   function Icon_Text_Gap (Line_Height : Positive) return Natural is
+     (Guikit.Layout.Scaled (Item_Icon_Text_Gap, Line_Height));
+   --  @param Line_Height The line height in use.
+   --  @return The padding above and below a details row's text.
+   function Row_Padding (Line_Height : Positive) return Natural is
+     (Guikit.Layout.Scaled (Details_Row_Padding, Line_Height));
+   --  @param Line_Height The line height in use.
+   --  @return The padding inside a details column.
+   function Column_Padding (Line_Height : Positive) return Natural is
+     (Guikit.Layout.Scaled (Details_Column_Padding, Line_Height));
 
    --  The size of one item cell in a given view: the cell box, the icon box
    --  inside it, and whether this is a "large" (icon-above-label) cell.
@@ -316,12 +342,14 @@ package Guikit.Item_Grid is
    --  @param Renaming Whether this cell is being renamed.
    --  @param Field_X Out: field left edge in pixels.
    --  @param Field_W Out: field width in pixels.
+   --  @param Line_Height The line height the grid was laid out with.
    procedure Rename_Field_Extent
-     (Cell     : Item_Layout;
-      View     : View_Kind;
-      Renaming : Boolean;
-      Field_X  : out Natural;
-      Field_W  : out Natural);
+     (Cell        : Item_Layout;
+      View        : View_Kind;
+      Renaming    : Boolean;
+      Field_X     : out Natural;
+      Field_W     : out Natural;
+      Line_Height : Positive := Guikit.Layout.Reference_Line_Height);
 
    --  Draw an item's name: the fitted label (Text is the edited value while
    --  renaming, otherwise the name), dimmed and italic for a cut item, plus --

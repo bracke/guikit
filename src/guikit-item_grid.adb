@@ -1,4 +1,3 @@
-with Guikit.Layout;
 with Guikit.Utf8;
 with Guikit.Widgets;
 
@@ -21,7 +20,7 @@ package body Guikit.Item_Grid is
          when Icons_Small =>
             return
               (Width     => 216,
-               Height    => Add (Line_Height, Mul (Item_Content_Padding, 2)),
+               Height    => Add (Line_Height, Mul (Content_Padding (Line_Height), 2)),
                Icon_Size => Line_Height,
                Large     => False);
          when Icons_Large =>
@@ -33,7 +32,7 @@ package body Guikit.Item_Grid is
          when Details =>
             return
               (Width     => Main_Width,
-               Height    => Add (Add (Line_Height, Mul (Details_Row_Padding, 2)), Details_Row_Gap),
+               Height    => Add (Add (Line_Height, Mul (Row_Padding (Line_Height), 2)), Details_Row_Gap),
                Icon_Size => Line_Height,
                Large     => False);
       end case;
@@ -62,12 +61,12 @@ package body Guikit.Item_Grid is
       function Sub (Left, Right : Natural) return Natural is (if Left > Right then Left - Right else 0);
 
       function Columns_For (Main_Width : Natural; Cell_Width : Positive) return Positive is
-         Stride : constant Positive := Positive (Add (Cell_Width, Main_Grid_Gap));
+         Stride : constant Positive := Positive (Add (Cell_Width, Grid_Gap (Line_Height)));
       begin
          if Main_Width < Cell_Width then
             return 1;
          else
-            return Positive'Max (1, Positive (Add (Main_Width, Main_Grid_Gap) / Stride));
+            return Positive'Max (1, Positive (Add (Main_Width, Grid_Gap (Line_Height)) / Stride));
          end if;
       end Columns_For;
 
@@ -82,8 +81,8 @@ package body Guikit.Item_Grid is
          Offset      : constant Natural := Natural (Index - 1);
          Column      : constant Natural := Offset mod Grid_Cols;
          Row         : constant Natural := Offset / Grid_Cols;
-         Cell_Stride : constant Natural := Add (Cell_W, Main_Grid_Gap);
-         Row_Stride  : constant Natural := Add (Cell_H, Main_Grid_Gap);
+         Cell_Stride : constant Natural := Add (Cell_W, Grid_Gap (Line_Height));
+         Row_Stride  : constant Natural := Add (Cell_H, Grid_Gap (Line_Height));
          Cell_Offset : constant Natural := Mul (Column, Cell_Stride);
          Row_Offset  : constant Natural := Mul (Row, Row_Stride);
          Hidden_Px   : constant Natural :=
@@ -97,7 +96,7 @@ package body Guikit.Item_Grid is
            (if Hidden_Px = 0 and then Content_H >= Add (Visible_Row, Cell_H) then Cell_H else 0);
          Draw_Icon   : constant Natural := Natural'Min (Icon_Size, Natural'Min (Cell_Width, Cell_Height));
          Content_Pad : constant Natural :=
-           Natural'Min (Item_Content_Padding, Natural'Min (Cell_Width, Cell_Height));
+           Natural'Min (Content_Padding (Line_Height), Natural'Min (Cell_Width, Cell_Height));
          Inner_X     : constant Natural := Add (Cell_X, Content_Pad);
          Inner_Y     : constant Natural := Add (Cell_Y, Content_Pad);
          Inner_W     : constant Natural :=
@@ -106,7 +105,7 @@ package body Guikit.Item_Grid is
            (if Cell_Height > Mul (Content_Pad, 2) then Cell_Height - Mul (Content_Pad, 2) else Cell_Height);
          Padded_Icon : constant Natural := Natural'Min (Draw_Icon, Natural'Min (Inner_W, Inner_H));
          Used_X      : constant Natural :=
-           (if Large then 0 else Natural'Min (Inner_W, Add (Padded_Icon, Item_Icon_Text_Gap)));
+           (if Large then 0 else Natural'Min (Inner_W, Add (Padded_Icon, Icon_Text_Gap (Line_Height))));
          Icon_X      : constant Natural :=
            (if Large then Add (Inner_X, (if Inner_W > Padded_Icon then (Inner_W - Padded_Icon) / 2 else 0))
             else Inner_X);
@@ -122,7 +121,7 @@ package body Guikit.Item_Grid is
            (if Large then Add (Inner_X, (if Inner_W > Large_Text_W then (Inner_W - Large_Text_W) / 2 else 0))
             else Add (Inner_X, Used_X));
          Text_Y       : constant Natural :=
-           (if Large then Add (Add (Inner_Y, Padded_Icon), Item_Content_Padding) else Inner_Y);
+           (if Large then Add (Add (Inner_Y, Padded_Icon), Content_Padding (Line_Height)) else Inner_Y);
          Text_W       : constant Natural := (if Large then Large_Text_W else Sub (Inner_W, Used_X));
       begin
          Result.Replace_Element
@@ -154,7 +153,7 @@ package body Guikit.Item_Grid is
                declare
                   Row_Offset : constant Natural :=
                     Mul ((Index - 1) / Columns_For (Content_W, Positive (Metrics.Width)),
-                         Add (Metrics.Height, Main_Grid_Gap));
+                         Add (Metrics.Height, Grid_Gap (Line_Height)));
                begin
                   return Row_Offset >= Scroll_Pixels
                     and then Content_H >= Add (Row_Offset - Scroll_Pixels, Metrics.Height);
@@ -162,7 +161,7 @@ package body Guikit.Item_Grid is
             when Details =>
                declare
                   Header_H   : constant Natural :=
-                    Natural'Min (Add (Line_Height, Mul (Details_Row_Padding, 2)), Content_H);
+                    Natural'Min (Add (Line_Height, Mul (Row_Padding (Line_Height), 2)), Content_H);
                   Row_Offset : constant Natural := Mul (Index - 1, Metrics.Height);
                begin
                   return Row_Offset >= Scroll_Pixels
@@ -180,7 +179,7 @@ package body Guikit.Item_Grid is
       Stride  : constant Positive :=
         Positive (case View is
                      when Details => Metrics.Height,
-                     when Icons_Small | Icons_Large => Add (Metrics.Height, Main_Grid_Gap));
+                     when Icons_Small | Icons_Large => Add (Metrics.Height, Grid_Gap (Line_Height)));
       First_Row : constant Natural :=
         Scroll_Pixels / Stride + (if Scroll_Pixels mod Stride = 0 then 0 else 1);
       First     : constant Long_Long_Integer :=
@@ -202,7 +201,7 @@ package body Guikit.Item_Grid is
                declare
                   Row_Step    : constant Natural := Metrics.Height;
                   Header_H    : constant Natural :=
-                    Natural'Min (Add (Line_Height, Mul (Details_Row_Padding, 2)), Content_H);
+                    Natural'Min (Add (Line_Height, Mul (Row_Padding (Line_Height), 2)), Content_H);
                   Rows_Y      : constant Natural := Add (Content_Y, Header_H);
                   Rows_H      : constant Natural := Sub (Content_H, Header_H);
                   Row_Offset  : constant Natural := Mul (Natural (Index - 1), Row_Step);
@@ -214,11 +213,11 @@ package body Guikit.Item_Grid is
                     (if Hidden_Px = 0 and then Rows_H >= Add (Visible_Row, Row_Step) then Row_Step else 0);
                   Row_Draw_H  : constant Natural :=
                     (if Row_H > Details_Row_Gap then Row_H - Details_Row_Gap else Row_H);
-                  Row_Pad     : constant Natural := Natural'Min (Details_Row_Padding, Row_Draw_H);
+                  Row_Pad     : constant Natural := Natural'Min (Row_Padding (Line_Height), Row_Draw_H);
                   Inner_H     : constant Natural :=
                     (if Row_Draw_H > Mul (Row_Pad, 2) then Row_Draw_H - Mul (Row_Pad, 2) else Row_Draw_H);
                   Row_Inner_X : constant Natural := Add (Content_X, Row_Pad);
-                  Text_Pad    : constant Natural := Natural'Min (Details_Column_Padding, Row_Draw_H);
+                  Text_Pad    : constant Natural := Natural'Min (Column_Padding (Line_Height), Row_Draw_H);
                   Name_X      : constant Natural := Columns (Name_Column).X;
                   Name_W      : constant Natural := Columns (Name_Column).Width;
                   Header_Name_W : constant Natural :=
@@ -340,16 +339,17 @@ package body Guikit.Item_Grid is
    end Emit_Border;
 
    procedure Rename_Field_Extent
-     (Cell     : Item_Layout;
-      View     : View_Kind;
-      Renaming : Boolean;
-      Field_X  : out Natural;
-      Field_W  : out Natural)
+     (Cell        : Item_Layout;
+      View        : View_Kind;
+      Renaming    : Boolean;
+      Field_X     : out Natural;
+      Field_W     : out Natural;
+      Line_Height : Positive := Guikit.Layout.Reference_Line_Height)
    is
       function Add (L, R : Natural) return Natural renames Guikit.Layout.Saturating_Add;
       function Mul (V, F : Natural) return Natural renames Guikit.Layout.Saturating_Multiply;
       Wide : constant Boolean := Renaming and then View = Icons_Large;
-      Pad  : constant Natural := Natural'Min (Item_Content_Padding, Cell.Width / 2);
+      Pad  : constant Natural := Natural'Min (Content_Padding (Line_Height), Cell.Width / 2);
    begin
       Field_X := (if Wide then Add (Cell.X, Pad) else Cell.Text_X);
       Field_W :=
@@ -379,7 +379,7 @@ package body Guikit.Item_Grid is
    is
       function Add (L, R : Natural) return Natural renames Guikit.Layout.Saturating_Add;
       function Mul (V, F : Natural) return Natural renames Guikit.Layout.Saturating_Multiply;
-      Pad_F   : constant Natural := Guikit.Layout.Input_Field_Padding;
+      Pad_F   : constant Natural := Guikit.Layout.Scaled (Guikit.Layout.Input_Field_Padding, Line_Height);
       Field_X : Natural;
       Field_W : Natural;
       Field_Y : constant Natural := Cell.Text_Y;
@@ -389,7 +389,7 @@ package body Guikit.Item_Grid is
       Field_H : constant Natural :=
         (if Wide then Natural'Min (Add (Line_Height, Mul (Pad_F, 2)), Label_H) else Cell.Height);
    begin
-      Rename_Field_Extent (Cell, View, Renaming, Field_X, Field_W);
+      Rename_Field_Extent (Cell, View, Renaming, Field_X, Field_W, Line_Height);
       Draw_Fitted_Text
         (Text_Commands, Clip_Width, Clip_Height, Field_X, Field_Y, Field_W,
          Natural'Min (Line_Height, Cell.Height), Text, (if Dim then Dim_Color else Text_Color),
@@ -541,8 +541,9 @@ package body Guikit.Item_Grid is
       Row_H : constant Natural := Natural'Min (Line_Height, Cell.Height);
 
       procedure Column (Col_X, Col_W : Natural; Value, Tooltip : Unbounded_String) is
-         CX : constant Natural := Col_X + Details_Column_Padding;
-         CW : constant Natural := (if Col_W > Details_Column_Padding then Col_W - Details_Column_Padding else 0);
+         Pad : constant Natural := Column_Padding (Line_Height);
+         CX  : constant Natural := Col_X + Pad;
+         CW  : constant Natural := (if Col_W > Pad then Col_W - Pad else 0);
       begin
          if Col_W = 0 then
             return;

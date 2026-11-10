@@ -229,12 +229,12 @@ package body Guikit.Command_Palette is
       --  configured, so the search box and results sit below it.
       Title_H : constant Natural :=
         (if Length (P.Config.Title) > 0
-         then Guikit.Layout.Saturating_Add (LH, Guikit.Layout.Palette_Padding) else 0);
+         then Guikit.Layout.Saturating_Add (LH, Guikit.Layout.Scaled (Guikit.Layout.Palette_Padding, LH)) else 0);
       Layout  : constant Guikit.Layout.Palette_Layout :=
         Guikit.Layout.Calculate_Palette_Layout
           (Region_X, Region_Y, Region_Width, Region_Height, LH, Title_H);
-      Pad     : constant Natural := Guikit.Layout.Palette_Padding;
-      Row_Pad : constant Natural := Guikit.Layout.Palette_Result_Row_Padding;
+      Pad     : constant Natural := Guikit.Layout.Scaled (Guikit.Layout.Palette_Padding, LH);
+      Row_Pad : constant Natural := Guikit.Layout.Scaled (Guikit.Layout.Palette_Result_Row_Padding, LH);
       Cell_W  : constant Natural := Guikit.Layout.Caret_Advance_Width (LH);
       Gutter  : constant Natural := (if P.Config.Show_Icons then Pad + Icon_Slot else 0);
       Ranked  : constant Command_Vectors.Vector := Filtered (P);

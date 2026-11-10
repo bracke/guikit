@@ -328,22 +328,26 @@ package Guikit.Layout is
    --  @param Pane_Width Settings pane width in pixels.
    --  @param Add_Label_Width Pixel width of the add-button label.
    --  @param Remove_Label_Width Pixel width of the remove-button label.
+   --  @param Line_Height Text line height; paddings and gaps scale with it.
    --  @return Right-aligned add/remove button layout.
    function Calculate_Settings_Entry_Button_Layout
      (Pane_X             : Natural;
       Pane_Width         : Natural;
       Add_Label_Width    : Natural;
-      Remove_Label_Width : Natural)
+      Remove_Label_Width : Natural;
+      Line_Height        : Positive := Reference_Line_Height)
       return Settings_Entry_Button_Layout;
 
    --  Calculate settings reset/save button rectangles.
    --
    --  @param Text_X Settings pane text column origin.
    --  @param Text_Width Settings pane text column width.
+   --  @param Line_Height Text line height; the gap scales with it.
    --  @return Two-column action button layout.
    function Calculate_Settings_Action_Button_Layout
-     (Text_X     : Natural;
-      Text_Width : Natural)
+     (Text_X      : Natural;
+      Text_Width  : Natural;
+      Line_Height : Positive := Reference_Line_Height)
       return Settings_Action_Button_Layout;
 
    --  Calculate settings pane and inner text rectangles.

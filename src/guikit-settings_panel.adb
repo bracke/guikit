@@ -9,8 +9,8 @@ package body Guikit.Settings_Panel is
 
    use Ada.Strings.Unbounded;
 
-   Pad     : constant Natural := 14;   --  panel inner padding
-   Row_Gap : constant Natural := 8;    --  gap between field rows
+   Base_Pad     : constant Natural := 14;   --  panel inner padding, at Reference_Line_Height
+   Base_Row_Gap : constant Natural := 8;    --  gap between field rows, likewise
    Bar_W   : constant Natural := 12;   --  scrollbar width (matches the grid/list)
 
    --  ----- small value helpers -------------------------------------------------
@@ -444,6 +444,9 @@ package body Guikit.Settings_Panel is
       Accessibility : out Guikit.Draw.Accessibility_Node_Vectors.Vector)
    is
       LH        : constant Positive := P.Config.Line_Height;
+      --  The panel's spacing grows with its text (a 2x display, a larger font).
+      Pad       : constant Natural  := Guikit.Layout.Scaled (Base_Pad, LH);
+      Row_Gap   : constant Natural  := Guikit.Layout.Scaled (Base_Row_Gap, LH);
       Row_H     : constant Natural  := LH + Row_Gap;
       --  Shared height for interactive controls: fill the row band (leaving a
       --  small margin) so fields and buttons are comfortably tall, not a short
@@ -666,7 +669,7 @@ package body Guikit.Settings_Panel is
       Accent_X  : constant Natural  := (if Content_X >= 3 then Content_X - 3 else Content_X);
       --  Extra vertical breathing room separating the preamble (the action buttons)
       --  from the active section's fields below it.
-      Group_Gap : constant Natural  := Row_Gap + 4;
+      Group_Gap : constant Natural  := Row_Gap + Guikit.Layout.Scaled (4, LH);
 
       procedure Add_Rect (X, Y, W, H : Natural; Color : Guikit.Draw.Render_Color) is
       begin

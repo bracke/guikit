@@ -163,7 +163,7 @@ package body Guikit.Menu_Tree is
                elsif Button.Hovered then Hover_Color
                else Pane_Color),
             Border_Color    => Border_Color,
-            Padding         => Guikit.Layout.Input_Field_Padding,
+            Padding         => Guikit.Layout.Scaled (Guikit.Layout.Input_Field_Padding, Line_Height),
             Label_Text      => Button.Label,
             Label_Truncated => False,
             Label_Height    => Line_Height,
