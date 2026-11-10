@@ -1,4 +1,6 @@
 with Ada.Containers.Indefinite_Vectors;
+with Ada.Exceptions;
+with Interfaces.C.Strings;
 
 --  Dropped paths for an app's windows, as Ada strings: the C callback, its
 --  path array and the window it fired for are handled here once for every
@@ -12,11 +14,18 @@ package Glfw.Windows.Drop.Paths is
    type Receiver is limited interface;
 
    --  Called on the thread that polls GLFW's events, in the order dropped.
-   --  An exception here is swallowed (it must not unwind into C).
+   --  An exception here goes to Failed: it must not unwind into C.
    --
    --  @param Into The receiver Watch was given.
    --  @param Dropped The paths, at most Watch's Limit of them.
    procedure Receive (Into : in out Receiver; Dropped : Path_Vectors.Vector) is abstract;
+
+   --  Told of a drop that failed, in Receive or in reading the paths, so the
+   --  app can record it; the drop itself is lost. The default ignores it.
+   --
+   --  @param Into The receiver of the window the drop was for.
+   --  @param Occurrence What was raised.
+   procedure Failed (Into : in out Receiver; Occurrence : Ada.Exceptions.Exception_Occurrence) is null;
 
    --  Hand what is dropped on Window to Into from now on.
    --
@@ -28,6 +37,17 @@ package Glfw.Windows.Drop.Paths is
      (Window : not null access Glfw.Windows.Window;
       Into   : not null access Receiver'Class;
       Limit  : Positive);
+
+   --  The paths a drop's C array holds, as Receive is given them: at most
+   --  Limit, in order, null entries left out.
+   --
+   --  @param Raw The array GLFW passes, as many entries as it says.
+   --  @param Limit The most paths to keep.
+   --  @return The paths.
+   function Collect
+     (Raw   : Interfaces.C.Strings.chars_ptr_array;
+      Limit : Positive)
+      return Path_Vectors.Vector;
 
    --  Stop watching Window (before it is destroyed).
    --

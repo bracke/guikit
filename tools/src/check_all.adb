@@ -1,4 +1,5 @@
 with Ada.Command_Line;
+with Ada.Containers.Indefinite_Vectors;
 with Ada.Characters.Handling;
 with Ada.Directories;
 with Ada.Exceptions;
@@ -852,6 +853,121 @@ procedure Check_All is
    --    * Guikit.Widgets -> Guikit.Draw, Guikit.Layout (label text metrics)
    --    * Guikit.Vulkan  -> Guikit.Draw, Guikit.Frame_Analysis, Guikit.Shared_Bytes
    --      (an icon atlas is uploaded again only when its pixels' serial moves)
+   --  An exception handler that carries on must say why: re-raise as its
+   --  last statement, hand its occurrence on (Guikit.Errors.Note, a
+   --  receiver's Failed), or explain in a comment why nothing is lost. A
+   --  silent "when others => return False;" hid every Vulkan failure.
+   procedure Check_Swallowing_Handlers is
+      package Line_Vectors is new Ada.Containers.Indefinite_Vectors (Positive, String);
+      Search : Ada.Directories.Search_Type;
+      Item   : Ada.Directories.Directory_Entry_Type;
+
+      function Indent (Line : String) return Natural is
+      begin
+         for Index in Line'Range loop
+            if Line (Index) /= ' ' then
+               return Index - Line'First;
+            end if;
+         end loop;
+         return Line'Length;
+      end Indent;
+
+      function Trimmed (Line : String) return String is (Ada.Strings.Fixed.Trim (Line, Ada.Strings.Both));
+      function Blank (Line : String) return Boolean is (Trimmed (Line) = "");
+      function Comment (Line : String) return Boolean is
+        (Trimmed (Line)'Length >= 2 and then Trimmed (Line) (Trimmed (Line)'First .. Trimmed (Line)'First + 1) = "--");
+      function Lower (Text : String) return String renames Ada.Characters.Handling.To_Lower;
+
+      procedure Check_File (Path : String) is
+         Text  : constant String := To_String (Project_Tools.Text.Read_Text_File (Path));
+         Lines : Line_Vectors.Vector;
+         First : Positive := Text'First;
+      begin
+         for Index in Text'Range loop
+            if Text (Index) = ASCII.LF then
+               Lines.Append (Text (First .. Index - 1));
+               First := Index + 1;
+            end if;
+         end loop;
+         for Number in Lines.First_Index .. Lines.Last_Index loop
+            declare
+               Line   : constant String := Lines (Number);
+               Code   : constant String := Lower (Trimmed (Line));
+               Arrow  : constant Natural := Ada.Strings.Fixed.Index (Code, "=>");
+               Margin : constant Natural := Indent (Line);
+               Above  : Natural := 0;
+            begin
+               if Code'Length > 5 and then Code (Code'First .. Code'First + 4) = "when " and then Arrow > 0 then
+                  for Back in reverse Lines.First_Index .. Number - 1 loop
+                     if not Blank (Lines (Back)) and then not Comment (Lines (Back))
+                       and then Indent (Lines (Back)) < Margin
+                     then
+                        Above := Back;
+                        exit;
+                     end if;
+                  end loop;
+                  if Above > 0 and then Lower (Trimmed (Lines (Above))) = "exception" then
+                     declare
+                        Colon     : constant Natural := Ada.Strings.Fixed.Index (Code (Code'First .. Arrow), ":");
+                        Name      : constant String :=
+                          (if Colon = 0 then "" else Trimmed (Code (Code'First + 5 .. Colon - 1)));
+                        Others_Of : constant Boolean :=
+                          Ada.Strings.Fixed.Index (Code (Code'First .. Arrow), "others") > 0;
+                        Body_Code : Unbounded_String := To_Unbounded_String (Code (Arrow + 2 .. Code'Last));
+                        Last_Code : Unbounded_String := To_Unbounded_String (Trimmed (Code (Arrow + 2 .. Code'Last)));
+                        Explained : Boolean := Number > Lines.First_Index and then Comment (Lines (Number - 1));
+                     begin
+                        for Below in Number + 1 .. Lines.Last_Index loop
+                           exit when not Blank (Lines (Below)) and then Indent (Lines (Below)) <= Margin;
+                           if Comment (Lines (Below)) then
+                              Explained := True;
+                           elsif not Blank (Lines (Below)) then
+                              Append (Body_Code, " " & Lower (Trimmed (Lines (Below))));
+                              Last_Code := To_Unbounded_String (Lower (Trimmed (Lines (Below))));
+                           end if;
+                        end loop;
+                        declare
+                           Last_Text : constant String := To_String (Last_Code);
+                           Re_Raised : constant Boolean :=
+                             (Last_Text'Length >= 5
+                              and then Last_Text (Last_Text'First .. Last_Text'First + 4) = "raise")
+                             or else Ada.Strings.Fixed.Index (Last_Text, "reraise_occurrence") > 0;
+                           Used : constant Boolean :=
+                             Name /= ""
+                             and then (Ada.Strings.Fixed.Index (To_String (Body_Code), "(" & Name & ")") > 0
+                                       or else Ada.Strings.Fixed.Index (To_String (Body_Code), "(" & Name & ",") > 0
+                                       or else Ada.Strings.Fixed.Index (To_String (Body_Code), ", " & Name & ")") > 0);
+                        begin
+                           if Re_Raised or else Used then
+                              null;
+                           elsif Name /= "" then
+                              Put_Line (Standard_Error, Path & ":" & Natural'Image (Number)
+                                        & ": a handler names " & Name & " and carries on without using it");
+                              Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);
+                              raise Program_Error;
+                           elsif Others_Of and then not Explained then
+                              Put_Line (Standard_Error, Path & ":" & Natural'Image (Number)
+                                        & ": a 'when others' handler carries on without noting or explaining it");
+                              Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);
+                              raise Program_Error;
+                           end if;
+                        end;
+                     end;
+                  end if;
+               end if;
+            end;
+         end loop;
+      end Check_File;
+   begin
+      Ada.Directories.Start_Search
+        (Search, Root & "/src", "*.adb", [Ada.Directories.Ordinary_File => True, others => False]);
+      while Ada.Directories.More_Entries (Search) loop
+         Ada.Directories.Get_Next_Entry (Search, Item);
+         Check_File (Ada.Directories.Full_Name (Item));
+      end loop;
+      Ada.Directories.End_Search (Search);
+   end Check_Swallowing_Handlers;
+
    procedure Check_Layering is
       No_Deps : constant Project_Tools.Ada_Source.String_List (1 .. 0) :=
         [others => <>];
@@ -874,7 +990,12 @@ procedure Check_All is
       end Require_Layer;
    begin
       Require_Layer ("guikit-shared_bytes", No_Deps);
-      Require_Layer ("guikit-draw", [1 => To_Unbounded_String ("Guikit.Shared_Bytes")]);
+      --  Where any layer reports what it caught: a leaf every layer may name.
+      Require_Layer ("guikit-errors", No_Deps);
+      Require_Layer
+        ("guikit-draw",
+         [To_Unbounded_String ("Guikit.Errors"),
+          To_Unbounded_String ("Guikit.Shared_Bytes")]);
       Require_Layer ("guikit-frame_analysis", No_Deps);
       Require_Layer ("guikit-input", No_Deps);
       Require_Layer ("guikit-utf8", No_Deps);
@@ -886,10 +1007,12 @@ procedure Check_All is
       Require_Layer
         ("guikit-vulkan",
          [To_Unbounded_String ("Guikit.Draw"),
+          To_Unbounded_String ("Guikit.Errors"),
           To_Unbounded_String ("Guikit.Frame_Analysis"),
           To_Unbounded_String ("Guikit.Shared_Bytes")]);
       --  The GLFW glue is the bottom layer: it may name only the input
       --  vocabulary (the modifiers it reports), nothing that draws.
+      Require_Layer ("glfw-input-keys-codes", [1 => To_Unbounded_String ("Guikit.Input")]);
       Require_Layer ("glfw-input-keys-layout", No_Deps);
       Require_Layer ("glfw-windows-drop", No_Deps);
       Require_Layer ("glfw-windows-drop-paths", No_Deps);
@@ -917,6 +1040,7 @@ begin
    Check_AUnit_Test_Registration;
    Check_Ada_Only_Tooling;
    Check_Layering;
+   Check_Swallowing_Handlers;
    Run ("guikit build", Root, Alr, [1 => new String'("build")]);
    Run ("tests build", Root & "/tests", Alr, [1 => new String'("build")]);
    Run ("AUnit tests", Root & "/tests", "./bin/guikit_tests", []);

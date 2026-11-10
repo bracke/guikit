@@ -310,6 +310,9 @@ package Guikit.Draw is
       Command_Y         : Natural := 0;
       Command_Width     : Natural := 0;
       Command_Height    : Natural := 0;
+      --  The line height the layout was made for; chrome sizes scale with it
+      --  (Guikit.Layout.Scaled).
+      Line_Height       : Positive := 20;
    end record;
 
    --  Outcome of rasterizing a frame's text through the textrender backend.

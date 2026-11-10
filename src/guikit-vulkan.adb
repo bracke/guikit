@@ -1,3 +1,4 @@
+with Guikit.Errors;
 with Ada.Containers.Hashed_Maps;
 with Ada.Numerics.Elementary_Functions;
 with Ada.Strings.Hash;
@@ -546,7 +547,8 @@ package body Guikit.Vulkan is
       Memory_Type := 0;
       return False;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          return False;
    end Host_Visible_Memory_Type;
 
@@ -571,7 +573,8 @@ package body Guikit.Vulkan is
 
       return False;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          return False;
    end Any_Memory_Type;
 
@@ -597,7 +600,8 @@ package body Guikit.Vulkan is
          return Vk.SAMPLE_COUNT_1_BIT;
       end if;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          return Vk.SAMPLE_COUNT_1_BIT;
    end Choose_Color_Sample_Count;
 
@@ -712,7 +716,8 @@ package body Guikit.Vulkan is
       Renderer.Color_MSAA_Live := True;
       return True;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          return False;
    end Create_Color_MSAA_Target;
 
@@ -1227,7 +1232,8 @@ package body Guikit.Vulkan is
       Renderer.Render_Targets_Live := Renderer.Render_Target_Count = Renderer.Swapchain_Image_Count;
       return Renderer.Render_Targets_Live;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          return False;
    end Create_Render_Targets;
 
@@ -1487,7 +1493,8 @@ package body Guikit.Vulkan is
       Renderer.Pipeline_Live := True;
       return True;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          return False;
    end Create_Graphics_Pipeline;
 
@@ -1581,7 +1588,8 @@ package body Guikit.Vulkan is
       Renderer.Texture_Binding_Count := Binding'Length;
       return True;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          return False;
    end Create_Descriptor_Resources;
 
@@ -1634,7 +1642,8 @@ package body Guikit.Vulkan is
       Renderer.Command_Buffer_Count := Renderer.Render_Target_Count;
       return True;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          return False;
    end Create_Command_Resources;
 
@@ -1744,7 +1753,8 @@ package body Guikit.Vulkan is
       Renderer.Vertex_Buffer_Live := True;
       return True;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          return False;
    end Ensure_Vertex_Buffer;
 
@@ -1816,7 +1826,8 @@ package body Guikit.Vulkan is
       Renderer.Uploaded_Vertices_Valid := True;
       return True;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          if Mapped_Data /= System.Null_Address then
             Vk.Unmap_Memory
               (device => Renderer.Device,
@@ -1922,7 +1933,8 @@ package body Guikit.Vulkan is
       Renderer.Readback_Bytes := Byte_Count;
       return True;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          return False;
    end Ensure_Readback_Buffer;
 
@@ -2004,7 +2016,8 @@ package body Guikit.Vulkan is
       Renderer.Readback_Ready := True;
       Renderer.Readback_Pending := False;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          if Mapped_Data /= System.Null_Address then
             Vk.Unmap_Memory (Renderer.Device, Renderer.Readback_Memory);
          end if;
@@ -2422,7 +2435,8 @@ package body Guikit.Vulkan is
       Renderer.Uploaded_Atlas_Version := (if Use_Batch_Atlas then Batch.Atlas_Version else 0);
       return True;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          return False;
    end Upload_Atlas;
 
@@ -2759,7 +2773,8 @@ package body Guikit.Vulkan is
       Renderer.Uploaded_Icon_Signature := Batch.Icon_Atlas_Signature;
       return True;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          return False;
    end Upload_Icon_Atlas;
 
@@ -3172,7 +3187,8 @@ package body Guikit.Vulkan is
       Renderer.Commands_Live := Renderer.Command_Buffer_Count = Renderer.Render_Target_Count;
       return Renderer.Commands_Live;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          return False;
    end Record_Command_Buffers;
 
@@ -3470,7 +3486,8 @@ package body Guikit.Vulkan is
       Renderer.Last_Status := Vulkan_Swapchain_Ready;
       return Renderer.Last_Status;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          Destroy_Swapchain_Resources (Renderer);
          Renderer.Last_Status := Vulkan_Swapchain_Create_Failed;
          return Renderer.Last_Status;
@@ -3661,7 +3678,8 @@ package body Guikit.Vulkan is
       Renderer.Last_Status := Vulkan_Ready;
       return Renderer.Last_Status;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          if Renderer.Device_Live then
             Vk.Destroy_Device (device => Renderer.Device, p_Allocator => System.Null_Address);
             Renderer.Device := System.Null_Address;
@@ -3802,7 +3820,8 @@ package body Guikit.Vulkan is
 
       return Renderer.Last_Status;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          Renderer.Surface := System.Null_Address;
          Renderer.Surface_Live := False;
          Renderer.Swapchain_Configured := False;
@@ -3852,7 +3871,8 @@ package body Guikit.Vulkan is
 
       return Renderer.Last_Status;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          Renderer.Swapchain_Configured := False;
          Renderer.Swapchain_Pending := True;
          Renderer.Frame_Width_Value := 0;
@@ -5219,7 +5239,8 @@ package body Guikit.Vulkan is
 
       return Renderer.Last_Status;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
          Renderer.Last_Status := Vulkan_Present_Failed;
          Renderer.Failed_Frames := Renderer.Failed_Frames + 1;
          return Renderer.Last_Status;

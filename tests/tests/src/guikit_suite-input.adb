@@ -2,7 +2,14 @@ with AUnit;
 with AUnit.Assertions;
 with AUnit.Test_Cases;
 
+with Ada.Exceptions;
+with Ada.Strings.Unbounded;
+with Interfaces.C.Strings;
+
+with Glfw.Input.Keys.Codes;
 with Glfw.Input.Keys.Layout;
+with Glfw.Windows.Drop.Paths;
+with Guikit.Errors;
 with Guikit.Input;
 
 --  Smoke tests for the domain-free input value types. They confirm the empty
@@ -23,6 +30,9 @@ package body Guikit_Suite.Input is
    procedure Test_Modifier_Set_Roundtrip (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Enumerations (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Layout_Letters (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Glfw_Codes (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Drop_Collect (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Error_Reporter (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    overriding function Name (T : Input_Test_Case) return AUnit.Message_String is
       pragma Unreferenced (T);
@@ -40,6 +50,12 @@ package body Guikit_Suite.Input is
         (T, Test_Enumerations'Access, "key and navigation enumerations expose the expected ordering");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Layout_Letters'Access, "a layout's letter names its key; other names keep the pressed key");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Glfw_Codes'Access, "GLFW keys and modifiers map to guikit's, the + and - families included");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Drop_Collect'Access, "a drop's paths are kept in order, nulls left out, up to the limit");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Error_Reporter'Access, "a noted exception reaches the application's reporter, and never raises");
    end Register_Tests;
 
    procedure Test_No_Modifiers (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -99,5 +115,74 @@ package body Guikit_Suite.Input is
       Assert (Named (Character'Val (16#C3#) & Character'Val (16#BC#), Semicolon) = Semicolon,
               "a letter outside ASCII (u-umlaut) keeps it");
    end Test_Layout_Letters;
+
+   procedure Test_Glfw_Codes (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      package Codes renames Glfw.Input.Keys.Codes;
+      Mods : Glfw.Input.Keys.Modifiers := (others => False);
+   begin
+      Assert (Codes.To_Key_Code (Glfw.Input.Keys.A) = Key_A, "a letter is its letter");
+      Assert (Codes.To_Key_Code (Glfw.Input.Keys.Numpad_Enter) = Key_Return, "both Enter keys are Return");
+      Assert (Codes.To_Key_Code (Glfw.Input.Keys.Right_Bracket) = Key_Equal, "] is in the + family (German +)");
+      Assert (Codes.To_Key_Code (Glfw.Input.Keys.Numpad_Add) = Key_Equal, "so is the numpad +");
+      Assert (Codes.To_Key_Code (Glfw.Input.Keys.Slash) = Key_Minus, "/ is in the - family (German -)");
+      Assert (Codes.To_Key_Code (Glfw.Input.Keys.Caps_Lock) = Key_Unknown, "a key guikit does not name is unknown");
+      Assert (Codes.To_Modifiers (Mods) = No_Modifiers, "no modifiers held");
+      Mods.Super := True;
+      Mods.Shift := True;
+      Assert (Codes.To_Modifiers (Mods) (Meta_Key) and then Codes.To_Modifiers (Mods) (Shift_Key)
+              and then not Codes.To_Modifiers (Mods) (Control_Key),
+              "Super is Meta, and each modifier reads back alone");
+   end Test_Glfw_Codes;
+
+   procedure Test_Drop_Collect (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Interfaces.C.Strings;
+      Raw : chars_ptr_array := [New_String ("/a"), Null_Ptr, New_String ("/b"), New_String ("/c")];
+      All_Kept : constant Glfw.Windows.Drop.Paths.Path_Vectors.Vector := Glfw.Windows.Drop.Paths.Collect (Raw, 10);
+      Two      : constant Glfw.Windows.Drop.Paths.Path_Vectors.Vector := Glfw.Windows.Drop.Paths.Collect (Raw, 2);
+   begin
+      Assert (Natural (All_Kept.Length) = 3 and then All_Kept (1) = "/a" and then All_Kept (3) = "/c",
+              "every path, in order, the null left out");
+      Assert (Natural (Two.Length) = 2 and then Two (2) = "/b", "no more than the limit");
+      for Item of Raw loop
+         Free (Item);
+      end loop;
+   end Test_Drop_Collect;
+
+   Reported : Ada.Strings.Unbounded.Unbounded_String;
+
+   procedure Record_Report (Occurrence : Ada.Exceptions.Exception_Occurrence; Where : String) is
+   begin
+      Reported := Ada.Strings.Unbounded.To_Unbounded_String
+        (Where & ":" & Ada.Exceptions.Exception_Name (Occurrence));
+   end Record_Report;
+
+   procedure Fail_Report (Occurrence : Ada.Exceptions.Exception_Occurrence; Where : String) is
+   begin
+      raise Program_Error with Where & Ada.Exceptions.Exception_Name (Occurrence);
+   end Fail_Report;
+
+   procedure Test_Error_Reporter (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use type Ada.Strings.Unbounded.Unbounded_String;
+   begin
+      Reported := Ada.Strings.Unbounded.Null_Unbounded_String;
+      begin
+         raise Constraint_Error;
+      exception
+         when Error : Constraint_Error =>
+            Guikit.Errors.Note (Error, "Before");
+            Guikit.Errors.Set_Reporter (Record_Report'Access);
+            Guikit.Errors.Note (Error, "Guikit.Test");
+            Assert (Reported = "Guikit.Test:CONSTRAINT_ERROR", "the reporter is told what and where");
+            Guikit.Errors.Set_Reporter (Fail_Report'Access);
+            Guikit.Errors.Note (Error, "Guikit.Test");
+            Guikit.Errors.Set_Reporter (null);
+            Reported := Ada.Strings.Unbounded.Null_Unbounded_String;
+            Guikit.Errors.Note (Error, "After");
+            Assert (Reported = "", "without a reporter nothing is told");
+      end;
+   end Test_Error_Reporter;
 
 end Guikit_Suite.Input;

@@ -200,10 +200,12 @@ package body Guikit.Layout is
    end Filter_Input_Field_Width;
 
    function Calculate_Toolbar_Layout
-     (Width : Natural)
+     (Width       : Natural;
+      Line_Height : Positive := Reference_Line_Height)
       return Toolbar_Layout
    is
-      Preferred_Left : constant Natural := Saturating_Multiply (Toolbar_Button_Width, Toolbar_Button_Count);
+      Button_Width   : constant Natural := Scaled (Toolbar_Button_Width, Line_Height);
+      Preferred_Left : constant Natural := Saturating_Multiply (Button_Width, Toolbar_Button_Count);
       --  The right region holds the filter/search input plus a fixed-width scope
       --  chip; at Width/5 the chip left the input only a couple of characters
       --  wide. Give it a larger share so the search field stays usable, while
@@ -218,7 +220,8 @@ package body Guikit.Layout is
          Middle_X     => Left,
          Middle_Width => Width - Left - Right,
          Right_X      => Width - Right,
-         Right_Width  => Right);
+         Right_Width  => Right,
+         Button_Width => Button_Width);
    end Calculate_Toolbar_Layout;
 
    function Toolbar_Input_Height
@@ -227,7 +230,7 @@ package body Guikit.Layout is
    is
       Toolbar_H : constant Natural := Saturating_Multiply (Line_Height, 2);
       Wanted_H  : constant Natural :=
-        Saturating_Add (Line_Height, Input_Field_Padding);
+        Saturating_Add (Line_Height, Scaled (Input_Field_Padding, Line_Height));
    begin
       return Natural'Min (Toolbar_H, Wanted_H);
    end Toolbar_Input_Height;
@@ -253,8 +256,8 @@ package body Guikit.Layout is
    is
       Clamped_Index : constant Natural := Natural'Min (Button_Index, Toolbar_Button_Count);
    begin
-      if Toolbar.Left_Width >= Saturating_Multiply (Toolbar_Button_Width, Toolbar_Button_Count) then
-         return Saturating_Add (Toolbar.Left_X, Saturating_Multiply (Toolbar_Button_Width, Clamped_Index));
+      if Toolbar.Left_Width >= Saturating_Multiply (Toolbar.Button_Width, Toolbar_Button_Count) then
+         return Saturating_Add (Toolbar.Left_X, Saturating_Multiply (Toolbar.Button_Width, Clamped_Index));
       end if;
 
       return Saturating_Add (Toolbar.Left_X, Scaled_Down (Toolbar.Left_Width, Clamped_Index, Toolbar_Button_Count));
@@ -482,7 +485,7 @@ package body Guikit.Layout is
    is
       Search_H  : constant Natural :=
         Natural'Min
-          (Saturating_Add (Line_Height, Saturating_Multiply (Input_Field_Padding, 2)),
+          (Saturating_Add (Line_Height, Saturating_Multiply (Scaled (Input_Field_Padding, Line_Height), 2)),
            (if Command_Height > Saturating_Multiply (Palette_Padding, 2)
             then Command_Height - Saturating_Multiply (Palette_Padding, 2)
             else Command_Height));

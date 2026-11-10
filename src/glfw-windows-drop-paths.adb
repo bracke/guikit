@@ -1,5 +1,4 @@
 with Ada.Containers.Vectors;
-with Interfaces.C.Strings;
 with System.Address_To_Access_Conversions;
 
 package body Glfw.Windows.Drop.Paths is
@@ -29,35 +28,64 @@ package body Glfw.Windows.Drop.Paths is
       Paths  : System.Address)
      with Convention => C;
 
+   function Collect
+     (Raw   : Interfaces.C.Strings.chars_ptr_array;
+      Limit : Positive)
+      return Path_Vectors.Vector
+   is
+      use type Interfaces.C.size_t;
+      Got : Path_Vectors.Vector;
+   begin
+      for Item of Raw loop
+         exit when Natural (Got.Length) = Limit;
+         if Item /= Interfaces.C.Strings.Null_Ptr then
+            Got.Append (Interfaces.C.Strings.Value (Item));
+         end if;
+      end loop;
+      return Got;
+   end Collect;
+
    procedure Dropped_On
      (Window : System.Address;
       Count  : Interfaces.C.int;
-      Paths  : System.Address) is
+      Paths  : System.Address)
+   is
+      Target : access Receiver'Class := null;
    begin
       if Paths = System.Null_Address or else Count <= 0 then
          return;
       end if;
       for Item of Windows loop
          if Item.Raw = Window then
+            Target := Item.Into;
             declare
                Raw  : constant C_Path_Array_Pointers.Object_Pointer := C_Path_Array_Pointers.To_Pointer (Paths);
-               Last : constant Natural := Natural'Min (Natural (Count), Item.Limit);
-               Got  : Path_Vectors.Vector;
+               --  No more of GLFW's array than can be kept: a drop of
+               --  thousands of paths is not copied onto the stack.
+               Given : Interfaces.C.Strings.chars_ptr_array
+                 (1 .. Interfaces.C.size_t (Natural'Min (Natural (Count), Item.Limit)));
             begin
-               for Index in 1 .. Last loop
-                  if Raw.all (Index) /= Interfaces.C.Strings.Null_Ptr then
-                     Got.Append (Interfaces.C.Strings.Value (Raw.all (Index)));
-                  end if;
+               for Index in Given'Range loop
+                  Given (Index) := Raw.all (Positive (Index));
                end loop;
-               Item.Into.Receive (Got);
+               Item.Into.Receive (Collect (Given, Item.Limit));
             end;
             return;
          end if;
       end loop;
    exception
-      --  Called from GLFW's C frames: nothing may unwind through them.
-      when others =>
-         null;
+      --  Called from GLFW's C frames: nothing may unwind through them, not
+      --  even from the receiver's own Failed.
+      when Error : others =>
+         if Target /= null then
+            begin
+               Target.Failed (Error);
+            exception
+               --  The receiver's own report failed: there is nobody left to tell.
+               when others =>
+                  null;
+            end;
+         end if;
    end Dropped_On;
 
    procedure Watch

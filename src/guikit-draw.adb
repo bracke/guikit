@@ -1,3 +1,4 @@
+with Guikit.Errors;
 with Ada.Strings;
 with Ada.Strings.Fixed;
 
@@ -546,7 +547,8 @@ package body Guikit.Draw is
         and then not Result.Rectangles.Is_Empty;
       return Result;
    exception
-      when others =>
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Draw");
          Result.Valid := False;
          Result.Rectangles.Clear;
          return Result;

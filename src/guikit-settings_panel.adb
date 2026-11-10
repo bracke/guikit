@@ -21,7 +21,9 @@ package body Guikit.Settings_Panel is
    begin
       return Integer'Value (To_String (Value));
    exception
-      when others => return Default;
+      --  Not a number: the field's default stands, as for an empty value.
+      when others =>
+         return Default;
    end To_Int;
 
    --  The 1-based index of Value within a field's Option_Values, or 0.

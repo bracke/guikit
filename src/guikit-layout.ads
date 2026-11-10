@@ -18,6 +18,27 @@ package Guikit.Layout is
    Toolbar_Button_Width : constant Natural := 40;
    Toolbar_Button_Count : constant Natural := 7;
 
+   --  The line height the fixed chrome sizes above were drawn for: a 16 px
+   --  font. Chrome follows text from there: on a 2x display (or a larger
+   --  font) a 40 px button next to doubled text would look half-size.
+   Reference_Line_Height : constant Positive := 20;
+
+   --  A chrome size in pixels, scaled with the line height it is drawn
+   --  beside, never below Base.
+   --
+   --  @param Base Size at Reference_Line_Height.
+   --  @param Line_Height The line height in use, in framebuffer pixels.
+   --  @return Base, grown in proportion to Line_Height past the reference.
+   function Scaled
+     (Base        : Natural;
+      Line_Height : Positive)
+      return Natural
+   is (Natural
+         (Long_Long_Integer'Min
+            (Long_Long_Integer (Natural'Last),
+             Long_Long_Integer (Base) * Long_Long_Integer (Positive'Max (Line_Height, Reference_Line_Height))
+               / Long_Long_Integer (Reference_Line_Height))));
+
    Settings_Pane_Padding : constant Natural := 14;
    Settings_Row_Gap      : constant Natural := 8;
 
@@ -161,6 +182,8 @@ package Guikit.Layout is
       Middle_Width : Natural := 0;
       Right_X      : Natural := 0;
       Right_Width  : Natural := 0;
+      --  One left-section button at full width (Toolbar_Button_Width, scaled).
+      Button_Width : Natural := Toolbar_Button_Width;
    end record;
 
    --  Rectangle of the filter-bar search-scope chip. The chip is a small
@@ -245,9 +268,11 @@ package Guikit.Layout is
    --  Calculate toolbar section widths for a window.
    --
    --  @param Width Window width in pixels.
+   --  @param Line_Height Line height the toolbar's text uses; buttons scale with it.
    --  @return Three-section toolbar layout.
    function Calculate_Toolbar_Layout
-     (Width : Natural)
+     (Width       : Natural;
+      Line_Height : Positive := Reference_Line_Height)
       return Toolbar_Layout;
 
    --  Return the X coordinate of a left-toolbar button.
