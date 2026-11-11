@@ -6,6 +6,7 @@ with AUnit.Test_Cases;
 
 with Guikit.Command_Palette;
 with Guikit.Draw;
+with Guikit.Layout;
 
 --  Exercises the command-palette state machine (filtering, selection, id
 --  mapping) and a headless Build_Frame that emits draw commands without a GPU.
@@ -22,6 +23,7 @@ package body Guikit_Suite.Command_Palette is
 
    procedure Test_Filter_And_Select (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Build_Frame (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Line_Height_Scaling (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function Sample return CP.Command_Vectors.Vector is
       Result : CP.Command_Vectors.Vector;
@@ -55,6 +57,9 @@ package body Guikit_Suite.Command_Palette is
         (T, Test_Filter_And_Select'Access, "filtering narrows results, selection clamps, id maps back");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Build_Frame'Access, "Build_Frame emits draw commands and lays out clickable rows");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Line_Height_Scaling'Access,
+         "the palette's padding, title band, search box and row height scale with the line height");
    end Register_Tests;
 
    procedure Test_Filter_And_Select (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -107,6 +112,90 @@ package body Guikit_Suite.Command_Palette is
          Assert (Hit or else CP.Selected_Index (P) >= 1, "a click hits a laid-out row");
       end;
    end Test_Build_Frame;
+
+   procedure Test_Line_Height_Scaling (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use type Guikit.Draw.Accessibility_Role;
+
+      Width  : constant := 800;
+      Height : constant := 600;
+
+      --  Lay out and render the palette at Line_Height and check it against the
+      --  expected chrome at that height: the panel padding (8 at 20 px), the
+      --  result-row padding (4) and the search box's input-field padding (8).
+      procedure Check (LH : Positive; Pad, Row_Pad, Field_Pad : Natural) is
+         Where     : constant String := " at line height" & LH'Image;
+         Layout    : constant Guikit.Layout.Palette_Layout :=
+           Guikit.Layout.Calculate_Palette_Layout (0, 0, Width, Height, LH);
+         Search_H  : constant Natural := LH + 2 * Field_Pad;
+         Row_H     : constant Natural := 2 * LH + 2 * Row_Pad;
+         Title_H   : constant Natural := LH + Pad;
+         Results_Y : constant Natural := Pad + Title_H + Search_H + Pad;
+         P         : CP.Palette;
+         Rects     : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         Text      : Guikit.Draw.Text_Command_Vectors.Vector;
+         Icons     : Guikit.Draw.Icon_Command_Vectors.Vector;
+         Nodes     : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+         Seen_Heading, Seen_Search, Seen_Row, Seen_Label : Boolean := False;
+      begin
+         --  The pure layout, without a title band.
+         Assert (Layout.Search_X = Pad and then Layout.Search_Y = Pad,
+                 "the search box is inset by the palette padding" & Where);
+         Assert (Layout.Search_Width = Width - 2 * Pad, "the search box spans the panel less two paddings" & Where);
+         Assert (Layout.Search_Height = Search_H, "the search box is a line plus two field paddings" & Where);
+         Assert (Layout.Results_X = Pad, "the results are inset by the palette padding" & Where);
+         Assert (Layout.Results_Y = Pad + Search_H + Pad, "the results sit one padding below the search box" & Where);
+         Assert (Layout.Results_Height = Height - 2 * Pad - Search_H - Pad,
+                 "the results fill the rest of the padded panel" & Where);
+         Assert (Layout.Row_Height = Row_H, "a result row is two lines plus two row paddings" & Where);
+
+         --  The component, with a title band (one line plus a padding).
+         CP.Set_Configuration
+           (P, CP.Configuration'(Line_Height => LH, Title => To_Unbounded_String ("Commands"), others => <>));
+         CP.Set_Commands (P, Sample);
+         CP.Build_Frame (P, 0, 0, Width, Height, Width, Height, False, -1, -1, Rects, Text, Icons, Nodes);
+         for Node of Nodes loop
+            if Node.Role = Guikit.Draw.Role_Heading then
+               Seen_Heading := True;
+               Assert (Node.X = Pad, "the title is inset by the palette padding" & Where);
+            elsif Node.Role = Guikit.Draw.Role_Text_Input then
+               Seen_Search := True;
+               Assert (Node.X = Pad and then Node.Y = Pad + Title_H,
+                       "the search box sits below the padded title band" & Where);
+               Assert (Node.Height = Search_H, "the rendered search box has the scaled height" & Where);
+            elsif Node.Role = Guikit.Draw.Role_List_Item and then Node.Name = "Firefox" then
+               Seen_Row := True;
+               Assert (Node.X = Pad and then Node.Y = Results_Y,
+                       "the first row starts one padding below the search box" & Where);
+               Assert (Node.Height = Row_H, "the rendered row has the scaled height" & Where);
+            end if;
+         end loop;
+         for Command of Text loop
+            if Command.Text = "Firefox" then
+               Seen_Label := True;
+               Assert (Command.X = 2 * Pad, "a row label is inset by the padding inside the padded row" & Where);
+               Assert (Command.Y = Results_Y + Row_Pad, "a row label sits one row padding into its row" & Where);
+            end if;
+         end loop;
+         Assert (Seen_Heading and then Seen_Search and then Seen_Row and then Seen_Label,
+                 "the title, search box, first row and its label are all rendered" & Where);
+      end Check;
+
+      Base   : constant Guikit.Layout.Palette_Layout :=
+        Guikit.Layout.Calculate_Palette_Layout (0, 0, Width, Height, 20);
+      Double : constant Guikit.Layout.Palette_Layout :=
+        Guikit.Layout.Calculate_Palette_Layout (0, 0, Width, Height, 40);
+   begin
+      Check (20, Pad => 8, Row_Pad => 4, Field_Pad => 8);
+      Check (30, Pad => 12, Row_Pad => 6, Field_Pad => 12);
+      Check (40, Pad => 16, Row_Pad => 8, Field_Pad => 16);
+
+      --  Everything the line height drives is exactly doubled at twice the line height.
+      Assert (Double.Search_X = 2 * Base.Search_X, "the palette padding doubles at 2x");
+      Assert (Double.Search_Height = 2 * Base.Search_Height, "the search box height doubles at 2x");
+      Assert (Double.Results_Y = 2 * Base.Results_Y, "the results top doubles at 2x");
+      Assert (Double.Row_Height = 2 * Base.Row_Height, "the row height doubles at 2x");
+   end Test_Line_Height_Scaling;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

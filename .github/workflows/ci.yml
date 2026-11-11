@@ -115,10 +115,8 @@ jobs:
           pacman() { /c/msys64/usr/bin/pacman "$@"; }
 
           # The runner's MSYS2 keyring goes stale, and then the database refuses to
-          # sync at all: "signature ... is invalid". Refresh it first, and fall back
-          # to an unsigned sync if the signed one still will not go -- this is a
-          # throwaway CI image installing four well-known libraries, not a machine
-          # whose supply chain we are defending.
+          # sync at all: "signature ... is invalid". Refresh it first, as files'
+          # and hostkit's CI do; a sync that still will not verify fails the job.
           pacman-key() { /c/msys64/usr/bin/pacman-key "$@"; }
           pacman-key --init || true
           pacman-key --populate msys2 || true
@@ -142,20 +140,8 @@ jobs:
             sleep 15
           done
 
-          if [ -z "$synced" ]; then
-            echo "::warning::signed pacman sync failed; retrying without signature checks"
-            # This step runs in Git Bash, whose /tmp is NOT the /tmp of the MSYS2
-            # installation that owns this pacman -- writing the config to "/tmp" puts
-            # it somewhere pacman would never look. Hand both a path they agree on.
-            sed 's/^SigLevel.*/SigLevel = Never/' /c/msys64/etc/pacman.conf \
-              > /c/msys64/tmp/pacman-nosig.conf
-            for attempt in 1 2 3; do
-              if sync --config C:/msys64/tmp/pacman-nosig.conf; then synced=yes; break; fi
-              echo "::warning::unsigned pacman sync attempt ${attempt} failed"
-              sleep 15
-            done
-          fi
-
+          #  No unsigned fallback: a sync that cannot be verified fails the
+          #  job rather than installing packages nobody checked.
           [ -n "$synced" ] || { echo "::error::could not install the MSYS2 packages"; exit 1; }
 
           # ld resolves -l<name> through LIBRARY_PATH; the DLLs must also be on PATH
@@ -198,7 +184,20 @@ jobs:
       - name: Build the library
         shell: bash
         working-directory: guikit
-        run: alr --non-interactive build
+        run: |
+          set -o pipefail
+          #  A clean build says nothing: `alr build` exits 0 with warnings and
+          #  style complaints on its output, so they are refused here, as
+          #  hostkit's CI does. Only this crate's own units (guikit-*, glfw-*):
+          #  what a path dependency says about its sources belongs to its own
+          #  repository.
+          alr --non-interactive build 2>&1 | tee "${RUNNER_TEMP:-/tmp}/build-output.txt"
+          pattern="^(guikit|glfw)[a-z0-9_.-]*\\.(ad[bs]|c|h):[0-9]+:[0-9]+: "
+          if grep -Eq "$pattern" "${RUNNER_TEMP:-/tmp}/build-output.txt"; then
+            echo "The build said something. A clean build says nothing:"
+            grep -E "$pattern" "${RUNNER_TEMP:-/tmp}/build-output.txt"
+            exit 1
+          fi
 
       - name: Build and run the test suite
         # Well inside the job's own limit: a hung suite fails here, by name.

@@ -23,6 +23,7 @@ package body Guikit_Suite.Segmented is
 
    procedure Test_Cell_At (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Build_Frame (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Line_Height_Scaling (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function Sample return SG.Segment_Vectors.Vector is
       V : SG.Segment_Vectors.Vector;
@@ -46,6 +47,8 @@ package body Guikit_Suite.Segmented is
         (T, Test_Cell_At'Access, "Cell_At maps a coordinate to a cell and 0 outside the region");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Build_Frame'Access, "Build_Frame emits cells, tooltips, and a selected accessibility node");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Line_Height_Scaling'Access, "a cell's padding and its label's inset scale with the line height");
    end Register_Tests;
 
    procedure Test_Cell_At (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -132,6 +135,56 @@ package body Guikit_Suite.Segmented is
          Assert (T2.Element (1).Y = 103, "Label_Inset places the label at Region_Y plus the inset");
       end;
    end Test_Build_Frame;
+
+   procedure Test_Line_Height_Scaling (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+
+      --  Check one line height. Cell_Adv is the text cell advance there
+      --  (12 px at 20), Segment_Pad the padding on each side of a cell's label
+      --  (8 at 20) and Label_Pad the inset of a label too wide to centre (4 at
+      --  20). Width is the region a ten-character label overflows.
+      procedure Check (LH : Positive; Cell_Adv, Segment_Pad, Label_Pad, Width : Natural) is
+         Where : constant String := " at line height" & LH'Image;
+         Short : SG.Segment_Vectors.Vector;
+         Pair  : SG.Segment_Vectors.Vector;
+         Long  : SG.Segment_Vectors.Vector;
+         Rects : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         Text  : Guikit.Draw.Text_Command_Vectors.Vector;
+         Tips  : Guikit.Draw.Tooltip_Command_Vectors.Vector;
+         Nodes : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+         CX, CW : Natural;
+      begin
+         Short.Append (SG.Segment'(Label => To_Unbounded_String ("ab"), others => <>));
+         Pair.Append (SG.Segment'(Label => To_Unbounded_String ("ab"), others => <>));
+         Pair.Append (SG.Segment'(Label => To_Unbounded_String ("abcd"), others => <>));
+         Long.Append (SG.Segment'(Label => To_Unbounded_String ("abcdefghij"), others => <>));
+
+         Assert (SG.Natural_Width (Short, LH) = 2 * Cell_Adv + 2 * Segment_Pad,
+                 "a cell wants its label plus the scaled padding on each side" & Where);
+         Assert (SG.Natural_Width (Pair, LH) = 6 * Cell_Adv + 4 * Segment_Pad,
+                 "the natural width sums every cell's padded label" & Where);
+         SG.Cell_Bounds (Pair, 0, SG.Natural_Width (Pair, LH), LH, 2, CX, CW);
+         Assert (CX = 2 * Cell_Adv + 2 * Segment_Pad and then CW = 4 * Cell_Adv + 2 * Segment_Pad,
+                 "laid out at its natural width each cell gets its padded label" & Where);
+
+         --  A label wider than its cell is inset by the scaled label padding.
+         SG.Build_Frame (Long, Active => 0, Region_X => 10, Region_Y => 0, Region_Width => Width,
+                         Region_Height => LH, Clip_Width => 1000, Clip_Height => 1000, Line_Height => LH,
+                         Hover_X => -1, Hover_Y => -1,
+                         Rectangles => Rects, Text => Text, Tooltips => Tips, Accessibility => Nodes);
+         Assert (Natural (Text.Length) = 1, "the one cell draws its label" & Where);
+         Assert (Text.Element (1).X = 10 + Label_Pad,
+                 "an over-wide label is inset by the scaled label padding" & Where);
+         Assert (Text.Element (1).Width = Width - 2 * Label_Pad,
+                 "an over-wide label is clipped one scaled padding short of each edge" & Where);
+      end Check;
+   begin
+      Check (20, Cell_Adv => 12, Segment_Pad => 8, Label_Pad => 4, Width => 100);
+      Check (30, Cell_Adv => 18, Segment_Pad => 12, Label_Pad => 6, Width => 150);
+      Check (40, Cell_Adv => 24, Segment_Pad => 16, Label_Pad => 8, Width => 200);
+      Assert (SG.Natural_Width (Sample, 40) = 2 * SG.Natural_Width (Sample, 20),
+              "at twice the line height the whole control is exactly twice as wide");
+   end Test_Line_Height_Scaling;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

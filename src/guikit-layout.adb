@@ -116,6 +116,20 @@ package body Guikit.Layout is
       return Positive'Max (1, Saturating_Multiply (Line_Height, 12) / 20);
    end Caret_Advance_Width;
 
+   function Input_Scroll_Columns
+     (Caret_Column : Natural;
+      Text_Width   : Natural;
+      Line_Height  : Positive)
+      return Natural
+   is
+      Capacity : constant Natural := Text_Width / Caret_Advance_Width (Line_Height);
+   begin
+      if Capacity = 0 or else Caret_Column < Capacity then
+         return 0;
+      end if;
+      return Caret_Column - Capacity + 1;
+   end Input_Scroll_Columns;
+
    function Saturating_Add
      (Left  : Natural;
       Right : Natural)

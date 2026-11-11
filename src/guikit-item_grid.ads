@@ -29,6 +29,10 @@ package Guikit.Item_Grid is
    Details_Row_Padding    : constant Natural := 4;
    Details_Column_Padding : constant Natural := 6;
 
+   --  The width of a small-icons cell at Guikit.Layout.Reference_Line_Height:
+   --  room for the icon, its gap and about a dozen characters of label.
+   Small_Icon_Cell_Width : constant Natural := 216;
+
    --  The spacing above at a line height, as the grid draws it: it grows
    --  with the text past Guikit.Layout.Reference_Line_Height (a 2x display,
    --  a larger font).
@@ -53,6 +57,11 @@ package Guikit.Item_Grid is
    --  @return The padding inside a details column.
    function Column_Padding (Line_Height : Positive) return Natural is
      (Guikit.Layout.Scaled (Details_Column_Padding, Line_Height));
+   --  @param Line_Height The line height in use.
+   --  @return The width of a small-icons cell, grown with the text like its
+   --  padding and icon so the label keeps the same number of characters.
+   function Small_Cell_Width (Line_Height : Positive) return Natural is
+     (Guikit.Layout.Scaled (Small_Icon_Cell_Width, Line_Height));
 
    --  The size of one item cell in a given view: the cell box, the icon box
    --  inside it, and whether this is a "large" (icon-above-label) cell.
@@ -64,7 +73,8 @@ package Guikit.Item_Grid is
    end record;
 
    --  The cell metrics for one view. In Details the cell spans the full main
-   --  width; the icon views use fixed multiples of the line height.
+   --  width; the icon views scale with the line height (Small_Cell_Width,
+   --  multiples of the line height for Icons_Large).
    --
    --  @param View The grid view.
    --  @param Main_Width Available content width in pixels (used by Details).
@@ -354,7 +364,10 @@ package Guikit.Item_Grid is
    --  Draw an item's name: the fitted label (Text is the edited value while
    --  renaming, otherwise the name), dimmed and italic for a cut item, plus --
    --  when renaming with the field focused -- a cell border, a focus ring, and a
-   --  text caret at the byte offset Cursor.
+   --  text caret at the byte offset Cursor. A focused rename field is not
+   --  fitted: it skips Guikit.Layout.Input_Scroll_Columns leading columns so
+   --  the caret stays visible and clips the rest to the field, which is the
+   --  offset a consumer's click-to-caret mapping must apply too.
    --
    --  @param Rectangles Rectangle command vector.
    --  @param Text_Commands Text command vector.

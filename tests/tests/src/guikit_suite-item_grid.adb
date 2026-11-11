@@ -6,6 +6,7 @@ with AUnit.Test_Cases;
 
 with Guikit.Item_Grid;
 with Guikit.Draw;
+with Guikit.Layout;
 
 --  Exercises the item-grid geometry: pointer-to-item hit-testing, marquee
 --  rectangle normalisation, and the items a marquee rectangle covers.
@@ -27,7 +28,9 @@ package body Guikit_Suite.Item_Grid is
    procedure Test_Group_Header (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Details_Row (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Name_Field (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Name_Field_Scroll (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Indicators (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Line_Height_Scaling (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  Three stacked 100x20 rows, plus a non-selectable header row (index 0).
    function Sample return IG.Item_Layout_Vectors.Vector is
@@ -65,7 +68,13 @@ package body Guikit_Suite.Item_Grid is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Name_Field'Access, "Draw_Name_Field draws the label and, when renaming+focused, chrome and a caret");
       AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Name_Field_Scroll'Access,
+         "Draw_Name_Field scrolls a long focused rename so its caret shows, and fits other labels");
+      AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Indicators'Access, "Draw_Item_Indicators draws the favorite star and color-label dot per flag");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Line_Height_Scaling'Access,
+         "the grid's gaps, paddings and small-cell width scale with the line height in layout and drawing");
    end Register_Tests;
 
    procedure Test_Item_At (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -110,8 +119,16 @@ package body Guikit_Suite.Item_Grid is
       Small   : constant IG.Cell_Metrics := IG.Cell_Metrics_For (IG.Icons_Small, 800, 20);
       Large   : constant IG.Cell_Metrics := IG.Cell_Metrics_For (IG.Icons_Large, 800, 20);
       Details : constant IG.Cell_Metrics := IG.Cell_Metrics_For (IG.Details, 800, 20);
+      Small_2 : constant IG.Cell_Metrics := IG.Cell_Metrics_For (IG.Icons_Small, 800, 40);
    begin
-      Assert (Small.Width = 216 and then not Small.Large, "small-icon cells are a fixed 216px single-line row");
+      Assert (Small.Width = IG.Small_Icon_Cell_Width and then not Small.Large,
+              "small-icon cells are Small_Icon_Cell_Width single-line rows at the reference line height");
+      Assert (Small_2.Width = 2 * IG.Small_Icon_Cell_Width,
+              "small-icon cells double with the line height, like their padding and icon");
+      Assert (Small_2.Height = 2 * Small.Height and then Small_2.Icon_Size = 2 * Small.Icon_Size,
+              "a small-icon cell's height and icon double at line height 40");
+      Assert (IG.Small_Cell_Width (Positive'Last) = Natural'Last,
+              "the small-icon width saturates instead of overflowing");
       Assert (Large.Width = 140 and then Large.Icon_Size = 60 and then Large.Large,
               "large-icon cells are 7x wide with a 3x icon and centre the label");
       Assert (Details.Width = 800 and then not Details.Large, "details rows span the full main width");
@@ -269,8 +286,8 @@ package body Guikit_Suite.Item_Grid is
       pragma Unreferenced (T);
       use Ada.Strings.Unbounded;
       Cell : constant IG.Item_Layout :=
-        (Visible_Index => 1, X => 0, Y => 0, Width => 216, Height => 24, Text_X => 30, Text_Y => 4,
-         Text_Width => 180, others => 0);
+        (Visible_Index => 1, X => 0, Y => 0, Width => IG.Small_Icon_Cell_Width, Height => 24, Text_X => 30,
+         Text_Y => 4, Text_Width => 180, others => 0);
       FX, FW, WX, WW : Natural;
 
       function Text_Count (Renaming, Focused : Boolean) return Natural is
@@ -299,6 +316,72 @@ package body Guikit_Suite.Item_Grid is
               "renaming with focus adds chrome and a caret");
    end Test_Name_Field;
 
+   procedure Test_Name_Field_Scroll (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Ada.Strings.Unbounded;
+      Line_Height : constant := 20;
+      Cell        : constant IG.Item_Layout :=
+        (Visible_Index => 1, X => 0, Y => 0, Width => IG.Small_Icon_Cell_Width, Height => 24, Text_X => 30,
+         Text_Y => 4, Text_Width => 180, others => 0);
+      Char_W      : constant Positive := Guikit.Layout.Caret_Advance_Width (Line_Height);
+      Long_Name   : constant String := "a-very-long-file-name-that-never-fits-the-label-box-0123456789.txt";
+      Field_X     : Natural;
+      Field_W     : Natural;
+
+      procedure Draw
+        (Renaming, Focused : Boolean;
+         Cursor            : Natural;
+         Rects             : out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         Texts             : out Guikit.Draw.Text_Command_Vectors.Vector) is
+      begin
+         Rects.Clear;
+         Texts.Clear;
+         IG.Draw_Name_Field (Rects, Texts, 1_000, 1_000, Cell, IG.Icons_Small, Renaming, Focused, Dim => False,
+                             Text => To_Unbounded_String (Long_Name), Cursor => Cursor,
+                             Line_Height => Line_Height, Text_Color => Guikit.Draw.Text_Color,
+                             Dim_Color => Guikit.Draw.Muted_Text_Color, Border_Color => Guikit.Draw.Border_Color,
+                             Focus_Ring_Color => Guikit.Draw.Selection_Color, Caret_Color => Guikit.Draw.Text_Color);
+      end Draw;
+
+      Rects : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Texts : Guikit.Draw.Text_Command_Vectors.Vector;
+   begin
+      IG.Rename_Field_Extent (Cell, IG.Icons_Small, True, Field_X, Field_W, Line_Height);
+      Assert (Long_Name'Length * Char_W > Field_W, "the sample name is wider than the rename field");
+
+      --  Caret at the end of a long name: the text scrolls so the caret, the
+      --  last rectangle drawn, sits inside the field at its true position.
+      Draw (Renaming => True, Focused => True, Cursor => Long_Name'Length, Rects => Rects, Texts => Texts);
+      declare
+         Shown    : constant String := To_String (Texts.First_Element.Text);
+         Caret    : constant Guikit.Draw.Rectangle_Command := Rects.Last_Element;
+         Skipped  : constant Natural :=
+           Guikit.Layout.Input_Scroll_Columns (Long_Name'Length, Field_W, Line_Height);
+      begin
+         Assert (Natural (Texts.Length) = 1, "the rename field draws one text command");
+         Assert (Skipped > 0, "a caret past the field's capacity scrolls the text");
+         Assert (Shown = Long_Name (Long_Name'First + Skipped .. Long_Name'Last),
+                 "the focused field shows the name minus its scrolled-off leading columns");
+         Assert (not Texts.First_Element.Truncated, "the focused field is clipped, not ellipsised");
+         Assert (Caret.X >= Field_X and then Caret.X + Caret.Width <= Field_X + Field_W,
+                 "the caret at the end of a long name stays inside the field");
+         Assert (Caret.X = Field_X + (Long_Name'Length - Skipped) * Char_W,
+                 "the caret sits after the last shown character");
+      end;
+
+      --  Caret at the start: nothing scrolls, and the caret is at the field's left edge.
+      Draw (Renaming => True, Focused => True, Cursor => 0, Rects => Rects, Texts => Texts);
+      Assert (To_String (Texts.First_Element.Text) = Long_Name, "a caret at the start shows the name from its start");
+      Assert (Rects.Last_Element.X = Field_X, "a caret at the start sits at the field's left edge");
+
+      --  Not focused (another field of a multi-rename has focus, or a plain
+      --  label): the name keeps the fitted ellipsis form.
+      Draw (Renaming => True, Focused => False, Cursor => Long_Name'Length, Rects => Rects, Texts => Texts);
+      Assert (Texts.First_Element.Truncated, "an unfocused rename field keeps the fitted ellipsis");
+      Draw (Renaming => False, Focused => False, Cursor => 0, Rects => Rects, Texts => Texts);
+      Assert (Texts.First_Element.Truncated, "a plain long label keeps the fitted ellipsis");
+   end Test_Name_Field_Scroll;
+
    procedure Test_Indicators (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);
       use Ada.Strings.Unbounded;
@@ -321,6 +404,121 @@ package body Guikit_Suite.Item_Grid is
       Assert (Drawn (False, True) = 1, "the color-label dot is a rect, no glyph");
       Assert (Drawn (True, True) = 1001, "both indicators draw together");
    end Test_Indicators;
+
+   procedure Test_Line_Height_Scaling (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Ada.Strings.Unbounded;
+
+      Items : IG.Layout_Item_Vectors.Vector;
+      Cols  : IG.Detail_Column_Bounds;
+
+      --  The spacing functions at one line height, against their expected
+      --  values there.
+      procedure Check_Spacing (LH : Positive; Gap, Content, Icon_Gap, Row, Column, Small_W : Natural) is
+         Where : constant String := " at line height" & LH'Image;
+      begin
+         Assert (IG.Grid_Gap (LH) = Gap, "the grid gap scales" & Where);
+         Assert (IG.Content_Padding (LH) = Content, "the cell content padding scales" & Where);
+         Assert (IG.Icon_Text_Gap (LH) = Icon_Gap, "the icon-to-label gap scales" & Where);
+         Assert (IG.Row_Padding (LH) = Row, "the details row padding scales" & Where);
+         Assert (IG.Column_Padding (LH) = Column, "the details column padding scales" & Where);
+         Assert (IG.Small_Cell_Width (LH) = Small_W, "the small-icon cell width scales" & Where);
+      end Check_Spacing;
+
+      --  Lay out two small-icon cells and two details rows at one line height
+      --  and check the spacing the layout and the details drawing use.
+      procedure Check_Layout (LH : Positive) is
+         Where   : constant String := " at line height" & LH'Image;
+         Gap     : constant Natural := IG.Grid_Gap (LH);
+         Pad     : constant Natural := IG.Content_Padding (LH);
+         Small   : constant IG.Item_Layout_Vectors.Vector :=
+           IG.Calculate_Layout (Items, IG.Icons_Small, Content_X => 0, Content_Y => 0, Content_W => 1000,
+                                Content_H => 600, Columns => Cols, Scroll_Pixels => 0, Line_Height => LH);
+         Details : constant IG.Item_Layout_Vectors.Vector :=
+           IG.Calculate_Layout (Items, IG.Details, Content_X => 0, Content_Y => 0, Content_W => 1000,
+                                Content_H => 600, Columns => Cols, Scroll_Pixels => 0, Line_Height => LH);
+         Row_H   : constant Natural := LH + 2 * IG.Row_Padding (LH);
+         Cell    : constant IG.Item_Layout :=
+           (Visible_Index => 1, X => 0, Y => 0, Width => 1000, Height => 2 * LH, Text_Y => 4,
+            Modified_X => 300, Modified_Width => 200, others => 0);
+         Rects   : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         Text    : Guikit.Draw.Text_Command_Vectors.Vector;
+         Tips    : Guikit.Draw.Tooltip_Command_Vectors.Vector;
+         Wide    : constant IG.Item_Layout :=
+           (Visible_Index => 1, X => 50, Y => 0, Width => 7 * LH, Height => 5 * LH, others => 0);
+         Field_X, Field_W : Natural;
+      begin
+         --  Small icons: a padded icon, the icon-to-label gap, then the label;
+         --  the next cell one scaled grid gap along.
+         Assert (Small (1).Width = IG.Small_Cell_Width (LH) and then Small (1).Height = LH + 2 * Pad,
+                 "a small-icon cell is the scaled width and a line plus two paddings tall" & Where);
+         Assert (Small (1).Icon_X = Pad and then Small (1).Icon_Y = Pad and then Small (1).Icon_Size = LH,
+                 "a small-icon cell's icon is inset by the scaled padding" & Where);
+         Assert (Small (1).Text_X = Pad + LH + IG.Icon_Text_Gap (LH),
+                 "a small-icon label follows the icon by the scaled gap" & Where);
+         Assert (Small (1).Text_Width = IG.Small_Cell_Width (LH) - 2 * Pad - LH - IG.Icon_Text_Gap (LH),
+                 "a small-icon label takes the rest of the padded cell" & Where);
+         Assert (Small (2).X = IG.Small_Cell_Width (LH) + Gap and then Small (2).Y = 0,
+                 "the next small-icon cell is one scaled grid gap along" & Where);
+
+         --  Details: a header band, then rows padded above and below.
+         Assert (Details (1).Y = Row_H and then Details (1).Height = Row_H,
+                 "a details row is a line plus two scaled row paddings, below an equal header" & Where);
+         Assert (Details (2).Y = 2 * Row_H, "details rows stack one scaled row apart" & Where);
+         Assert (Details (1).Icon_X = IG.Row_Padding (LH),
+                 "a details row's icon is inset by the scaled row padding" & Where);
+         Assert (Details (1).Text_X = Cols (IG.Name_Column).X + IG.Column_Padding (LH),
+                 "a details name is inset into its column by the scaled column padding" & Where);
+
+         --  The other details columns are inset by the same scaled padding.
+         IG.Draw_Details_Row
+           (Rects, Text, Tips, 2000, 2000, Cell, LH,
+            Modified => To_Unbounded_String ("today"), Size => Null_Unbounded_String,
+            Filetype => Null_Unbounded_String, Created => Null_Unbounded_String,
+            Permissions => Null_Unbounded_String, Modified_Tooltip => Null_Unbounded_String,
+            Created_Tooltip => Null_Unbounded_String, Dim => False, Value_Color => Guikit.Draw.Text_Color,
+            Dim_Color => Guikit.Draw.Muted_Text_Color, Border_Color => Guikit.Draw.Border_Color);
+         Assert (Natural (Text.Length) = 1, "the one non-empty column draws its value" & Where);
+         Assert (Text (1).X = 300 + IG.Column_Padding (LH),
+                 "a details column value is inset by the scaled column padding" & Where);
+
+         --  A large-icon rename field spans the cell less the scaled padding.
+         IG.Rename_Field_Extent (Wide, IG.Icons_Large, Renaming => True, Field_X => Field_X, Field_W => Field_W,
+                                 Line_Height => LH);
+         Assert (Field_X = 50 + Pad and then Field_W = 7 * LH - 2 * Pad,
+                 "a large-icon rename field is inset by the scaled content padding" & Where);
+      end Check_Layout;
+   begin
+      Check_Spacing (20, Gap => 8, Content => 4, Icon_Gap => 12, Row => 4, Column => 6, Small_W => 216);
+      Check_Spacing (30, Gap => 12, Content => 6, Icon_Gap => 18, Row => 6, Column => 9, Small_W => 324);
+      Check_Spacing (40, Gap => 16, Content => 8, Icon_Gap => 24, Row => 8, Column => 12, Small_W => 432);
+      Assert (IG.Grid_Gap (10) = IG.Main_Grid_Gap and then IG.Small_Cell_Width (10) = IG.Small_Icon_Cell_Width,
+              "below the reference line height the grid keeps its base spacing");
+
+      Items.Append (IG.Layout_Item'(Visible_Index => 1, Group_Header => False, Label => To_Unbounded_String ("a")));
+      Items.Append (IG.Layout_Item'(Visible_Index => 2, Group_Header => False, Label => To_Unbounded_String ("b")));
+      Cols (IG.Name_Column) := (X => 20, Width => 380);
+      Check_Layout (20);
+      Check_Layout (30);
+      Check_Layout (40);
+
+      --  At twice the line height the small-icon geometry is exactly doubled.
+      declare
+         Base   : constant IG.Item_Layout_Vectors.Vector :=
+           IG.Calculate_Layout (Items, IG.Icons_Small, 0, 0, 1000, 600, Cols, 0, 20);
+         Double : constant IG.Item_Layout_Vectors.Vector :=
+           IG.Calculate_Layout (Items, IG.Icons_Small, 0, 0, 1000, 600, Cols, 0, 40);
+      begin
+         for Index in 1 .. 2 loop
+            Assert (Double (Index).X = 2 * Base (Index).X and then Double (Index).Width = 2 * Base (Index).Width
+                      and then Double (Index).Height = 2 * Base (Index).Height
+                      and then Double (Index).Icon_X = 2 * Base (Index).Icon_X
+                      and then Double (Index).Text_X = 2 * Base (Index).Text_X
+                      and then Double (Index).Text_Width = 2 * Base (Index).Text_Width,
+                    "every small-icon cell measure doubles at twice the line height");
+         end loop;
+      end;
+   end Test_Line_Height_Scaling;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

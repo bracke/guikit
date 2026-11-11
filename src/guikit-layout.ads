@@ -159,6 +159,22 @@ package Guikit.Layout is
      (Line_Height : Positive := 20)
       return Positive;
 
+   --  Display columns a focused single-line input scrolls off its left edge
+   --  so the caret stays visible: typing at the end of a long value would
+   --  otherwise happen past the field's right edge. Stateless, so drawing and
+   --  click-to-caret mapping derive the same offset from the same caret and
+   --  width.
+   --
+   --  @param Caret_Column Display columns before the caret.
+   --  @param Text_Width Pixel width available to the text.
+   --  @param Line_Height Text line height in pixels.
+   --  @return Columns hidden on the left; zero when the caret already fits.
+   function Input_Scroll_Columns
+     (Caret_Column : Natural;
+      Text_Width   : Natural;
+      Line_Height  : Positive)
+      return Natural;
+
    --  Return the toolbar input-field height including vertical padding.
    --
    --  @param Line_Height Text line height in pixels.

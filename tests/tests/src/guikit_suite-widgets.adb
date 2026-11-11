@@ -6,6 +6,7 @@ with AUnit.Assertions;
 with AUnit.Test_Cases;
 
 with Guikit.Draw;
+with Guikit.Menu_Tree;
 with Guikit.Widgets;
 
 --  Unit tests for the domain-free widget draw procedures. Each test calls one
@@ -44,6 +45,7 @@ package body Guikit_Suite.Widgets is
    procedure Test_Toggle (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Number_Stepper (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Button (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Menu_Tree_Button_Scaling (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  Number of rectangle commands in a vector, as a plain Natural.
    function Count (V : Rectangle_Command_Vectors.Vector) return Natural is
@@ -89,6 +91,9 @@ package body Guikit_Suite.Widgets is
         (T, Test_Number_Stepper'Access, "Draw_Number_Stepper emits a value box and two flanking button boxes");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Button'Access, "Draw_Button emits a fill, border and a padded, vertically centred label");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Menu_Tree_Button_Scaling'Access,
+         "Menu_Tree footer buttons pad their labels by the line-height-scaled input padding");
    end Register_Tests;
 
    procedure Test_Focus_Ring (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -426,6 +431,49 @@ package body Guikit_Suite.Widgets is
       Draw_Input_Field (Rects, Big, Big, 10, 10, 0, 28, Input_Color, Border_Color);
       Assert (Count (Rects) = 0, "a zero-width input field draws nothing");
    end Test_Input_Field;
+
+   procedure Test_Menu_Tree_Button_Scaling (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      package MT renames Guikit.Menu_Tree;
+
+      --  Draw one footer button whose ten-character label overflows it, at a
+      --  line height whose input-field padding (8 px at 20) is Padding: the
+      --  label falls back to the left inset and is clipped one padding short of
+      --  each edge.
+      procedure Check (LH : Positive; Padding, Width : Natural) is
+         Where   : constant String := " at line height" & LH'Image;
+         Rects   : Rectangle_Command_Vectors.Vector;
+         Text    : Text_Command_Vectors.Vector;
+         Buttons : MT.Menu_Tree_Button_Vectors.Vector;
+      begin
+         Buttons.Append
+           (MT.Menu_Tree_Button'
+              (Label => U.To_Unbounded_String ("abcdefghij"), X => 10, Y => 10, Width => Width,
+               Height => 2 * LH, others => <>));
+         MT.Draw_Frame
+           (Rectangles    => Rects,
+            Text          => Text,
+            Clip_Width    => Big,
+            Clip_Height   => Big,
+            Region_X      => 0,
+            Region_Y      => 0,
+            Region_Width  => 400,
+            Region_Height => 400,
+            Title         => U.Null_Unbounded_String,
+            Config        => MT.Menu_Tree_Configuration'(Line_Height => LH, others => <>),
+            Rows          => MT.Menu_Tree_Row_Vectors.Empty_Vector,
+            Buttons       => Buttons,
+            Draw_Chrome   => False);
+         Assert (Count (Text) = 1, "the footer button draws its label" & Where);
+         Assert (Text (1).X = 10 + Padding, "an over-wide button label is inset by the scaled padding" & Where);
+         Assert (Text (1).Width = Width - 2 * Padding,
+                 "an over-wide button label is clipped one scaled padding short of each edge" & Where);
+      end Check;
+   begin
+      Check (20, Padding => 8, Width => 100);
+      Check (30, Padding => 12, Width => 150);
+      Check (40, Padding => 16, Width => 200);
+   end Test_Menu_Tree_Button_Scaling;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

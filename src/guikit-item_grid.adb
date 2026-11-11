@@ -19,7 +19,7 @@ package body Guikit.Item_Grid is
       case View is
          when Icons_Small =>
             return
-              (Width     => 216,
+              (Width     => Small_Cell_Width (Line_Height),
                Height    => Add (Line_Height, Mul (Content_Padding (Line_Height), 2)),
                Icon_Size => Line_Height,
                Large     => False);
@@ -388,14 +388,44 @@ package body Guikit.Item_Grid is
       Wide    : constant Boolean := Renaming and then View = Icons_Large;
       Field_H : constant Natural :=
         (if Wide then Natural'Min (Add (Line_Height, Mul (Pad_F, 2)), Label_H) else Cell.Height);
+      Editing : constant Boolean := Renaming and then Focused;
+      Raw     : constant String := To_String (Text);
+      --  Display columns before the caret, and how many leading columns
+      --  (whole codepoints, as Skip_Bytes cuts them) scroll off the left.
+      Caret_Column : constant Natural :=
+        Guikit.Utf8.Display_Units_Before (Raw, Natural'Min (Cursor, Raw'Length));
+      Skip_Bytes   : Natural := 0;
+      Skip_Columns : Natural := 0;
    begin
       Rename_Field_Extent (Cell, View, Renaming, Field_X, Field_W, Line_Height);
-      Draw_Fitted_Text
-        (Text_Commands, Clip_Width, Clip_Height, Field_X, Field_Y, Field_W,
-         Natural'Min (Line_Height, Cell.Height), Text, (if Dim then Dim_Color else Text_Color),
-         Line_Height, Fit => True, Italic => Dim);
+      if Editing then
+         declare
+            Skipped : constant String :=
+              Guikit.Utf8.Prefix_By_Units
+                (Raw, Guikit.Layout.Input_Scroll_Columns (Caret_Column, Field_W, Line_Height));
+         begin
+            Skip_Bytes := Skipped'Length;
+            Skip_Columns := Guikit.Utf8.Display_Units (Skipped);
+         end;
+      end if;
+      --  A focused rename field scrolls its leading columns off the left edge
+      --  so the caret stays visible, and shows the rest clipped to the field
+      --  rather than fitted: an ellipsis would hide the very text being typed.
+      --  Every other label keeps the fitted, ellipsised form.
+      if Editing then
+         Draw_Fitted_Text
+           (Text_Commands, Clip_Width, Clip_Height, Field_X, Field_Y, Field_W,
+            Natural'Min (Line_Height, Cell.Height),
+            To_Unbounded_String (Raw (Raw'First + Skip_Bytes .. Raw'Last)),
+            (if Dim then Dim_Color else Text_Color), Line_Height, Fit => False, Italic => Dim);
+      else
+         Draw_Fitted_Text
+           (Text_Commands, Clip_Width, Clip_Height, Field_X, Field_Y, Field_W,
+            Natural'Min (Line_Height, Cell.Height), Text, (if Dim then Dim_Color else Text_Color),
+            Line_Height, Fit => True, Italic => Dim);
+      end if;
 
-      if Renaming and then Focused then
+      if Editing then
          Emit_Border (Rectangles, Clip_Width, Clip_Height, Cell.X, Cell.Y, Cell.Width, Cell.Height, Border_Color);
          Guikit.Widgets.Draw_Focus_Ring
            (Rectangles, Clip_Width, Clip_Height, Cell.X, Cell.Y, Cell.Width, Cell.Height, Focus_Ring_Color);
@@ -404,9 +434,9 @@ package body Guikit.Item_Grid is
             Inset   : constant Natural := Field_X - Base;
             Total_W : constant Natural := Add (Field_W, Inset);
             Char_W  : constant Positive := Guikit.Layout.Caret_Advance_Width (Line_Height);
-            Raw     : constant String := To_String (Text);
-            Raw_X   : constant Natural :=
-              Add (Add (Base, Pad_F), Mul (Guikit.Utf8.Display_Units_Before (Raw, Cursor), Char_W));
+            Shown   : constant Natural :=
+              (if Caret_Column > Skip_Columns then Caret_Column - Skip_Columns else 0);
+            Raw_X   : constant Natural := Add (Add (Base, Pad_F), Mul (Shown, Char_W));
             Max_X   : constant Natural := (if Total_W > 2 then Add (Base, Total_W - 2) else Base);
             Caret_H : constant Natural :=
               Natural'Min ((if Field_H > 2 then Field_H - 2 else Field_H),

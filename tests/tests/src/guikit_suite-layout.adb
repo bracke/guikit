@@ -19,6 +19,7 @@ package body Guikit_Suite.Layout is
 
    procedure Test_Within (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Saturating (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Scaled (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Caret_And_Label (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Toolbar_Layout (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Toolbar_Buttons (T : in out AUnit.Test_Cases.Test_Case'Class);
@@ -43,6 +44,9 @@ package body Guikit_Suite.Layout is
         (T, Test_Within'Access, "Within and Within_Rect test point containment");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Saturating'Access, "Saturating_Multiply and Saturating_Add clamp at Natural'Last");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Scaled'Access,
+         "Scaled grows chrome with the line height, rounds down, never shrinks and saturates");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Caret_And_Label'Access, "Caret_Advance_Width and Label_Pixel_Width measure as expected");
       AUnit.Test_Cases.Registration.Register_Routine
@@ -92,6 +96,49 @@ package body Guikit_Suite.Layout is
       Assert (Saturating_Add (3, 4) = 7, "3 + 4 is 7");
       Assert (Saturating_Add (Natural'Last, 1) = Natural'Last, "addition saturates at Natural'Last");
    end Test_Saturating;
+
+   procedure Test_Scaled (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+   begin
+      --  At the reference line height every base is unchanged.
+      Assert (Scaled (8, 20) = 8, "at the reference line height a base is unchanged");
+      Assert (Scaled (5, 20) = 5, "at the reference line height an odd base is unchanged");
+      Assert (Scaled (0, 40) = 0, "a zero base stays zero at any line height");
+
+      --  1.5x: Base * 30 / 20, truncated toward zero.
+      Assert (Scaled (8, 30) = 12, "an even base grows by half at 1.5x");
+      Assert (Scaled (14, 30) = 21, "the settings padding grows by half at 1.5x");
+      Assert (Scaled (5, 30) = 7, "an odd base at 1.5x rounds down (7.5 is 7)");
+      Assert (Scaled (7, 30) = 10, "an odd base at 1.5x rounds down (10.5 is 10)");
+      Assert (Scaled (1, 30) = 1, "a one-pixel base at 1.5x rounds down to one");
+      Assert (Scaled (8, 21) = 8, "a line height just past the reference rounds a small base down (8.4 is 8)");
+      Assert (Scaled (20, 21) = 21, "a base equal to the reference grows one-for-one with the line height");
+
+      --  2x: exactly double, odd or even.
+      Assert (Scaled (8, 40) = 16, "an even base doubles at 2x");
+      Assert (Scaled (5, 40) = 10, "an odd base doubles exactly at 2x");
+      Assert (Scaled (216, 40) = 432, "a large base doubles at 2x");
+
+      --  Below the reference the base is kept, never shrunk.
+      Assert (Scaled (8, 10) = 8, "a line height below the reference keeps the base");
+      Assert (Scaled (14, 19) = 14, "a line height just below the reference keeps the base");
+      Assert (Scaled (14, 1) = 14, "a one-pixel line height keeps the base");
+
+      --  Extremes saturate at Natural'Last rather than raising Constraint_Error.
+      Assert (Scaled (Natural'Last, 20) = Natural'Last, "the largest base is unchanged at the reference");
+      Assert (Scaled (Natural'Last, 10) = Natural'Last, "the largest base is unchanged below the reference");
+      Assert (Scaled (Natural'Last, 40) = Natural'Last, "the largest base saturates at 2x");
+      Assert (Scaled (Natural'Last / 2 + 1, 40) = Natural'Last, "a base just past half the range saturates at 2x");
+      Assert (Scaled (Natural'Last / 2, 40) = Natural'Last - 1, "a base of half the range doubles without saturating");
+      Assert (Scaled (Natural'Last, Positive'Last) = Natural'Last,
+              "the largest base at the largest line height saturates");
+      Assert (Scaled (1, Positive'Last) = Positive'Last / 20,
+              "a unit base at the largest line height is that height over 20, rounded down");
+      Assert (Scaled (8, Positive'Last) = 858_993_458,
+              "a padding at the largest line height scales in 64 bits without overflow");
+      Assert (Scaled (20, Positive'Last) = Natural'Last, "a reference-sized base reaches exactly Natural'Last");
+      Assert (Scaled (100, Positive'Last) = Natural'Last, "a large padding at the largest line height saturates");
+   end Test_Scaled;
 
    procedure Test_Caret_And_Label (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);

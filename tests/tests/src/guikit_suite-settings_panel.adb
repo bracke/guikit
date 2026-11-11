@@ -32,6 +32,8 @@ package body Guikit_Suite.Settings_Panel is
    procedure Test_Switch_Tooltip (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Field_Help (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Choice_Fits_Options (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Line_Height_Scaling (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Button_Layouts_Scale (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function U (S : String) return Unbounded_String renames To_Unbounded_String;
 
@@ -97,6 +99,12 @@ package body Guikit_Suite.Settings_Panel is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Field_Help'Access,
          "the focused field's help renders in the footer, not only in the accessibility node");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Line_Height_Scaling'Access,
+         "the panel padding, row gap and preamble gap scale with the line height");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Button_Layouts_Scale'Access,
+         "the settings pane, entry and action button layouts scale their padding and gaps with the line height");
    end Register_Tests;
 
    --  Two sections, one field each side, to exercise the section switcher.
@@ -605,6 +613,156 @@ package body Guikit_Suite.Settings_Panel is
                  "no word of the help is lost to clipping");
       end;
    end Test_Field_Help;
+
+   procedure Test_Line_Height_Scaling (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use type Guikit.Draw.Accessibility_Role;
+
+      Region_X : constant := 50;
+      Region_Y : constant := 40;
+
+      --  A preamble toggle, then one section (so no tab switcher) of two toggles:
+      --  the preamble and the section are split by the extra group gap.
+      function Fields return SP.Field_Vectors.Vector is
+         V : SP.Field_Vectors.Vector;
+      begin
+         V.Append (SP.Field'(Key => U ("pre"), Label => U ("Pre"), Kind => SP.Toggle, Value => U ("false"),
+                             others => <>));
+         V.Append (SP.Field'(Key => U ("sec"), Label => U ("Sec"), Kind => SP.Section, others => <>));
+         V.Append (SP.Field'(Key => U ("two"), Label => U ("Two"), Kind => SP.Toggle, Value => U ("false"),
+                             others => <>));
+         V.Append (SP.Field'(Key => U ("three"), Label => U ("Three"), Kind => SP.Toggle, Value => U ("false"),
+                             others => <>));
+         return V;
+      end Fields;
+
+      --  Render at Line_Height and check the row geometry against the expected
+      --  panel padding (14 at 20 px), row gap (8) and preamble-to-section gap
+      --  (row gap plus 4). Title_Inset is the title's top inset, max (4, LH / 4).
+      procedure Check (LH : Positive; Pad, Row_Gap, Group_Gap, Title_Inset : Natural) is
+         Where    : constant String := " at line height" & LH'Image;
+         Row_H    : constant Natural := LH + Row_Gap;
+         Rows_Top : constant Natural := Region_Y + Title_Inset + Row_H;
+         P        : SP.Panel;
+         Rects    : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         Text     : Guikit.Draw.Text_Command_Vectors.Vector;
+         Nodes    : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+         Seen_Pre, Seen_Two, Seen_Three, Seen_Label : Boolean := False;
+      begin
+         SP.Set_Configuration (P, SP.Configuration'(Line_Height => LH, Title => U ("Settings"), others => <>));
+         SP.Set_Fields (P, Fields);
+         SP.Build_Frame (P, Region_X, Region_Y, 600, 500, 1000, 1000, False, -1, -1, Rects, Text, Nodes);
+         for Node of Nodes loop
+            if Node.Role = Guikit.Draw.Role_Text_Input then
+               Assert (Node.Height = Row_H, "a field row is a line plus the scaled row gap" & Where);
+               if Node.Name = "Pre" then
+                  Seen_Pre := True;
+                  Assert (Node.Y = Rows_Top, "the preamble row follows the title row" & Where);
+               elsif Node.Name = "Two" then
+                  Seen_Two := True;
+                  Assert (Node.Y = Rows_Top + Row_H + Group_Gap,
+                          "the section's first row sits one scaled group gap below the preamble" & Where);
+               elsif Node.Name = "Three" then
+                  Seen_Three := True;
+                  Assert (Node.Y = Rows_Top + 2 * Row_H + Group_Gap,
+                          "the section's rows are one scaled row apart" & Where);
+               end if;
+            end if;
+         end loop;
+         for Command of Text loop
+            if Command.Text = "Pre" then
+               Seen_Label := True;
+               Assert (Command.X = Region_X + Pad, "a field label is inset by the scaled panel padding" & Where);
+               Assert (Command.Y = Rows_Top + Row_Gap / 2, "a field label is centred in its row" & Where);
+            elsif Command.Text = "Settings" then
+               Assert (Command.X = Region_X + Pad, "the title is inset by the scaled panel padding" & Where);
+            end if;
+         end loop;
+         Assert (Seen_Pre and then Seen_Two and then Seen_Three and then Seen_Label,
+                 "every field row and the preamble label are rendered" & Where);
+      end Check;
+   begin
+      Check (20, Pad => 14, Row_Gap => 8, Group_Gap => 12, Title_Inset => 5);
+      Check (30, Pad => 21, Row_Gap => 12, Group_Gap => 18, Title_Inset => 7);
+      Check (40, Pad => 28, Row_Gap => 16, Group_Gap => 24, Title_Inset => 10);
+   end Test_Line_Height_Scaling;
+
+   procedure Test_Button_Layouts_Scale (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+
+      --  The entry buttons for a pane and labels that grow with the text, as a
+      --  caller measures them at the line height in use.
+      function Entry_At
+        (LH      : Positive;
+         Pane_W  : Natural;
+         Label_W : Natural)
+         return Guikit.Layout.Settings_Entry_Button_Layout
+      is (Guikit.Layout.Calculate_Settings_Entry_Button_Layout
+            (Pane_X             => 0,
+             Pane_Width         => Pane_W,
+             Add_Label_Width    => Label_W,
+             Remove_Label_Width => Label_W,
+             Line_Height        => LH));
+
+      Entry_1   : constant Guikit.Layout.Settings_Entry_Button_Layout := Entry_At (20, 500, 30);
+      Entry_15  : constant Guikit.Layout.Settings_Entry_Button_Layout := Entry_At (30, 750, 45);
+      Entry_2   : constant Guikit.Layout.Settings_Entry_Button_Layout := Entry_At (40, 1000, 60);
+      Narrow_2  : constant Guikit.Layout.Settings_Entry_Button_Layout := Entry_At (40, 1000, 30);
+      Action_1  : constant Guikit.Layout.Settings_Action_Button_Layout :=
+        Guikit.Layout.Calculate_Settings_Action_Button_Layout (10, 100, 20);
+      Action_15 : constant Guikit.Layout.Settings_Action_Button_Layout :=
+        Guikit.Layout.Calculate_Settings_Action_Button_Layout (15, 150, 30);
+      Action_2  : constant Guikit.Layout.Settings_Action_Button_Layout :=
+        Guikit.Layout.Calculate_Settings_Action_Button_Layout (20, 200, 40);
+      Pane_15   : constant Guikit.Layout.Settings_Pane_Layout :=
+        Guikit.Layout.Calculate_Settings_Pane_Layout (1000, 800, 40, 30);
+      Pane_2    : constant Guikit.Layout.Settings_Pane_Layout :=
+        Guikit.Layout.Calculate_Settings_Pane_Layout (1000, 800, 40, 40);
+   begin
+      --  Entry buttons: label + two input paddings, a gap, an edge padding.
+      Assert (Entry_1.Add_Button_Width = 46 and then Entry_1.Remove_Button_Width = 46,
+              "at 20 px each entry button is the label plus two 8 px paddings");
+      Assert (Entry_1.Total_Width = 96 and then Entry_1.Add_Button_X = 390 and then Entry_1.Remove_Button_X = 440,
+              "at 20 px the entry buttons are 4 px apart and 14 px from the pane edge");
+      Assert (Entry_15.Add_Button_Width = 69 and then Entry_15.Remove_Button_Width = 69,
+              "at 1.5x each entry button is the label plus two 12 px paddings");
+      Assert (Entry_15.Total_Width = 144 and then Entry_15.Add_Button_X = 585
+                and then Entry_15.Remove_Button_X = 660,
+              "at 1.5x the entry buttons are 6 px apart and 21 px from the pane edge");
+      Assert (Entry_2.Add_Button_Width = 2 * Entry_1.Add_Button_Width
+                and then Entry_2.Remove_Button_Width = 2 * Entry_1.Remove_Button_Width,
+              "at 2x each entry button is exactly twice as wide");
+      Assert (Entry_2.Total_Width = 2 * Entry_1.Total_Width
+                and then Entry_2.Add_Button_X = 2 * Entry_1.Add_Button_X
+                and then Entry_2.Remove_Button_X = 2 * Entry_1.Remove_Button_X,
+              "at 2x the entry gap and edge padding are exactly doubled");
+      Assert (Narrow_2.Add_Button_Width = 68,
+              "at 2x a short label is floored at the doubled 34 px minimum button width");
+
+      --  Action buttons: two halves of the text column split by a 4 px gap.
+      Assert (Action_1.First_Button_Width = 48 and then Action_1.Second_Button_X = 62,
+              "at 20 px the action buttons are split by a 4 px gap");
+      Assert (Action_15.First_Button_X = 15 and then Action_15.First_Button_Width = 72
+                and then Action_15.Second_Button_X = 93 and then Action_15.Second_Button_Width = 72,
+              "at 1.5x the action buttons are split by a 6 px gap");
+      Assert (Action_2.First_Button_X = 2 * Action_1.First_Button_X
+                and then Action_2.First_Button_Width = 2 * Action_1.First_Button_Width
+                and then Action_2.Second_Button_X = 2 * Action_1.Second_Button_X
+                and then Action_2.Second_Button_Width = 2 * Action_1.Second_Button_Width
+                and then Action_2.Total_Width = 2 * Action_1.Total_Width,
+              "at 2x the action buttons and their gap are exactly doubled");
+
+      --  The settings pane insets its text column by the scaled pane padding.
+      Assert (Pane_15.Text_X = Pane_15.X + 21 and then Pane_15.Text_Y = Pane_15.Y + 21
+                and then Pane_15.Text_Width = Pane_15.Width - 42,
+              "at 1.5x the pane's text column is inset by a 21 px padding");
+      Assert (Pane_15.Height = 660,
+              "at 1.5x the pane fits 15 lines, 14 scaled row gaps and two scaled paddings");
+      Assert (Pane_2.Text_X = Pane_2.X + 28 and then Pane_2.Text_Y = Pane_2.Y + 28
+                and then Pane_2.Text_Width = Pane_2.Width - 56,
+              "at 2x the pane's text column is inset by a doubled 28 px padding");
+      Assert (Pane_2.Height = 667, "at 2x the taller pane is clamped to the height below the top margin");
+   end Test_Button_Layouts_Scale;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;
