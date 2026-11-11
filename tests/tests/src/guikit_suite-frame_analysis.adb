@@ -40,6 +40,7 @@ package body Guikit_Suite.Frame_Analysis is
    procedure Test_Empty_Band_Fails (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Region_Ink_Detection (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Region_Clamping (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Icon_Definitions_Come_From_The_Host (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  Write one RGBA pixel into Buffer at column X, row Y.
    procedure Set_Pixel
@@ -117,7 +118,98 @@ package body Guikit_Suite.Frame_Analysis is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Shared_Tile_Id_Shares_Pictures'Access,
          "icons carrying pixels share a tile when they name the same identity");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Icon_Definitions_Come_From_The_Host'Access,
+         "guikit has no icons of its own: definitions come from the host's source");
    end Register_Tests;
+
+   --  A host's icon source holding one icon, "probe", in a producer-tagged
+   --  header.
+   function Probe_Source
+     (Icon_Id    : String;
+      Theme_Name : String)
+      return String
+   is
+      pragma Unreferenced (Theme_Name);
+   begin
+      if Icon_Id = "probe" then
+         return "host-icon-v1" & ASCII.LF & "name=probe" & ASCII.LF & "grid=4" & ASCII.LF
+           & "rect=0,0,4,4,base" & ASCII.LF;
+      end if;
+      return "";
+   end Probe_Source;
+
+   --  Guikit draws only what its host defines: with no source registered
+   --  there is no icon at all (no application's icons are built in), and a
+   --  registered source answers for exactly its own. The format header is
+   --  the neutral format name, alone or after a producer's prefix.
+   procedure Test_Icon_Definitions_Come_From_The_Host (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      Body_Text : constant String :=
+        "name=square" & ASCII.LF & "grid=2" & ASCII.LF & "rect=0,0,2,2,accent" & ASCII.LF;
+   begin
+      Guikit.Draw.Set_Icon_Asset_Source (null);
+      Assert (Guikit.Draw.Icon_Asset_Text ("folder", "") = "",
+              "without a source guikit has no folder icon");
+      Assert (Guikit.Draw.Icon_Asset_Text ("toolbar-home", "files-high-contrast") = "",
+              "without a source guikit has no toolbar icon");
+
+      Guikit.Draw.Set_Icon_Asset_Source (Probe_Source'Access);
+      Assert (Guikit.Draw.Parse_Icon_Asset (Guikit.Draw.Icon_Asset_Text ("probe", "any")).Valid,
+              "a registered source's icon is served and parses");
+      Assert (Guikit.Draw.Icon_Asset_Text ("folder", "") = "",
+              "a registered source answers only for its own icons");
+
+      --  The probe is all base-role colour: its tile is drawn in the colour the
+      --  command names, or the neutral grey when it names none.
+      declare
+         function First_Pixel (Base : Guikit.Draw.Icon_Rgb) return Guikit.Draw.Icon_Rgb is
+            No_Rectangles : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+            No_Triangles  : Guikit.Draw.Triangle_Command_Vectors.Vector;
+            No_Text       : Guikit.Draw.Text_Render_Result;
+            Layout        : Guikit.Draw.Layout_Metrics;
+            Icons         : Guikit.Draw.Icon_Command_Vectors.Vector;
+         begin
+            Icons.Append
+              (Guikit.Draw.Icon_Command'
+                 (X => 0, Y => 0, Size => 64, Icon_Id => Ada.Strings.Unbounded.To_Unbounded_String ("probe"),
+                  Base_Color => Base, others => <>));
+            declare
+               Pixels : constant Guikit.Draw.Byte_Vectors.Vector :=
+                 Guikit.Vulkan.Build_Submission
+                   (Rectangles         => No_Rectangles,
+                    Triangles          => No_Triangles,
+                    Icons              => Icons,
+                    Overlay_Rectangles => No_Rectangles,
+                    Layout             => Layout,
+                    Theme              => Guikit.Draw.Theme_Dark,
+                    Text               => No_Text).Icon_Atlas_Pixels.To_Vector;
+            begin
+               Assert (Natural (Pixels.Length) >= 3, "the probe is rasterized into an atlas");
+               return (R => Pixels (Pixels.First_Index),
+                       G => Pixels (Pixels.First_Index + 1),
+                       B => Pixels (Pixels.First_Index + 2));
+            end;
+         end First_Pixel;
+
+         Tint : constant Guikit.Draw.Icon_Rgb := (R => 10, G => 20, B => 30);
+         use type Guikit.Draw.Icon_Rgb;
+      begin
+         Assert (First_Pixel (Tint) = Tint, "an asset's base shapes take the command's base colour");
+         Assert (First_Pixel (Guikit.Draw.Default_Icon_Base_Color) = (R => 184, G => 190, B => 198),
+                 "and the neutral grey by default");
+      end;
+      Guikit.Draw.Set_Icon_Asset_Source (null);
+
+      Assert (Guikit.Draw.Parse_Icon_Asset (Guikit.Draw.Icon_Format_Name & ASCII.LF & Body_Text).Valid,
+              "the bare format name is a valid header");
+      Assert (Guikit.Draw.Parse_Icon_Asset ("files-icon-v1" & ASCII.LF & Body_Text).Valid,
+              "a producer-prefixed format name is a valid header");
+      Assert (not Guikit.Draw.Parse_Icon_Asset ("-icon-v1" & ASCII.LF & Body_Text).Valid,
+              "an empty producer prefix is not a header");
+      Assert (not Guikit.Draw.Parse_Icon_Asset ("icon-v2" & ASCII.LF & Body_Text).Valid,
+              "another format version is not a header");
+   end Test_Icon_Definitions_Come_From_The_Host;
 
    --  The icon atlas allocates by tile, and a tile is shared by every icon that
    --  would rasterize to the same pixels. This matters beyond memory: the tile
@@ -300,6 +392,31 @@ package body Guikit_Suite.Frame_Analysis is
       Assert (Atlas_Width_For (Different) = 3 * Tile_Size,
               "three distinct icons need three tiles, got"
               & Natural'Image (Atlas_Width_For (Different) / Tile_Size));
+
+      --  The backend knows no icon names: whether it draws an icon, and in
+      --  which base colour, is what the command says.
+      declare
+         Placed : Guikit.Draw.Icon_Command := Icon ("toolbar-home");
+         Blue   : Guikit.Draw.Icon_Command := Icon ("folder");
+         Mixed  : Guikit.Draw.Icon_Command_Vectors.Vector;
+         Named  : Guikit.Draw.Icon_Command_Vectors.Vector;
+         Tinted : Guikit.Draw.Icon_Command_Vectors.Vector;
+      begin
+         Placed.Class := Guikit.Draw.Placed_Icon;
+         Mixed.Append (Icon ("folder"));
+         Mixed.Append (Placed);
+         Assert (Atlas_Width_For (Mixed) = Tile_Size, "an icon the host placed itself takes no atlas tile");
+
+         Named.Append (Icon ("folder"));
+         Named.Append (Icon ("toolbar-home"));
+         Assert (Atlas_Width_For (Named) = 2 * Tile_Size,
+                 "an id says nothing about how an icon is drawn: any id gets its tile");
+
+         Blue.Base_Color := (R => 82, G => 128, B => 209);
+         Tinted.Append (Icon ("folder"));
+         Tinted.Append (Blue);
+         Assert (Atlas_Width_For (Tinted) = 2 * Tile_Size, "one asset in two base colours is two tiles");
+      end;
    end Test_Identical_Icons_Share_A_Tile;
 
    procedure Test_Uniform_Frame_Fails (T : in out AUnit.Test_Cases.Test_Case'Class) is

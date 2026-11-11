@@ -681,10 +681,116 @@ package body Guikit_Suite.Settings_Panel is
          Assert (Seen_Pre and then Seen_Two and then Seen_Three and then Seen_Label,
                  "every field row and the preamble label are rendered" & Where);
       end Check;
+      --  The controls' own chrome, at 20 px: a text field is its row less 4 px
+      --  tall and insets its value 4 px; a button pads its label 6 px a side
+      --  and sits 4 px from the next; the scrollbar is 12 px wide; the panel's
+      --  top accent band is 3 px tall and its shadow starts 3 px in.
+      procedure Check_Chrome (LH : Positive; Margin, Inset, Button_Pad, Button_Gap, Bar, Accent, Shadow : Natural) is
+         use type Guikit.Draw.Render_Color;
+
+         Where    : constant String := " at line height" & LH'Image;
+         Row_H    : constant Natural := LH + Guikit.Layout.Scaled (Guikit.Layout.Settings_Row_Gap, LH);
+         Cell_W   : constant Natural := Guikit.Layout.Caret_Advance_Width (LH);
+         V        : SP.Field_Vectors.Vector;
+         P        : SP.Panel;
+         Rects    : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         Text     : Guikit.Draw.Text_Command_Vectors.Vector;
+         Nodes    : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+         One_X, Two_X, Value_X : Integer := -1;
+         Seen_Field, Seen_Bar, Seen_Accent, Seen_Shadow : Boolean := False;
+      begin
+         --  A row of actions (no label of its own, so its buttons take their
+         --  natural widths), then more text fields than fit, so it scrolls.
+         V.Append
+           (SP.Field'(Key => U ("act"), Label => U (""), Kind => SP.Buttons,
+                      Option_Values => Options ("one", "two"), Option_Labels => Options ("One", "Two"),
+                      others => <>));
+         for I in 1 .. 30 loop
+            V.Append
+              (SP.Field'(Key => U ("f" & I'Image), Label => U ("Field" & I'Image), Kind => SP.Text,
+                         Value => U ("abc"), others => <>));
+         end loop;
+         SP.Set_Configuration (P, SP.Configuration'(Line_Height => LH, others => <>));
+         SP.Set_Fields (P, V);
+         SP.Build_Frame (P, Region_X, Region_Y, 600, 500, 1000, 1000, False, -1, -1, Rects, Text, Nodes);
+         for Command of Text loop
+            if Command.Text = "One" and then One_X < 0 then
+               One_X := Command.X;
+            elsif Command.Text = "Two" and then Two_X < 0 then
+               Two_X := Command.X;
+            elsif Command.Text = "abc" and then Value_X < 0 then
+               Value_X := Command.X;
+            end if;
+         end loop;
+         Assert (One_X >= 0 and then Two_X >= 0 and then Value_X >= 0,
+                 "the buttons and a field value are drawn" & Where);
+         Assert (Two_X - One_X = 3 * Cell_W + 2 * Button_Pad + Button_Gap,
+                 "a button pads its label and is followed by the gap" & Where);
+         for R of Rects loop
+            if R.Color = Guikit.Draw.Input_Color and then R.X = Value_X - Inset then
+               Seen_Field := True;
+               Assert (R.Height = Row_H - Margin, "a text field is its row less the scaled margin" & Where);
+            elsif R.Color = Guikit.Draw.Border_Color and then R.X = Region_X + 600 - Bar and then R.Width = Bar then
+               Seen_Bar := True;
+            elsif R.Color = Guikit.Draw.Selection_Color and then R.X = Region_X and then R.Y = Region_Y
+              and then R.Width = 600 and then R.Height = Accent
+            then
+               Seen_Accent := True;
+            elsif R.Color = Guikit.Draw.Shadow_Color and then R.X = Region_X + Shadow and then R.Y = Region_Y + 500 then
+               Seen_Shadow := True;
+            end if;
+         end loop;
+         Assert (Seen_Field, "a text field's value is inset by the scaled inset" & Where);
+         Assert (Seen_Bar, "the scrollbar track is the scaled width, at the panel's right edge" & Where);
+         Assert (Seen_Accent, "the panel's top accent band is the scaled height" & Where);
+         Assert (Seen_Shadow, "the panel's shadow starts the scaled offset in" & Where);
+      end Check_Chrome;
+
+      --  The tab switcher's tooltip: 4 px below the switcher and padding its
+      --  text 6 px, at 20 px. Title_Inset is the title row's top inset.
+      procedure Check_Tooltip (LH : Positive; Title_Inset, Tip_Pad, Tip_Gap : Natural) is
+         Where    : constant String := " at line height" & LH'Image;
+         Row_H    : constant Natural := LH + Guikit.Layout.Scaled (Guikit.Layout.Settings_Row_Gap, LH);
+         Switch_Y : constant Natural := Region_Y + Title_Inset + Row_H;
+         Hover_X  : constant Natural := Region_X + Guikit.Layout.Scaled (Guikit.Layout.Settings_Pane_Padding, LH) + 10;
+         V        : SP.Field_Vectors.Vector;
+         P        : SP.Panel;
+         Rects    : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         Text     : Guikit.Draw.Text_Command_Vectors.Vector;
+         Nodes    : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+         Seen     : Boolean := False;
+      begin
+         V.Append (SP.Field'(Key => U ("a"), Label => U ("A"), Kind => SP.Section, others => <>));
+         V.Append (SP.Field'(Key => U ("one"), Label => U ("One"), Kind => SP.Toggle, Value => U ("false"),
+                             others => <>));
+         V.Append (SP.Field'(Key => U ("b"), Label => U ("B"), Kind => SP.Section, others => <>));
+         V.Append (SP.Field'(Key => U ("two"), Label => U ("Two"), Kind => SP.Toggle, Value => U ("false"),
+                             others => <>));
+         SP.Set_Configuration
+           (P, SP.Configuration'(Line_Height => LH, Switch_Tooltip => U ("Switch tabs"), others => <>));
+         SP.Set_Fields (P, V);
+         SP.Build_Frame
+           (P, Region_X, Region_Y, 600, 500, 1000, 1000, False, Hover_X, Switch_Y + 2, Rects, Text, Nodes);
+         for Command of Text loop
+            if Command.Text = "Switch tabs" then
+               Seen := True;
+               Assert (Command.X = Hover_X + Tip_Pad, "the tooltip pads its text by the scaled padding" & Where);
+               Assert (Command.Y = Switch_Y + Row_H + Tip_Gap + Tip_Pad,
+                       "the tooltip sits the scaled gap below the switcher" & Where);
+            end if;
+         end loop;
+         Assert (Seen, "hovering the tab switcher shows its tooltip" & Where);
+      end Check_Tooltip;
    begin
       Check (20, Pad => 14, Row_Gap => 8, Group_Gap => 12, Title_Inset => 5);
       Check (30, Pad => 21, Row_Gap => 12, Group_Gap => 18, Title_Inset => 7);
       Check (40, Pad => 28, Row_Gap => 16, Group_Gap => 24, Title_Inset => 10);
+      Check_Chrome
+        (20, Margin => 4, Inset => 4, Button_Pad => 6, Button_Gap => 4, Bar => 12, Accent => 3, Shadow => 3);
+      Check_Chrome
+        (40, Margin => 8, Inset => 8, Button_Pad => 12, Button_Gap => 8, Bar => 24, Accent => 6, Shadow => 6);
+      Check_Tooltip (20, Title_Inset => 5, Tip_Pad => 6, Tip_Gap => 4);
+      Check_Tooltip (40, Title_Inset => 10, Tip_Pad => 12, Tip_Gap => 8);
    end Test_Line_Height_Scaling;
 
    procedure Test_Button_Layouts_Scale (T : in out AUnit.Test_Cases.Test_Case'Class) is

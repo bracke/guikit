@@ -157,174 +157,19 @@ package body Guikit.Draw is
       Asset_Source := Source;
    end Set_Icon_Asset_Source;
 
-   function Builtin_Icon_Asset_Text
-     (Icon_Id    : String;
-      Theme_Name : String)
-      return String
-   is
-      LF          : constant String := [1 => ASCII.LF];
-      Corner_Role : constant String := (if Theme_Name = "files-high-contrast" then "border" else "muted");
-
-      function Header (Asset_Name : String) return String is
-      begin
-         return "files-icon-v1" & LF & "name=" & Asset_Name & LF & "grid=16" & LF;
-      end Header;
-
-      --  A page on the finer 32-unit grid with a real folded top-right corner (a
-      --  triangle), so filetype icons read as detailed shapes rather than blocky
-      --  rectangles at large sizes. The caller paints its glyph over the page.
-      function Document
-        (Asset_Name : String;
-         Body_Text  : String)
-         return String is
-      begin
-         return
-           "files-icon-v1" & LF & "name=" & Asset_Name & LF & "grid=32" & LF
-           & "rect=5,0,13,32,base" & LF
-           & "rect=18,7,9,25,base" & LF
-           & "tri=18,0,27,7,18,7," & Corner_Role & LF
-           & Body_Text;
-      end Document;
-   begin
-      if Icon_Id = "folder" then
-         return
-           "files-icon-v1" & LF & "name=folder" & LF & "grid=32" & LF
-           & "rect=0,1,13,8,base" & LF
-           & "tri=13,1,13,9,19,9,base" & LF
-           & "rect=0,9,32,22,base" & LF
-           & "rect=0,9,32,4,accent" & LF
-           & "rect=3,16,26,1,border" & LF;
-      elsif Icon_Id = "text" then
-         return
-           "files-icon-v1" & LF & "name=text" & LF & "grid=64" & LF
-           & "rect=10,0,27,64,base" & LF
-           & "rect=37,15,17,49,base" & LF
-           & "tri=37,0,54,15,37,15," & Corner_Role & LF
-           & "rect=17,25,30,3,border" & LF
-           & "rect=17,34,30,4,border" & LF
-           & "rect=17,44,30,4,border" & LF
-           & "rect=17,54,20,4,border" & LF;
-      elsif Icon_Id = "image" then
-         return
-           Document
-             ("image",
-              "rect=7,12,18,16,accent" & LF
-              & "rect=10,15,4,3,base" & LF
-              & "tri=7,28,16,16,21,28,border" & LF
-              & "tri=15,28,21,21,25,28,border" & LF);
-      elsif Icon_Id = "thumbnail" then
-         return
-           Header ("thumbnail")
-           & "rect=1,1,14,14,border" & LF
-           & "rect=2,2,12,12,base" & LF
-           & "rect=3,3,10,7,accent" & LF
-           & "rect=4,8,4,2,border" & LF
-           & "rect=8,7,4,3,border" & LF
-           & "rect=3,12,10,1,muted" & LF;
-      elsif Icon_Id = "executable" then
-         return
-           Document
-             ("executable",
-              "tri=10,12,10,22,18,17,accent" & LF
-              & "rect=12,25,10,2,border" & LF);
-      elsif Icon_Id = "link" then
-         return
-           Document
-             ("link",
-              "tri=12,25,15,25,22,12,accent" & LF
-              & "tri=15,25,22,12,22,15,accent" & LF
-              & "tri=15,10,25,10,25,20,accent" & LF);
-      elsif Icon_Id = "unknown" then
-         return
-           Document
-             ("unknown",
-              "rect=12,11,9,3,border" & LF
-              & "rect=18,12,3,5,border" & LF
-              & "rect=15,16,6,2,border" & LF
-              & "rect=15,18,2,5,border" & LF
-              & "rect=15,27,2,3,border" & LF);
-      elsif Icon_Id = "ada" then
-         return
-           Document
-             ("ada",
-              "tri=15,11,17,11,10,30,accent" & LF
-              & "tri=15,11,10,30,12,30,accent" & LF
-              & "tri=15,11,17,11,22,30,accent" & LF
-              & "tri=17,11,22,30,20,30,accent" & LF
-              & "rect=12,22,8,3,border" & LF);
-      elsif Icon_Id = "markdown" then
-         return
-           Document
-             ("markdown",
-              "rect=9,11,2,11,border" & LF
-              & "rect=21,11,2,11,border" & LF
-              & "tri=10,11,22,11,16,18,border" & LF
-              & "rect=15,22,2,4,accent" & LF
-              & "tri=12,25,20,25,16,30,accent" & LF);
-      elsif Icon_Id = "toolbar-home" then
-         return
-           Header ("toolbar-home")
-           & "rect=7,2,2,1,border" & LF
-           & "rect=6,3,4,1,border" & LF
-           & "rect=5,4,6,1,border" & LF
-           & "rect=4,5,8,1,border" & LF
-           & "rect=3,6,10,2,border" & LF
-           & "rect=4,8,2,5,border" & LF
-           & "rect=10,8,2,5,border" & LF
-           & "rect=6,12,4,1,border" & LF
-           & "rect=7,9,2,4,border" & LF;
-      elsif Icon_Id = "toolbar-back" then
-         return
-           Header ("toolbar-back")
-           & "rect=7,3,2,2,border" & LF
-           & "rect=6,5,2,2,border" & LF
-           & "rect=4,7,8,2,border" & LF
-           & "rect=6,9,2,2,border" & LF
-           & "rect=7,11,2,2,border" & LF;
-      elsif Icon_Id = "toolbar-forward" then
-         return
-           Header ("toolbar-forward")
-           & "rect=7,3,2,2,border" & LF
-           & "rect=8,5,2,2,border" & LF
-           & "rect=4,7,8,2,border" & LF
-           & "rect=8,9,2,2,border" & LF
-           & "rect=7,11,2,2,border" & LF;
-      elsif Icon_Id = "toolbar-create" then
-         return
-           Header ("toolbar-create")
-           & "rect=7,3,2,10,border" & LF
-           & "rect=3,7,10,2,border" & LF;
-      elsif Icon_Id = "toolbar-delete" then
-         return
-           Header ("toolbar-delete")
-           & "rect=6,3,4,1,border" & LF
-           & "rect=4,5,8,2,border" & LF
-           & "rect=5,7,1,6,border" & LF
-           & "rect=10,7,1,6,border" & LF
-           & "rect=5,12,6,1,border" & LF
-           & "rect=7,8,1,4,border" & LF
-           & "rect=9,8,1,4,border" & LF;
-      else
-         return "";
-      end if;
-   end Builtin_Icon_Asset_Text;
-
    function Icon_Asset_Text
      (Icon_Id    : String;
       Theme_Name : String)
       return String is
+     (if Asset_Source = null then "" else Asset_Source (Icon_Id, Theme_Name));
+
+   function Is_Format_Header (Line : String) return Boolean is
+      Suffix : constant String := "-" & Icon_Format_Name;
    begin
-      if Asset_Source /= null then
-         declare
-            Supplied : constant String := Asset_Source (Icon_Id, Theme_Name);
-         begin
-            if Supplied /= "" then
-               return Supplied;
-            end if;
-         end;
-      end if;
-      return Builtin_Icon_Asset_Text (Icon_Id, Theme_Name);
-   end Icon_Asset_Text;
+      return Line = Icon_Format_Name
+        or else (Line'Length > Suffix'Length
+                 and then Line (Line'Last - Suffix'Length + 1 .. Line'Last) = Suffix);
+   end Is_Format_Header;
 
    function Parse_Icon_Asset
      (Content : String)
@@ -435,7 +280,7 @@ package body Guikit.Draw is
          if Line = "" then
             return;
          elsif not Saw_Header then
-            Saw_Header := Line = "files-icon-v1";
+            Saw_Header := Is_Format_Header (Line);
          elsif Starts_With (Line, "name=") then
             Result.Name := To_Unbounded_String (Line (Line'First + 5 .. Line'Last));
             Saw_Name := Length (Result.Name) > 0;

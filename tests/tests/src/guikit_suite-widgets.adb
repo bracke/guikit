@@ -122,7 +122,7 @@ package body Guikit_Suite.Widgets is
       pragma Unreferenced (T);
       Rects : Rectangle_Command_Vectors.Vector;
    begin
-      Draw_Drop_Shadow (Rects, Big, Big, 10, 10, 20, 15, Shadow_Color);
+      Draw_Drop_Shadow (Rects, Big, Big, 10, 10, 20, 15, Shadow_Color, 20);
       Assert (Count (Rects) = 8, "a drop shadow is four bands, each a horizontal and a vertical strip");
       Assert (Rects (1).X = 13 and then Rects (1).Y = 25, "the bottom strip is offset below the box");
       Assert (Rects (1).Width = 19 and then Rects (1).Height = 2,
@@ -131,9 +131,17 @@ package body Guikit_Suite.Widgets is
       Assert (Rects (2).Width = 2 and then Rects (2).Height = 12, "the right strip stops where the bottom begins");
       Assert (Rects (7).Height = 8 and then Rects (8).Width = 8, "the outermost band reaches eight pixels out");
 
+      --  The shadow is chrome: at twice the line height it is twice the size.
+      Rects.Clear;
+      Draw_Drop_Shadow (Rects, Big, Big, 10, 10, 20, 15, Shadow_Color, 40);
+      Assert (Count (Rects) = 8, "a scaled drop shadow is still four bands");
+      Assert (Rects (1).X = 16 and then Rects (1).Y = 25 and then Rects (1).Height = 4,
+              "at twice the line height the shadow starts 6 px in, in 4 px steps");
+      Assert (Rects (7).Height = 16 and then Rects (8).Width = 16, "and reaches sixteen pixels out");
+
       --  Both bands fall outside a tiny clip window and are dropped.
       Rects.Clear;
-      Draw_Drop_Shadow (Rects, 20, 20, 10, 10, 20, 15, Shadow_Color);
+      Draw_Drop_Shadow (Rects, 20, 20, 10, 10, 20, 15, Shadow_Color, 20);
       Assert (Count (Rects) = 0, "shadow bands off-screen of the clip are dropped");
    end Test_Drop_Shadow;
 
@@ -257,7 +265,7 @@ package body Guikit_Suite.Widgets is
       Draw_Palette_Row
         (Rects, Texts, Big, Big,
          Row_X => 10, Row_Y => 40, Row_Width => 200, Row_Height => 40,
-         Background_Color => Selection_Color, Selected => True, Accent_Color => Border_Color,
+         Background_Color => Selection_Color, Selected => True, Accent_Color => Border_Color, Accent_Width => 3,
          Label_X => 18, Label_Y => 44, Label_Width => 120, Label_Height => 20,
          Label_Text => U.To_Unbounded_String ("Open"), Label_Truncated => False, Label_Color => Text_Color,
          Shortcut_X => 160, Shortcut_Width => 40,
@@ -277,7 +285,7 @@ package body Guikit_Suite.Widgets is
       Draw_Palette_Row
         (Rects, Texts, Big, Big,
          Row_X => 10, Row_Y => 40, Row_Width => 200, Row_Height => 20,
-         Background_Color => Pane_Color, Selected => False, Accent_Color => Border_Color,
+         Background_Color => Pane_Color, Selected => False, Accent_Color => Border_Color, Accent_Width => 3,
          Label_X => 18, Label_Y => 44, Label_Width => 170, Label_Height => 16,
          Label_Text => U.To_Unbounded_String ("Save"), Label_Truncated => False, Label_Color => Text_Color,
          Shortcut_X => 0, Shortcut_Width => 0,
@@ -469,10 +477,38 @@ package body Guikit_Suite.Widgets is
          Assert (Text (1).Width = Width - 2 * Padding,
                  "an over-wide button label is clipped one scaled padding short of each edge" & Where);
       end Check;
+
+      --  The panel's right drop shadow (3 px wide and 3 px down at 20 px)
+      --  scales with the line height too.
+      procedure Check_Shadow (LH : Positive; Offset : Natural) is
+         Where : constant String := " at line height" & LH'Image;
+         Rects : Rectangle_Command_Vectors.Vector;
+         Text  : Text_Command_Vectors.Vector;
+      begin
+         MT.Draw_Frame
+           (Rectangles    => Rects,
+            Text          => Text,
+            Clip_Width    => Big,
+            Clip_Height   => Big,
+            Region_X      => 0,
+            Region_Y      => 0,
+            Region_Width  => 400,
+            Region_Height => 400,
+            Title         => U.Null_Unbounded_String,
+            Config        => MT.Menu_Tree_Configuration'(Line_Height => LH, others => <>),
+            Rows          => MT.Menu_Tree_Row_Vectors.Empty_Vector,
+            Buttons       => MT.Menu_Tree_Button_Vectors.Empty_Vector,
+            Draw_Chrome   => True);
+         Assert (Count (Rects) > 0, "the chrome is drawn" & Where);
+         Assert (Rects (1).X = 400 and then Rects (1).Y = Offset and then Rects (1).Width = Offset,
+                 "the right shadow is offset and as wide as the scaled shadow" & Where);
+      end Check_Shadow;
    begin
       Check (20, Padding => 8, Width => 100);
       Check (30, Padding => 12, Width => 150);
       Check (40, Padding => 16, Width => 200);
+      Check_Shadow (20, Offset => 3);
+      Check_Shadow (40, Offset => 6);
    end Test_Menu_Tree_Button_Scaling;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is

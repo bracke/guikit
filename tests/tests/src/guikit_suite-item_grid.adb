@@ -469,6 +469,11 @@ package body Guikit_Suite.Item_Grid is
                  "a details row's icon is inset by the scaled row padding" & Where);
          Assert (Details (1).Text_X = Cols (IG.Name_Column).X + IG.Column_Padding (LH),
                  "a details name is inset into its column by the scaled column padding" & Where);
+         --  Its text and icon sit above the row padding by a lift (2 px at
+         --  20 px) that scales with them: half the padding at any line height.
+         Assert (Details (1).Text_Y = Details (1).Y + IG.Row_Padding (LH) / 2
+                   and then Details (1).Icon_Y = Details (1).Text_Y,
+                 "a details row's text and icon lift scales with the line height" & Where);
 
          --  The other details columns are inset by the same scaled padding.
          IG.Draw_Details_Row
@@ -487,6 +492,30 @@ package body Guikit_Suite.Item_Grid is
                                  Line_Height => LH);
          Assert (Field_X = 50 + Pad and then Field_W = 7 * LH - 2 * Pad,
                  "a large-icon rename field is inset by the scaled content padding" & Where);
+
+         --  A selected cell's left stripe (3 px at 20 px) and a drop target's
+         --  (4 px) scale with the line height too.
+         declare
+            use type Guikit.Draw.Render_Color;
+
+            function Stripe_Width (Kind : IG.Background_Kind; Color : Guikit.Draw.Render_Color) return Natural is
+               Background : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+            begin
+               IG.Draw_Item_Background
+                 (Background, 2000, 2000, Wide, Kind,
+                  Selection_Color => Guikit.Draw.Selection_Color, Hover_Color => Guikit.Draw.Hover_Color,
+                  Border_Color => Guikit.Draw.Border_Color, Alternate_Color => Guikit.Draw.Alternate_Row_Color,
+                  Line_Height => LH);
+               --  The stripe is the last rectangle drawn, in its own colour.
+               Assert (Background.Last_Element.Color = Color, "the stripe is drawn last" & Where);
+               return Background.Last_Element.Width;
+            end Stripe_Width;
+         begin
+            Assert (Stripe_Width (IG.Selected, Guikit.Draw.Border_Color) = Guikit.Layout.Scaled (3, LH),
+                    "a selected cell's stripe scales with the line height" & Where);
+            Assert (Stripe_Width (IG.Drop_Target, Guikit.Draw.Selection_Color) = Guikit.Layout.Scaled (4, LH),
+                    "a drop target's stripe scales with the line height" & Where);
+         end;
       end Check_Layout;
    begin
       Check_Spacing (20, Gap => 8, Content => 4, Icon_Gap => 12, Row => 4, Column => 6, Small_W => 216);

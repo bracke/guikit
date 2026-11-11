@@ -181,6 +181,55 @@ package body Guikit_Suite.Command_Palette is
                  "the title, search box, first row and its label are all rendered" & Where);
       end Check;
 
+      --  The rest of the chrome: the icon column (36 px at 20 px), the
+      --  scrollbar (12 px), the floating panel's top accent band (3 px) and
+      --  its drop shadow (3 px in from the corner).
+      procedure Check_Chrome (LH : Positive; Pad, Icon_Slot, Bar, Accent, Shadow : Natural) is
+         use type Guikit.Draw.Render_Color;
+
+         Where    : constant String := " at line height" & LH'Image;
+         Many     : CP.Command_Vectors.Vector;
+         P        : CP.Palette;
+         Rects    : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         Text     : Guikit.Draw.Text_Command_Vectors.Vector;
+         Icons    : Guikit.Draw.Icon_Command_Vectors.Vector;
+         Nodes    : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+         Seen_Label, Seen_Bar, Seen_Accent, Seen_Shadow : Boolean := False;
+      begin
+         for I in 1 .. 60 loop
+            Many.Append
+              (CP.Command'
+                 (Id => I, Label => To_Unbounded_String ("Entry" & I'Image), Enabled => True, others => <>));
+         end loop;
+         CP.Set_Configuration
+           (P, CP.Configuration'(Line_Height => LH, Show_Icons => True, Overlay => True, others => <>));
+         CP.Set_Commands (P, Many);
+         --  Clipped wider than the panel, so its shadow (outside it) is kept.
+         CP.Build_Frame (P, 0, 0, Width, Height, Width + 100, Height + 100, False, -1, -1, Rects, Text, Icons, Nodes);
+         for Command of Text loop
+            if Command.Text = "Entry 1" then
+               Seen_Label := True;
+               Assert (Command.X = 3 * Pad + Icon_Slot,
+                       "a row label clears the padded icon column" & Where);
+            end if;
+         end loop;
+         for R of Rects loop
+            if R.X = Width - Bar and then R.Width = Bar and then R.Color = Guikit.Draw.Border_Color then
+               Seen_Bar := True;
+            elsif R.X = 0 and then R.Y = 0 and then R.Width = Width and then R.Height = Accent
+              and then R.Color = Guikit.Draw.Selection_Color
+            then
+               Seen_Accent := True;
+            elsif R.Color = Guikit.Draw.Shadow_Color and then R.X = Shadow and then R.Y = Height then
+               Seen_Shadow := True;
+            end if;
+         end loop;
+         Assert (Seen_Label, "the first row's label is drawn" & Where);
+         Assert (Seen_Bar, "the scrollbar track is the scaled width, at the panel's right edge" & Where);
+         Assert (Seen_Accent, "the panel's top accent band is the scaled height" & Where);
+         Assert (Seen_Shadow, "the drop shadow starts the scaled offset in from the corner" & Where);
+      end Check_Chrome;
+
       Base   : constant Guikit.Layout.Palette_Layout :=
         Guikit.Layout.Calculate_Palette_Layout (0, 0, Width, Height, 20);
       Double : constant Guikit.Layout.Palette_Layout :=
@@ -189,6 +238,8 @@ package body Guikit_Suite.Command_Palette is
       Check (20, Pad => 8, Row_Pad => 4, Field_Pad => 8);
       Check (30, Pad => 12, Row_Pad => 6, Field_Pad => 12);
       Check (40, Pad => 16, Row_Pad => 8, Field_Pad => 16);
+      Check_Chrome (20, Pad => 8, Icon_Slot => 36, Bar => 12, Accent => 3, Shadow => 3);
+      Check_Chrome (40, Pad => 16, Icon_Slot => 72, Bar => 24, Accent => 6, Shadow => 6);
 
       --  Everything the line height drives is exactly doubled at twice the line height.
       Assert (Double.Search_X = 2 * Base.Search_X, "the palette padding doubles at 2x");

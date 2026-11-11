@@ -451,7 +451,7 @@ package body Guikit.Layout is
       Line_Height    : Positive := 20)
       return Settings_Pane_Layout
    is
-      Wanted_W : constant Natural := Natural'Max (440, Scaled_Down (Width, 4, 5));
+      Wanted_W : constant Natural := Natural'Max (Scaled (440, Line_Height), Scaled_Down (Width, 4, 5));
       Pane_W : constant Natural := Natural'Min (Width, Wanted_W);
       --  Height for a typical settings section's rows plus the title, tab
       --  switcher, and footer chrome. A section is one tab's worth of fields, not
@@ -467,7 +467,7 @@ package body Guikit.Layout is
           (Saturating_Add (Content_H, Saturating_Multiply (Scaled (Settings_Pane_Padding, Line_Height), 2)),
            Height / 3);
       Top_Margin : constant Natural :=
-        Natural'Max (Saturating_Add (Toolbar_Height, 8), Height / 6);
+        Natural'Max (Saturating_Add (Toolbar_Height, Scaled (8, Line_Height)), Height / 6);
       Available_H : constant Natural :=
         (if Height > Top_Margin then Height - Top_Margin else 0);
       Pane_H : constant Natural := Natural'Min (Wanted_H, Available_H);

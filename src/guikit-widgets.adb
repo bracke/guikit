@@ -181,10 +181,11 @@ package body Guikit.Widgets is
       Y           : Natural;
       Width       : Natural;
       Height      : Natural;
-      Color       : Render_Color)
+      Color       : Render_Color;
+      Line_Height : Positive)
    is
-      Shadow_Offset : constant Natural := 3;
-      Band_Step     : constant Natural := 2;
+      Shadow_Offset : constant Natural := Guikit.Layout.Scaled (3, Line_Height);
+      Band_Step     : constant Natural := Guikit.Layout.Scaled (2, Line_Height);
       Bands         : constant Positive := 4;
    begin
       if Width = 0 or else Height = 0 then
@@ -390,7 +391,8 @@ package body Guikit.Widgets is
                Text         => Label_Text,
                Color        => Label_Color,
                Truncated    => Label_Truncated,
-               Scale_To_Box => False,               Italic       => False));
+               Scale_To_Box => False,
+               Italic       => False));
       end if;
    end Draw_Menu_Row;
 
@@ -406,6 +408,7 @@ package body Guikit.Widgets is
       Background_Color      : Render_Color;
       Selected              : Boolean;
       Accent_Color          : Render_Color;
+      Accent_Width          : Natural;
       Label_X               : Natural;
       Label_Y               : Natural;
       Label_Width           : Natural;
@@ -450,7 +453,8 @@ package body Guikit.Widgets is
                   Text         => Content,
                   Color        => Color,
                   Truncated    => Truncated,
-                  Scale_To_Box => False,                  Italic       => False));
+                  Scale_To_Box => False,
+                  Italic       => False));
          end if;
       end Emit_Text;
    begin
@@ -459,7 +463,7 @@ package body Guikit.Widgets is
       if Selected then
          Add_Clipped_Rect
            (Rectangles, Clip_Width, Clip_Height,
-            Row_X, Row_Y, Natural'Min (3, Row_Width), Row_Height, Accent_Color);
+            Row_X, Row_Y, Natural'Min (Accent_Width, Row_Width), Row_Height, Accent_Color);
       end if;
 
       Emit_Text (Label_X, Label_Y, Label_Width, Label_Height, Label_Text, Label_Color, Label_Truncated);
@@ -551,7 +555,8 @@ package body Guikit.Widgets is
                   Text         => Label,
                   Color        => Text_Color,
                   Truncated    => False,
-                  Scale_To_Box => False,                  Italic       => False));
+                  Scale_To_Box => False,
+                  Italic       => False));
          end if;
       end Box;
    begin
@@ -612,7 +617,8 @@ package body Guikit.Widgets is
                Text         => Label_Text,
                Color        => Label_Color,
                Truncated    => Label_Truncated,
-               Scale_To_Box => False,               Italic       => False));
+               Scale_To_Box => False,
+               Italic       => False));
       end if;
    end Draw_Button;
 
@@ -678,7 +684,8 @@ package body Guikit.Widgets is
                Text         => Label_Text,
                Color        => Label_Color,
                Truncated    => Label_Truncated,
-               Scale_To_Box => False,               Italic       => False));
+               Scale_To_Box => False,
+               Italic       => False));
       end if;
    end Draw_Tooltip;
 

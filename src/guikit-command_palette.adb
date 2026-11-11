@@ -8,9 +8,12 @@ package body Guikit.Command_Palette is
    use Ada.Strings.Unbounded;
    use type Guikit.Draw.Render_Color;
 
-   Icon_Slot : constant Natural := 36;
-   --  Match the grid/list scrollbar width so panels look consistent.
-   Bar_Width : constant Natural := 12;
+   --  The width of a row's icon column at Guikit.Layout.Reference_Line_Height;
+   --  it grows with the text like the rest of the chrome.
+   Icon_Slot_Base : constant Natural := 36;
+   --  Match the grid/list scrollbar width so panels look consistent (at the
+   --  reference line height, scaled with the text).
+   Bar_Width_Base : constant Natural := 12;
    Ellipsis  : constant String :=
      Character'Val (16#E2#) & Character'Val (16#80#) & Character'Val (16#A6#);  --  U+2026
 
@@ -236,6 +239,10 @@ package body Guikit.Command_Palette is
       Pad     : constant Natural := Guikit.Layout.Scaled (Guikit.Layout.Palette_Padding, LH);
       Row_Pad : constant Natural := Guikit.Layout.Scaled (Guikit.Layout.Palette_Result_Row_Padding, LH);
       Cell_W  : constant Natural := Guikit.Layout.Caret_Advance_Width (LH);
+      Icon_Slot : constant Natural := Guikit.Layout.Scaled (Icon_Slot_Base, LH);
+      Bar_Width : constant Natural := Guikit.Layout.Scaled (Bar_Width_Base, LH);
+      --  The icon's margin above and below it within a row, together.
+      Icon_Margins : constant Natural := Guikit.Layout.Scaled (8, LH);
       Gutter  : constant Natural := (if P.Config.Show_Icons then Pad + Icon_Slot else 0);
       Ranked  : constant Command_Vectors.Vector := Filtered (P);
       Count   : constant Natural := Natural (Ranked.Length);
@@ -250,7 +257,7 @@ package body Guikit.Command_Palette is
       --  with a title the close icon sits in the title row and the search is full
       --  width.
       Close_Btn   : constant Natural := LH;
-      Close_Inset : constant Natural := Natural'Max (4, LH / 4);
+      Close_Inset : constant Natural := Natural'Max (Guikit.Layout.Scaled (4, LH), LH / 4);
       Search_W    : constant Natural :=
         (if Title_H > 0 then Layout.Search_Width
          elsif P.Config.Overlay
@@ -275,7 +282,7 @@ package body Guikit.Command_Palette is
       if P.Config.Overlay then
          Guikit.Widgets.Draw_Drop_Shadow
            (Rectangles, Clip_Width, Clip_Height, Layout.X, Layout.Y, Layout.Width, Layout.Height,
-            Guikit.Draw.Shadow_Color);
+            Guikit.Draw.Shadow_Color, LH);
       end if;
       Guikit.Widgets.Draw_Menu_Panel
         (Rectangles, Clip_Width, Clip_Height, Layout.X, Layout.Y, Layout.Width, Layout.Height,
@@ -283,7 +290,7 @@ package body Guikit.Command_Palette is
       Rectangles.Append
         (Guikit.Draw.Rectangle_Command'
            (X => Layout.X, Y => Layout.Y, Width => Layout.Width,
-            Height => Natural'Min (3, Layout.Height), Color => Guikit.Draw.Selection_Color));
+            Height => Natural'Min (Guikit.Layout.Scaled (3, LH), Layout.Height), Color => Guikit.Draw.Selection_Color));
       Accessibility.Append
         (Guikit.Draw.Accessibility_Node'
            (Role => Guikit.Draw.Role_Dialog, X => Layout.X, Y => Layout.Y,
@@ -294,7 +301,7 @@ package body Guikit.Command_Palette is
       if Title_H > 0 then
          declare
             Title_X : constant Natural := Layout.X + Pad;
-            Title_Y : constant Natural := Layout.Y + Natural'Max (4, LH / 4);
+            Title_Y : constant Natural := Layout.Y + Natural'Max (Guikit.Layout.Scaled (4, LH), LH / 4);
             Title_W : constant Natural :=
               (if Layout.Width > Pad + Close_Btn + 2 * Close_Inset
                then Layout.Width - Pad - Close_Btn - 2 * Close_Inset else 0);
@@ -390,7 +397,8 @@ package body Guikit.Command_Palette is
                if P.Config.Show_Icons and then C.Icon.Width > 0 then
                   declare
                      Display : constant Natural :=
-                       Natural'Min (Icon_Slot, (if Row.Height > 8 then Row.Height - 8 else Row.Height));
+                       Natural'Min
+                         (Icon_Slot, (if Row.Height > Icon_Margins then Row.Height - Icon_Margins else Row.Height));
                   begin
                      Icons.Append
                        (Guikit.Draw.Icon_Command'
@@ -419,6 +427,7 @@ package body Guikit.Command_Palette is
                      else Guikit.Draw.Pane_Color),
                   Selected           => Row.Selected,
                   Accent_Color       => Guikit.Draw.Border_Color,
+                  Accent_Width       => Guikit.Layout.Scaled (3, LH),
                   Label_X            => Label_X,
                   Label_Y            => Label_Y,
                   Label_Width        => Label_W,
@@ -498,7 +507,7 @@ package body Guikit.Command_Palette is
       end;
 
       --  Overlay close button, at the panel's top-right (matching the common
-      --  panel-close geometry: inset = max(4, line/4), a line-height square).
+      --  panel-close geometry: inset = max(4 scaled, line/4), a line-height square).
       if P.Config.Overlay then
          declare
             Inset : constant Natural := Close_Inset;

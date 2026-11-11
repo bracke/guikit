@@ -215,6 +215,7 @@ package body Guikit.List_Panel is
                Background_Color      => Background,
                Selected              => Row.Selected,
                Accent_Color          => Row.Accent_Color,
+               Accent_Width          => Guikit.Layout.Scaled (3, Line_Height),
                Label_X               => Title_X + Leading_Icon_Width,
                Label_Y               => Label_Y,
                Label_Width           => Label_W,

@@ -116,34 +116,39 @@ package Guikit.Draw is
       Triangles  : Icon_Asset_Tri_Vectors.Vector;
    end record;
 
-   --  Return the shape definition (files-icon-v1) for an icon and theme. When an
-   --  external source has been registered (see Set_Icon_Asset_Source) its
-   --  definition is used; otherwise the built-in copy is returned. The result is
-   --  an empty string when no definition exists.
+   --  The icon definition format's name. A definition's first line is the
+   --  name alone or after a producer's prefix and a hyphen (an application
+   --  may tag its files "<app>-icon-v1"); the parser accepts either.
+   Icon_Format_Name : constant String := "icon-v1";
+
+   --  Return the shape definition for an icon and theme from the source the
+   --  host registered (see Set_Icon_Asset_Source). Guikit has no icons of its
+   --  own: the result is an empty string when no source is registered or the
+   --  source has no such icon.
    --
-   --  @param Icon_Id Bundled icon identifier.
-   --  @param Theme_Name Icon theme identifier.
+   --  @param Icon_Id Icon identifier the host defines.
+   --  @param Theme_Name Icon theme identifier the host defines.
    --  @return Icon shape definition, or an empty string when none exists.
    function Icon_Asset_Text
      (Icon_Id    : String;
       Theme_Name : String)
       return String;
 
-   --  A source of icon shape definitions supplied by the host (e.g. reading the
-   --  bundled .icon files from disk), so those files are the single edit surface.
-   --  It returns the definition for (Icon_Id, Theme_Name) or "" when it has none,
-   --  in which case Icon_Asset_Text falls back to the built-in copy.
+   --  A source of icon shape definitions supplied by the host (e.g. reading its
+   --  bundled icon files from disk). It returns the definition for
+   --  (Icon_Id, Theme_Name) or "" when it has none.
    type Icon_Asset_Source is access function
      (Icon_Id    : String;
       Theme_Name : String)
       return String;
 
-   --  Register (or clear, with null) the external icon-definition source.
+   --  Register (or clear, with null) the icon-definition source.
    --
-   --  @param Source Definition provider, or null to use only the built-in copies.
+   --  @param Source Definition provider, or null for no icon definitions.
    procedure Set_Icon_Asset_Source (Source : Icon_Asset_Source);
 
-   --  Parse a files-icon-v1 asset into rasterizable rectangle commands.
+   --  Parse an icon definition (see Icon_Format_Name) into rasterizable
+   --  rectangle and triangle commands.
    --
    --  @param Content Icon asset text.
    --  @return Parsed icon asset; Valid is False when the text is malformed.
@@ -205,13 +210,30 @@ package Guikit.Draw is
      (Index_Type   => Positive,
       Element_Type => Tooltip_Command);
 
+   --  What the backend does with an icon command. An Atlas_Icon is drawn by
+   --  the backend from its icon atlas: the asset its Icon_Id names, or the
+   --  pixels it carries. A Placed_Icon the consumer has already drawn itself
+   --  (with rectangles and triangles): the command only records where the
+   --  icon is, and the backend neither rasterizes nor draws it.
+   type Icon_Class is (Atlas_Icon, Placed_Icon);
+
+   --  An opaque 8-bit sRGB colour, as the backend rasterizes asset icons in.
+   type Icon_Rgb is record
+      R : Interfaces.Unsigned_8 := 0;
+      G : Interfaces.Unsigned_8 := 0;
+      B : Interfaces.Unsigned_8 := 0;
+   end record;
+
+   --  The colour an asset's base-role shapes are rasterized in unless its
+   --  command names another: a neutral grey.
+   Default_Icon_Base_Color : constant Icon_Rgb := (R => 184, G => 190, B => 198);
+
    type Icon_Command is record
       X          : Natural := 0;
       Y          : Natural := 0;
       Size       : Natural := 0;
       Icon_Id    : UString;
       Theme_Name : UString;
-      Asset_Path : UString;
       Thumbnail_Width  : Natural := 0;
       Thumbnail_Height : Natural := 0;
       --  Shared: a frame rebuild passes an item's thumbnail on, not a copy.
@@ -230,6 +252,12 @@ package Guikit.Draw is
       --  the same identity here share one tile however many of them there are.
       --  A colour glyph does that -- the same emoji twice is one picture.
       Shared_Tile_Id   : UString;
+      --  Whether the backend draws the icon at all (see Icon_Class).
+      Class            : Icon_Class := Atlas_Icon;
+      --  The colour the asset's base-role shapes are rasterized in; the other
+      --  roles keep the backend's fixed colours. The consumer picks it (a
+      --  folder may be blue, a document grey): the backend knows no icon names.
+      Base_Color       : Icon_Rgb := Default_Icon_Base_Color;
    end record;
 
    package Icon_Command_Vectors is new Ada.Containers.Vectors

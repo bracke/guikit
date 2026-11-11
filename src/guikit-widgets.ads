@@ -92,7 +92,8 @@ package Guikit.Widgets is
    --  Draw a soft drop shadow along the bottom and right edges of a box,
    --  starting three pixels in from its corner: four nested L-shaped bands of
    --  Color, two pixels apart, so the shadow is darkest at the box and fades
-   --  out over eight pixels.
+   --  out over eight pixels. Those are the sizes at the reference line height
+   --  (Guikit.Layout.Reference_Line_Height); they grow with Line_Height.
    --
    --  @param Rectangles Rectangle command vector to append the shadow to.
    --  @param Clip_Width Drawable window width in pixels.
@@ -102,6 +103,7 @@ package Guikit.Widgets is
    --  @param Width Box width in pixels; nothing is drawn when zero.
    --  @param Height Box height in pixels; nothing is drawn when zero.
    --  @param Color Shadow color.
+   --  @param Line_Height The line height of the text the box is drawn beside.
    procedure Draw_Drop_Shadow
      (Rectangles  : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
       Clip_Width  : Natural;
@@ -110,7 +112,8 @@ package Guikit.Widgets is
       Y           : Natural;
       Width       : Natural;
       Height      : Natural;
-      Color       : Guikit.Draw.Render_Color);
+      Color       : Guikit.Draw.Render_Color;
+      Line_Height : Positive);
 
    --  Draw a panel close button: a filled, bordered square with the close
    --  glyph centered inside it. The rectangles and the glyph are appended to
@@ -335,6 +338,7 @@ package Guikit.Widgets is
    --  @param Background_Color Row background fill colour.
    --  @param Selected When True, paint the left selection accent bar.
    --  @param Accent_Color Selection accent bar colour.
+   --  @param Accent_Width Selection accent bar width in pixels.
    --  @param Label_X Label box left edge (also the description's left edge).
    --  @param Label_Y Label box top edge (also the shortcut's top edge).
    --  @param Label_Width Label box width in pixels.
@@ -365,6 +369,7 @@ package Guikit.Widgets is
       Background_Color      : Guikit.Draw.Render_Color;
       Selected              : Boolean;
       Accent_Color          : Guikit.Draw.Render_Color;
+      Accent_Width          : Natural;
       Label_X               : Natural;
       Label_Y               : Natural;
       Label_Width           : Natural;

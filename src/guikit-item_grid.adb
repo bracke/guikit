@@ -218,6 +218,9 @@ package body Guikit.Item_Grid is
                     (if Row_Draw_H > Mul (Row_Pad, 2) then Row_Draw_H - Mul (Row_Pad, 2) else Row_Draw_H);
                   Row_Inner_X : constant Natural := Add (Content_X, Row_Pad);
                   Text_Pad    : constant Natural := Natural'Min (Column_Padding (Line_Height), Row_Draw_H);
+                  --  Text and icon sit this far above the row padding (the
+                  --  glyphs' optical lift), scaled with the text.
+                  Lift        : constant Natural := Guikit.Layout.Scaled (2, Line_Height);
                   Name_X      : constant Natural := Columns (Name_Column).X;
                   Name_W      : constant Natural := Columns (Name_Column).Width;
                   Header_Name_W : constant Natural :=
@@ -233,7 +236,7 @@ package body Guikit.Item_Grid is
                            Width         => Content_W,
                            Height        => Row_Draw_H,
                            Text_X        => Add (Name_X, Text_Pad),
-                           Text_Y        => Add (Row_Y, Sub (Row_Pad, 2)),
+                           Text_Y        => Add (Row_Y, Sub (Row_Pad, Lift)),
                            Text_Width    => Sub (Header_Name_W, Text_Pad),
                            Name_X        => Name_X,
                            Name_Width    => Header_Name_W,
@@ -248,10 +251,10 @@ package body Guikit.Item_Grid is
                            Width             => Content_W,
                            Height            => Row_Draw_H,
                            Icon_X            => Row_Inner_X,
-                           Icon_Y            => Add (Row_Y, Sub (Row_Pad, 2)),
+                           Icon_Y            => Add (Row_Y, Sub (Row_Pad, Lift)),
                            Icon_Size         => Natural'Min (Line_Height, Inner_H),
                            Text_X            => Add (Name_X, Text_Pad),
-                           Text_Y            => Add (Row_Y, Sub (Row_Pad, 2)),
+                           Text_Y            => Add (Row_Y, Sub (Row_Pad, Lift)),
                            Text_Width        => Sub (Name_W, Text_Pad),
                            Name_X            => Add (Name_X, Text_Pad),
                            Name_Width        => Sub (Name_W, Text_Pad),
@@ -608,7 +611,8 @@ package body Guikit.Item_Grid is
       Selection_Color : Guikit.Draw.Render_Color;
       Hover_Color     : Guikit.Draw.Render_Color;
       Border_Color    : Guikit.Draw.Render_Color;
-      Alternate_Color : Guikit.Draw.Render_Color)
+      Alternate_Color : Guikit.Draw.Render_Color;
+      Line_Height     : Positive := Guikit.Layout.Reference_Line_Height)
    is
       procedure Add_Rect (X, Y, W, H : Natural; Color : Guikit.Draw.Render_Color) is
       begin
@@ -636,11 +640,11 @@ package body Guikit.Item_Grid is
          when Selected =>
             Add_Rect (CX, CY, CW, CH, Selection_Color);
             Add_Border (CX, CY, CW, CH, Selection_Color);
-            Add_Rect (CX, CY, Natural'Min (3, CW), CH, Border_Color);
+            Add_Rect (CX, CY, Natural'Min (Guikit.Layout.Scaled (3, Line_Height), CW), CH, Border_Color);
          when Drop_Target =>
             Add_Rect (CX, CY, CW, CH, Hover_Color);
             Add_Border (CX, CY, CW, CH, Selection_Color);
-            Add_Rect (CX, CY, Natural'Min (4, CW), CH, Selection_Color);
+            Add_Rect (CX, CY, Natural'Min (Guikit.Layout.Scaled (4, Line_Height), CW), CH, Selection_Color);
       end case;
    end Draw_Item_Background;
 

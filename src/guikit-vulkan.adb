@@ -18,6 +18,7 @@ package body Guikit.Vulkan is
    use type System.Address;
    use type Guikit.Draw.Text_Render_Status;
    use type Guikit.Draw.Icon_Command_Vectors.Vector;
+   use type Guikit.Draw.Icon_Class;
    use type Vk.Result_T;
    use type Vk.Format_T;
    use type Vk.Color_Space_KHR_T;
@@ -158,13 +159,12 @@ package body Guikit.Vulkan is
       end if;
    end Bounded_Product_Divide;
 
-   function Is_Toolbar_Icon
-     (Icon_Id : String)
+   --  Whether the backend draws an icon from its atlas, rather than the
+   --  consumer having drawn it already (Guikit.Draw.Icon_Class).
+   function Is_Atlas_Icon
+     (Icon : Guikit.Draw.Icon_Command)
       return Boolean is
-   begin
-      return Icon_Id'Length >= 8
-        and then Icon_Id (Icon_Id'First .. Icon_Id'First + 7) = "toolbar-";
-   end Is_Toolbar_Icon;
+     (Icon.Class = Guikit.Draw.Atlas_Icon);
 
    type Gpu_Vertex is record
       X : Interfaces.C.C_float := 0.0;
@@ -4297,7 +4297,7 @@ package body Guikit.Vulkan is
       --  that would rasterize to the same pixels share one.
       Icon_Tile_Layout : Icon_Tile_Rect_Vectors.Vector;
 
-      --  The tile each non-toolbar icon draws from (index = 1-based non-toolbar
+      --  The tile each atlas icon draws from (index = 1-based atlas
       --  icon, value = 1-based index into Icon_Tile_Layout).
       Icon_Tile_Of : Natural_Vectors.Vector;
 
@@ -4310,17 +4310,21 @@ package body Guikit.Vulkan is
          --  icon cost one tile between them rather than a hundred, and the cap on
          --  tiles stops being a cap on how many files may be on screen.
          --
-         --  Identity is whatever Rasterize_Asset reads: the id picks the asset
-         --  and its colours, the theme picks the variant. An icon carrying its
+         --  Identity is whatever Rasterize_Asset reads: the id picks the asset,
+         --  the theme its variant, the base colour its fill. An icon carrying its
          --  own picture is never shared -- a thumbnail belongs to one file, so
          --  comparing pixel buffers would cost more than the tile it might save.
          Slot_Rep : Natural_Vectors.Vector;
          Slot_Of  : Tile_Slot_Maps.Map;
 
+         --  The base colour in decimal, for the tile identity.
+         function Base_Color_Key (Base : Guikit.Draw.Icon_Rgb) return String is
+           (Natural'Image (Natural (Base.R)) & Natural'Image (Natural (Base.G)) & Natural'Image (Natural (Base.B)));
+
          function Tile_Key (Icon : Guikit.Draw.Icon_Command) return Unbounded_String is
            (if Icon.Shared_Tile_Id /= Null_Unbounded_String then Icon.Shared_Tile_Id
             elsif Icon.Thumbnail_Pixels.Is_Empty
-            then Icon.Icon_Id & ASCII.NUL & Icon.Theme_Name
+            then Icon.Icon_Id & ASCII.NUL & Icon.Theme_Name & ASCII.NUL & Base_Color_Key (Icon.Base_Color)
             else Null_Unbounded_String);
 
          --  The tile size for one icon: the 64-pixel icon tile, or up to
@@ -4379,7 +4383,7 @@ package body Guikit.Vulkan is
          begin
             Icon_Tile_Layout.Clear;
 
-            --  One pass per tile, not per icon: the toolbar icons and the shared
+            --  One pass per tile, not per icon: the placed icons and the shared
             --  repeats were both settled when the slots were assigned.
             for Rep of Slot_Rep loop
                declare
@@ -4457,25 +4461,20 @@ package body Guikit.Vulkan is
          end Put_Pixel;
 
          procedure Role_Color
-           (Icon_Id : String;
-            Role    : Guikit.Draw.Icon_Asset_Color_Role;
-            R       : out Interfaces.Unsigned_8;
-            G       : out Interfaces.Unsigned_8;
-            B       : out Interfaces.Unsigned_8;
-            A       : out Interfaces.Unsigned_8)
+           (Base : Guikit.Draw.Icon_Rgb;
+            Role : Guikit.Draw.Icon_Asset_Color_Role;
+            R    : out Interfaces.Unsigned_8;
+            G    : out Interfaces.Unsigned_8;
+            B    : out Interfaces.Unsigned_8;
+            A    : out Interfaces.Unsigned_8)
          is
          begin
             case Role is
                when Guikit.Draw.Icon_Asset_Base =>
-                  if Icon_Id = "folder" then
-                     R := 82;
-                     G := 128;
-                     B := 209;
-                  else
-                     R := 184;
-                     G := 190;
-                     B := 198;
-                  end if;
+                  --  The command's own: the consumer knows what the icon is.
+                  R := Base.R;
+                  G := Base.G;
+                  B := Base.B;
                when Guikit.Draw.Icon_Asset_Accent =>
                   R := 57;
                   G := 127;
@@ -4537,7 +4536,7 @@ package body Guikit.Vulkan is
                   return;
                end if;
 
-               Role_Color (To_String (Icon.Icon_Id), Rect.Role, R, G, B, A);
+               Role_Color (Icon.Base_Color, Rect.Role, R, G, B, A);
                for Y in Y0 .. Y1 - 1 loop
                   for X in X0 .. X1 - 1 loop
                      Put_Pixel (X, Y, R, G, B, A);
@@ -4609,7 +4608,7 @@ package body Guikit.Vulkan is
             for Icon of All_Icons loop
                Index := Index + 1;
 
-               if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
+               if Is_Atlas_Icon (Icon) then
                   declare
                      Key  : constant Unbounded_String := Tile_Key (Icon);
                      Slot : Positive;
@@ -4798,7 +4797,7 @@ package body Guikit.Vulkan is
             --  but are emitted later, in the overlay pass, so they sit on top of
             --  an opaque overlay panel.
             for Icon of All_Icons loop
-               if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
+               if Is_Atlas_Icon (Icon) then
                   if not Icon.Overlay then
                      declare
                         Before : constant Natural := Natural (Result.Vertices.Length);
@@ -4888,7 +4887,7 @@ package body Guikit.Vulkan is
                Source_Icon_Index : Natural := 0;
             begin
                for Icon of All_Icons loop
-                  if not Is_Toolbar_Icon (To_String (Icon.Icon_Id)) then
+                  if Is_Atlas_Icon (Icon) then
                      if Icon.Overlay then
                         declare
                            Before : constant Natural := Natural (Result.Vertices.Length);

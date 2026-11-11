@@ -228,6 +228,8 @@ package Guikit.Item_Grid is
    --  @param Hover_Color Hover and drop-target fill colour.
    --  @param Border_Color Selected left-stripe colour.
    --  @param Alternate_Color Striped alternate-row fill colour.
+   --  @param Line_Height The line height the cell is laid out for; the accent
+   --    stripes (3 and 4 px at Guikit.Layout.Reference_Line_Height) scale with it.
    procedure Draw_Item_Background
      (Rectangles      : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
       Clip_Width      : Natural;
@@ -237,7 +239,8 @@ package Guikit.Item_Grid is
       Selection_Color : Guikit.Draw.Render_Color;
       Hover_Color     : Guikit.Draw.Render_Color;
       Border_Color    : Guikit.Draw.Render_Color;
-      Alternate_Color : Guikit.Draw.Render_Color);
+      Alternate_Color : Guikit.Draw.Render_Color;
+      Line_Height     : Positive := Guikit.Layout.Reference_Line_Height);
 
    --  Emit a text command fitted to a box: measured against the box width in
    --  display columns and, when Fit, truncated on a codepoint boundary with a

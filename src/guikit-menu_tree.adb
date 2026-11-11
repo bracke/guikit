@@ -97,8 +97,8 @@ package body Guikit.Menu_Tree is
          --  Right drop-shadow, fill, border.
          Add_Rect
            (Guikit.Layout.Saturating_Add (Region_X, Region_Width),
-            Guikit.Layout.Saturating_Add (Region_Y, 3),
-            3, Region_Height, Pane_Color);
+            Guikit.Layout.Saturating_Add (Region_Y, Guikit.Layout.Scaled (3, Line_Height)),
+            Guikit.Layout.Scaled (3, Line_Height), Region_Height, Pane_Color);
          Add_Rect (Region_X, Region_Y, Region_Width, Region_Height, Overlay_Color);
          Guikit.Widgets.Draw_Border
            (Rectangles, Clip_Width, Clip_Height,

@@ -9,9 +9,9 @@ package body Guikit.Settings_Panel is
 
    use Ada.Strings.Unbounded;
 
-   Base_Pad     : constant Natural := 14;   --  panel inner padding, at Reference_Line_Height
-   Base_Row_Gap : constant Natural := 8;    --  gap between field rows, likewise
-   Bar_W   : constant Natural := 12;   --  scrollbar width (matches the grid/list)
+   --  Scrollbar width at Guikit.Layout.Reference_Line_Height (matches the
+   --  grid/list); scaled with the text like the rest of the panel's chrome.
+   Bar_W_Base : constant Natural := 12;
 
    --  ----- small value helpers -------------------------------------------------
 
@@ -445,13 +445,22 @@ package body Guikit.Settings_Panel is
    is
       LH        : constant Positive := P.Config.Line_Height;
       --  The panel's spacing grows with its text (a 2x display, a larger font).
-      Pad       : constant Natural  := Guikit.Layout.Scaled (Base_Pad, LH);
-      Row_Gap   : constant Natural  := Guikit.Layout.Scaled (Base_Row_Gap, LH);
+      Pad       : constant Natural  := Guikit.Layout.Scaled (Guikit.Layout.Settings_Pane_Padding, LH);
+      Row_Gap   : constant Natural  := Guikit.Layout.Scaled (Guikit.Layout.Settings_Row_Gap, LH);
       Row_H     : constant Natural  := LH + Row_Gap;
+      --  The rest of the chrome, at the reference line height, scaled alike:
+      --  the scrollbar, a text field's (and a stepper value's) inset, a
+      --  button's label padding on each side and the gap between buttons, and
+      --  the title and close button's inset from the panel's top edge.
+      Bar_W     : constant Natural  := Guikit.Layout.Scaled (Bar_W_Base, LH);
+      Field_Inset : constant Natural := Guikit.Layout.Scaled (4, LH);
+      Button_Pad  : constant Natural := Guikit.Layout.Scaled (6, LH);
+      Button_Gap  : constant Natural := Guikit.Layout.Scaled (4, LH);
+      Edge_Inset  : constant Natural := Natural'Max (Guikit.Layout.Scaled (4, LH), LH / 4);
       --  Shared height for interactive controls: fill the row band (leaving a
       --  small margin) so fields and buttons are comfortably tall, not a short
       --  fraction of the line height.
-      Ctrl_H    : constant Natural  := Row_H - 4;
+      Ctrl_H    : constant Natural  := Row_H - Guikit.Layout.Scaled (4, LH);
       Cell_W    : constant Natural  := Guikit.Layout.Caret_Advance_Width (LH);
       N         : constant Natural  := Natural (P.Fields.Length);
       Tab_Count : constant Natural  := Section_Count (P);
@@ -520,10 +529,10 @@ package body Guikit.Settings_Panel is
         Guikit.Layout.Saturating_Multiply (Tab_Rows, Row_H);
       --  Align the title header with the close icon (same top inset), forming a
       --  title bar at the very top of the panel; keep its text clear of the icon.
-      Title_Y   : constant Natural  := Region_Y + Natural'Max (4, LH / 4);
+      Title_Y   : constant Natural  := Region_Y + Edge_Inset;
       Title_W   : constant Natural  :=
-        (if Region_Width > Pad + LH + 2 * Natural'Max (4, LH / 4)
-         then Region_Width - Pad - LH - 2 * Natural'Max (4, LH / 4)
+        (if Region_Width > Pad + LH + 2 * Edge_Inset
+         then Region_Width - Pad - LH - 2 * Edge_Inset
          else Content_W);
       Switch_Y  : constant Natural  := Title_Y + Row_H;
       --  Leave a gap between the tab bar and the first row (the action buttons)
@@ -617,10 +626,10 @@ package body Guikit.Settings_Panel is
                   for J in 1 .. Count loop
                      Sum := Sum
                        + Guikit.Layout.Label_Pixel_Width (To_String (F.Option_Labels.Element (J)), Cell_W)
-                       + 2 * 6;
+                       + 2 * Button_Pad;
                   end loop;
                   if Count > 1 then
-                     Sum := Sum + (Count - 1) * 4;
+                     Sum := Sum + (Count - 1) * Button_Gap;
                   end if;
                   return Sum;
                end;
@@ -633,7 +642,7 @@ package body Guikit.Settings_Panel is
                         (16 * Cell_W,
                          Guikit.Utf8.Display_Units
                            (To_String (if F.Kind = Shortcut and then Length (F.Display) > 0
-                                       then F.Display else F.Value)) * Cell_W + 8);
+                                       then F.Display else F.Value)) * Cell_W + 2 * Field_Inset);
             when Section =>
                return 0;
          end case;
@@ -666,7 +675,9 @@ package body Guikit.Settings_Panel is
       --  the content's left edge.
       Hl_X      : constant Natural  := Content_X;
       Hl_W      : constant Natural  := Content_W;
-      Accent_X  : constant Natural  := (if Content_X >= 3 then Content_X - 3 else Content_X);
+      --  The focused row's accent bar: this wide, in the padding just left of the content.
+      Accent_W  : constant Natural  := Guikit.Layout.Scaled (3, LH);
+      Accent_X  : constant Natural  := (if Content_X >= Accent_W then Content_X - Accent_W else Content_X);
       --  Extra vertical breathing room separating the preamble (the action buttons)
       --  from the active section's fields below it.
       Group_Gap : constant Natural  := Row_Gap + Guikit.Layout.Scaled (4, LH);
@@ -742,11 +753,13 @@ package body Guikit.Settings_Panel is
       --  Panel chrome: shadow, panel, accent bar, dialog role, title, close.
       Guikit.Widgets.Draw_Drop_Shadow
         (Rectangles, Clip_Width, Clip_Height, Region_X, Region_Y, Region_Width, Region_Height,
-         Guikit.Draw.Shadow_Color);
+         Guikit.Draw.Shadow_Color, LH);
       Guikit.Widgets.Draw_Menu_Panel
         (Rectangles, Clip_Width, Clip_Height, Region_X, Region_Y, Region_Width, Region_Height,
          Guikit.Draw.Pane_Color, Guikit.Draw.Border_Color);
-      Add_Rect (Region_X, Region_Y, Region_Width, Natural'Min (3, Region_Height), Guikit.Draw.Selection_Color);
+      Add_Rect
+        (Region_X, Region_Y, Region_Width, Natural'Min (Guikit.Layout.Scaled (3, LH), Region_Height),
+         Guikit.Draw.Selection_Color);
       Accessibility.Append
         (Guikit.Draw.Accessibility_Node'
            (Role => Guikit.Draw.Role_Dialog, X => Region_X, Y => Region_Y,
@@ -782,7 +795,7 @@ package body Guikit.Settings_Panel is
                   end loop;
                   Guikit.Segmented.Build_Frame
                     (Segments => Segs, Active => Local_Active,
-                     Region_X => Content_X, Region_Y => Row_Y + 2, Region_Width => Content_W,
+                     Region_X => Content_X, Region_Y => Row_Y + Guikit.Layout.Scaled (2, LH), Region_Width => Content_W,
                      --  Fill each tab band (leaving a small margin) rather than a
                      --  short line-height strip, so the tabs are comfortably tall.
                      Region_Height => Ctrl_H, Clip_Width => Clip_Width, Clip_Height => Clip_Height,
@@ -840,7 +853,7 @@ package body Guikit.Settings_Panel is
             if Vis then
                if I = P.Focused then
                   Add_Rect (Hl_X, Row_Y, Hl_W, Row_H, Guikit.Draw.Hover_Color);
-                  Add_Rect (Accent_X, Row_Y, 3, Row_H, Guikit.Draw.Selection_Color);
+                  Add_Rect (Accent_X, Row_Y, Accent_W, Row_H, Guikit.Draw.Selection_Color);
                   if Focused then
                      Guikit.Widgets.Draw_Focus_Ring
                        (Rectangles, Clip_Width, Clip_Height, Hl_X, Row_Y,
@@ -850,7 +863,8 @@ package body Guikit.Settings_Panel is
 
                if F.Kind = Section then
                   Add_Text (Content_X, Mid_Y, Content_W, F.Label, Guikit.Draw.Muted_Text_Color);
-                  Add_Rect (Content_X, Row_Y + Row_H - 2, Content_W, 1, Guikit.Draw.Border_Color);
+                  Add_Rect
+                    (Content_X, Row_Y + Row_H - Guikit.Layout.Scaled (2, LH), Content_W, 1, Guikit.Draw.Border_Color);
                   Accessibility.Append
                     (Guikit.Draw.Accessibility_Node'
                        (Role => Guikit.Draw.Role_Heading, X => Content_X, Y => Row_Y,
@@ -947,7 +961,7 @@ package body Guikit.Settings_Panel is
                            Up_X  : constant Natural := Ctrl_X + Ctrl_W - Btn;
                         begin
                            Guikit.Widgets.Draw_Number_Stepper
-                             (Rectangles, Text, Clip_Width, Clip_Height, BY, BH, BY + (BH - LH) / 2, LH, 4,
+                             (Rectangles, Text, Clip_Width, Clip_Height, BY, BH, BY + (BH - LH) / 2, LH, Field_Inset,
                               Val_X, Val_W, F.Value, Ctrl_X, Up_X, Btn,
                               To_Unbounded_String ("-"), To_Unbounded_String ("+"),
                               Guikit.Draw.Input_Color, Guikit.Draw.Border_Color, Guikit.Draw.Text_Color);
@@ -964,12 +978,13 @@ package body Guikit.Settings_Panel is
                            Guikit.Widgets.Draw_Input_Field
                              (Rectangles, Clip_Width, Clip_Height, Ctrl_X, TY, Ctrl_W, TH,
                               Guikit.Draw.Input_Color, Guikit.Draw.Border_Color);
-                           Add_Text (Ctrl_X + 4, VY, (if Ctrl_W > 8 then Ctrl_W - 8 else 0), F.Value,
+                           Add_Text (Ctrl_X + Field_Inset, VY,
+                                     (if Ctrl_W > 2 * Field_Inset then Ctrl_W - 2 * Field_Inset else 0), F.Value,
                                      Guikit.Draw.Text_Color);
                            if Focused and then I = P.Focused then
                               Guikit.Widgets.Draw_Caret
                                 (Rectangles, Clip_Width, Clip_Height,
-                                 Ctrl_X + 4 + Guikit.Utf8.Display_Units (To_String (F.Value)) * Cell_W, VY,
+                                 Ctrl_X + Field_Inset + Guikit.Utf8.Display_Units (To_String (F.Value)) * Cell_W, VY,
                                  Natural'Max (1, Cell_W / 6), LH, Guikit.Draw.Text_Color);
                            end if;
                         end;
@@ -991,13 +1006,14 @@ package body Guikit.Settings_Panel is
                              (Rectangles, Clip_Width, Clip_Height, Ctrl_X, TY, Ctrl_W, TH,
                               Guikit.Draw.Input_Color,
                               (if Armed then Guikit.Draw.Selection_Color else Guikit.Draw.Border_Color));
-                           Add_Text (Ctrl_X + 4, VY, (if Ctrl_W > 8 then Ctrl_W - 8 else 0), Shown,
+                           Add_Text (Ctrl_X + Field_Inset, VY,
+                                     (if Ctrl_W > 2 * Field_Inset then Ctrl_W - 2 * Field_Inset else 0), Shown,
                                      (if F.Enabled then Guikit.Draw.Text_Color
                                       else Guikit.Draw.Disabled_Text_Color));
                            if Armed then
                               Guikit.Widgets.Draw_Caret
                                 (Rectangles, Clip_Width, Clip_Height,
-                                 Ctrl_X + 4 + Guikit.Utf8.Display_Units (To_String (Shown)) * Cell_W, VY,
+                                 Ctrl_X + Field_Inset + Guikit.Utf8.Display_Units (To_String (Shown)) * Cell_W, VY,
                                  Natural'Max (1, Cell_W / 6), LH, Guikit.Draw.Selection_Color);
                            end if;
                         end;
@@ -1008,7 +1024,7 @@ package body Guikit.Settings_Panel is
                         begin
                            if Count > 0 and then Ctrl_W > 0 then
                               declare
-                                 Even_W : constant Natural := (Ctrl_W - (Count - 1) * 4) / Count;
+                                 Even_W : constant Natural := (Ctrl_W - (Count - 1) * Button_Gap) / Count;
                                  BH : constant Natural := Ctrl_H;
                                  BY : constant Natural := Row_Y + (Row_H - BH) / 2;
 
@@ -1019,10 +1035,10 @@ package body Guikit.Settings_Panel is
                                  --  value column beside an empty label.
                                  function Natural_W (J : Positive) return Natural is
                                    (Guikit.Layout.Label_Pixel_Width
-                                      (To_String (F.Option_Labels.Element (J)), Cell_W) + 2 * 6);
+                                      (To_String (F.Option_Labels.Element (J)), Cell_W) + 2 * Button_Pad);
 
                                  function Total_W return Natural is
-                                    Sum : Natural := (Count - 1) * 4;
+                                    Sum : Natural := (Count - 1) * Button_Gap;
                                  begin
                                     for J in 1 .. Count loop
                                        Sum := Sum + Natural_W (J);
@@ -1041,10 +1057,10 @@ package body Guikit.Settings_Panel is
                                        BX     : constant Natural := Next_X;
                                        BW     : constant Natural := This_W;
                                     begin
-                                       Next_X := Next_X + This_W + 4;
+                                       Next_X := Next_X + This_W + Button_Gap;
                                        Guikit.Widgets.Draw_Button
                                          (Rectangles, Text, Clip_Width, Clip_Height, BX, BY, BW, BH,
-                                          Guikit.Draw.Input_Color, Guikit.Draw.Border_Color, 6,
+                                          Guikit.Draw.Input_Color, Guikit.Draw.Border_Color, Button_Pad,
                                           F.Option_Labels.Element (J), False, LH, Guikit.Draw.Text_Color);
                                        Add_Hit (Hit_Button, I, J, BX, BY, BW, BH);
                                     end;
@@ -1124,7 +1140,7 @@ package body Guikit.Settings_Panel is
       --  identical: a narrow, line-height-tall glyph cell centred in the square, in
       --  the regular text colour (the other panels use Files.Rendering's geometry).
       declare
-         Inset : constant Natural := Natural'Max (4, LH / 4);
+         Inset : constant Natural := Edge_Inset;
          Btn   : constant Natural := LH;
          Bx    : constant Natural :=
            (if Region_Width > Inset + Btn then Region_X + Region_Width - Inset - Btn else Region_X);
@@ -1156,7 +1172,8 @@ package body Guikit.Settings_Panel is
         and then Hover_Y >= Switch_Y and then Hover_Y < Switch_Y + Switch_H
       then
          declare
-            Tip_Pad : constant Natural := 6;
+            Tip_Pad : constant Natural := Guikit.Layout.Scaled (6, LH);
+            Tip_Gap : constant Natural := Guikit.Layout.Scaled (4, LH);
             Tip_Txt : constant String := To_String (P.Config.Switch_Tooltip);
             Tip_TW  : constant Natural := Guikit.Utf8.Display_Units (Tip_Txt) * Cell_W;
             Tip_W   : constant Natural := Tip_TW + 2 * Tip_Pad;
@@ -1165,13 +1182,13 @@ package body Guikit.Settings_Panel is
               (if Clip_Width > Tip_W then Natural'Min (Natural'Max (Hover_X, 0), Clip_Width - Tip_W) else 0);
             Below_Switch : constant Natural :=
               Guikit.Layout.Saturating_Add
-                (Guikit.Layout.Saturating_Add (Switch_Y, Switch_H), 4);
+                (Guikit.Layout.Saturating_Add (Switch_Y, Switch_H), Tip_Gap);
             Tip_Y   : constant Natural :=
               (if Below_Switch <= Clip_Height
                  and then Tip_H <= Clip_Height - Below_Switch
                then Below_Switch
-               elsif Switch_Y >= Tip_H + 4
-               then Switch_Y - Tip_H - 4
+               elsif Switch_Y >= Tip_H + Tip_Gap
+               then Switch_Y - Tip_H - Tip_Gap
                else 0);
          begin
             Guikit.Widgets.Draw_Tooltip
