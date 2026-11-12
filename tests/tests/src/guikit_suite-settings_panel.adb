@@ -34,6 +34,8 @@ package body Guikit_Suite.Settings_Panel is
    procedure Test_Choice_Fits_Options (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Line_Height_Scaling (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Button_Layouts_Scale (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Wheel_Scroll_Sticks (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Disabled_Buttons (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function U (S : String) return Unbounded_String renames To_Unbounded_String;
 
@@ -105,6 +107,12 @@ package body Guikit_Suite.Settings_Panel is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Button_Layouts_Scale'Access,
          "the settings pane, entry and action button layouts scale their padding and gaps with the line height");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Wheel_Scroll_Sticks'Access,
+         "the wheel scrolls away from an unchanged focus and stays; scrolling stops at the shown rows' end");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Disabled_Buttons'Access,
+         "a disabled button row draws muted and its buttons do not press");
    end Register_Tests;
 
    --  Two sections, one field each side, to exercise the section switcher.
@@ -869,6 +877,138 @@ package body Guikit_Suite.Settings_Panel is
               "at 2x the pane's text column is inset by a doubled 28 px padding");
       Assert (Pane_2.Height = 667, "at 2x the taller pane is clamped to the height below the top margin");
    end Test_Button_Layouts_Scale;
+
+   --  Section "A" with three toggles A1..A3, then section "B" with fifteen
+   --  toggles B1..B15: the hidden section and both headers are fields too,
+   --  which the scroll limit must not count.
+   function Long_Section return SP.Field_Vectors.Vector is
+      V : SP.Field_Vectors.Vector;
+
+      procedure Add_Section (Name : String; Count : Positive) is
+      begin
+         V.Append (SP.Field'(Key => U ("s" & Name), Label => U (Name), Kind => SP.Section, others => <>));
+         for Index in 1 .. Count loop
+            declare
+               Label : constant String := Name & Ada.Strings.Fixed.Trim (Index'Image, Ada.Strings.Left);
+            begin
+               V.Append (SP.Field'(Key => U (Label), Label => U (Label), Kind => SP.Toggle,
+                                   Value => U ("false"), others => <>));
+            end;
+         end loop;
+      end Add_Section;
+   begin
+      Add_Section ("A", 3);
+      Add_Section ("B", 15);
+      return V;
+   end Long_Section;
+
+   procedure Test_Wheel_Scroll_Sticks (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      P     : SP.Panel;
+      Rects : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text  : Guikit.Draw.Text_Command_Vectors.Vector;
+      Nodes : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+
+      --  At line height 20 a 500x300 panel with two tabs shows seven rows.
+      --  Build_Frame appends; each render starts from empty lists.
+      procedure Render is
+      begin
+         Rects.Clear;
+         Text.Clear;
+         Nodes.Clear;
+         SP.Build_Frame (P, 0, 0, 500, 300, 500, 300, True, -1, -1, Rects, Text, Nodes);
+      end Render;
+
+      function Drawn (Label : String) return Boolean is
+      begin
+         for Command of Text loop
+            if To_String (Command.Text) = Label then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Drawn;
+   begin
+      SP.Set_Fields (P, Long_Section);
+      SP.Set_Active_Section (P, 2);
+      Render;
+      Assert (SP.Focused_Key (P) = "B1", "switching to section B focuses its first row");
+      Assert (Drawn ("B1") and then Drawn ("B7") and then not Drawn ("B8"),
+              "section B shows its first seven rows");
+
+      SP.Scroll (P, 3);
+      Render;
+      Assert (Drawn ("B4") and then not Drawn ("B1"),
+              "a wheel scroll away from the focused row sticks instead of snapping back to it");
+      Render;
+      Assert (Drawn ("B4") and then not Drawn ("B1"), "and it still sticks on the frame after");
+
+      SP.Scroll (P, 100);
+      SP.Scroll (P, -2);
+      Render;
+      Assert (Drawn ("B13") and then not Drawn ("B14") and then not Drawn ("B15"),
+              "the scroll limit is the shown rows' end (15 rows, 7 visible), not the field count, "
+              & "so scrolling back up from the bottom moves at once");
+
+      SP.Move_Focus (P, 1);
+      Render;
+      Assert (SP.Focused_Key (P) = "B2" and then Drawn ("B2"),
+              "moving the focus brings the newly focused row back into view");
+
+      SP.Scroll (P, 5);
+      Render;
+      Assert (not Drawn ("B2"), "the wheel scrolls away from the focus again");
+      SP.Cycle_Choice (P, Forward => True);
+      Assert (SP.Take_Change (P).Kind = SP.Value_Changed, "editing the focused row emits its change");
+      Render;
+      Assert (Drawn ("B2"), "editing the scrolled-away focused row brings it back into view");
+   end Test_Wheel_Scroll_Sticks;
+
+   procedure Test_Disabled_Buttons (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use type Guikit.Draw.Render_Color;
+
+      --  Render one buttons row, click its "Add" label, and report the label's
+      --  colour and the change the click produced.
+      procedure Press_Add (Enabled : Boolean; Colour : out Guikit.Draw.Render_Color; Result : out SP.Change) is
+         P      : SP.Panel;
+         Fields : SP.Field_Vectors.Vector;
+         Rects  : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         Text   : Guikit.Draw.Text_Command_Vectors.Vector;
+         Nodes  : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+         Found  : Boolean := False;
+      begin
+         Fields.Append
+           (SP.Field'(Key => U ("entry"), Label => U ("Entries"), Kind => SP.Buttons,
+                      Option_Values => Options ("add", "remove"),
+                      Option_Labels => Options ("Add", "Remove"), Enabled => Enabled, others => <>));
+         SP.Set_Fields (P, Fields);
+         SP.Build_Frame (P, 0, 0, 500, 300, 500, 300, True, -1, -1, Rects, Text, Nodes);
+         Colour := Guikit.Draw.Text_Color;
+         Result := (Kind => SP.No_Change, others => <>);
+         for Command of Text loop
+            if To_String (Command.Text) = "Add" then
+               Found := True;
+               Colour := Command.Color;
+               Assert (SP.Click (P, Command.X + 1, Command.Y + 1), "a click on the button lands on the panel");
+               Result := SP.Take_Change (P);
+            end if;
+         end loop;
+         Assert (Found, "the Add button's label is drawn");
+      end Press_Add;
+
+      Colour : Guikit.Draw.Render_Color;
+      Change : SP.Change;
+   begin
+      Press_Add (True, Colour, Change);
+      Assert (Change.Kind = SP.Button_Pressed and then To_String (Change.Value) = "add",
+              "an enabled button presses");
+      Assert (Colour = Guikit.Draw.Text_Color, "an enabled button's label uses the text colour");
+
+      Press_Add (False, Colour, Change);
+      Assert (Change.Kind = SP.No_Change, "a disabled button does not press");
+      Assert (Colour = Guikit.Draw.Disabled_Text_Color, "a disabled button's label is muted");
+   end Test_Disabled_Buttons;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

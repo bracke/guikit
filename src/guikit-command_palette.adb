@@ -14,16 +14,16 @@ package body Guikit.Command_Palette is
    --  Match the grid/list scrollbar width so panels look consistent (at the
    --  reference line height, scaled with the text).
    Bar_Width_Base : constant Natural := 12;
-   Ellipsis  : constant String :=
-     Character'Val (16#E2#) & Character'Val (16#80#) & Character'Val (16#A6#);  --  U+2026
-
-   --  The commands matching the current query, ranked best-first (an empty query
-   --  keeps input order). Each Guikit.Palette item's Id is the one-based index
-   --  into Commands, so results map straight back.
-   function Filtered (P : Palette) return Command_Vectors.Vector is
-      Items  : Guikit.Palette.Item_Vectors.Vector;
-      Result : Command_Vectors.Vector;
+   --  Re-rank the commands for the current query unless the cached results
+   --  already belong to this query and command list. Each Guikit.Palette
+   --  item's Id is the one-based index into Commands, so results map straight
+   --  back. An empty query keeps input order.
+   procedure Refresh_Results (P : in out Palette) is
+      Items : Guikit.Palette.Item_Vectors.Vector;
    begin
+      if P.Ranked_Revision = P.Revision and then P.Ranked_Query = P.Query then
+         return;
+      end if;
       for I in P.Commands.First_Index .. P.Commands.Last_Index loop
          declare
             C : constant Command := P.Commands.Element (I);
@@ -39,56 +39,37 @@ package body Guikit.Command_Palette is
                   Score       => 0));
          end;
       end loop;
+      P.Ranked.Clear;
       for Item of Guikit.Palette.Search (To_String (P.Query), Items) loop
-         Result.Append (P.Commands.Element (Item.Id));
+         P.Ranked.Append (P.Commands.Element (Item.Id));
       end loop;
-      return Result;
-   end Filtered;
+      P.Ranked_Query    := P.Query;
+      P.Ranked_Revision := P.Revision;
+   end Refresh_Results;
 
-   --  Reset the selection to the first result (or none) after the query changes.
+   --  The number of commands matching the current query: the cached ranking,
+   --  which every query or command-list edit keeps current.
+   function Ranked_Count (P : Palette) return Natural is (Natural (P.Ranked.Length));
+
+   --  After the query changes: re-rank, and reset the selection to the first
+   --  result (or none).
    procedure Reset_Selection (P : in out Palette) is
    begin
-      P.Selected := (if Filtered (P).Is_Empty then 0 else 1);
+      Refresh_Results (P);
+      P.Selected := (if Ranked_Count (P) = 0 then 0 else 1);
       P.Offset   := 0;
    end Reset_Selection;
 
-   --  Fit Text into Max_Cells display cells, appending an ellipsis when it does
-   --  not fit; Truncated reports whether it was shortened.
+   --  Fit Text into Max_Cells display cells with the toolkit's one truncation
+   --  rule; Truncated reports whether it was shortened.
    function Fit_To_Cells
      (Text      : String;
       Max_Cells : Natural;
       Truncated : out Boolean)
-      return String
-   is
-      Index    : Integer := Text'First;
-      Cells    : Natural := 0;
-      Last_Fit : Integer := Text'First - 1;
+      return String is
    begin
-      Truncated := False;
-      if Max_Cells = 0 then
-         Truncated := Text'Length > 0;
-         return "";
-      elsif Guikit.Utf8.Display_Units (Text) <= Max_Cells then
-         return Text;
-      end if;
-
-      Truncated := True;
-      while Index <= Text'Last loop
-         declare
-            Start : constant Integer := Index;
-            CP    : Natural;
-         begin
-            Guikit.Utf8.Decode_Next_Codepoint (Text, Index, CP);
-            declare
-               W : constant Natural := Guikit.Utf8.Display_Units (Text (Start .. Index - 1));
-            begin
-               exit when Cells + W > Max_Cells - 1;
-               Cells := Cells + W;
-               Last_Fit := Index - 1;
-            end;
-         end;
-      end loop;
-      return Text (Text'First .. Last_Fit) & Ellipsis;
+      Truncated := Guikit.Utf8.Display_Units (Text) > Max_Cells;
+      return Guikit.Utf8.Fit_With_Ellipsis (Text, Max_Cells);
    end Fit_To_Cells;
 
    procedure Set_Configuration (P : in out Palette; Config : Configuration) is
@@ -100,7 +81,9 @@ package body Guikit.Command_Palette is
       Count : Natural;
    begin
       P.Commands := Commands;
-      Count := Natural (Filtered (P).Length);
+      P.Revision := P.Revision + 1;
+      Refresh_Results (P);
+      Count := Ranked_Count (P);
       if Count = 0 then
          P.Selected := 0;
       elsif P.Selected = 0 or else P.Selected > Count then
@@ -137,13 +120,14 @@ package body Guikit.Command_Palette is
    procedure Reset (P : in out Palette) is
    begin
       P.Query    := Null_Unbounded_String;
+      Refresh_Results (P);
       P.Selected := 0;
       P.Offset   := 0;
       P.Rows.Clear;
    end Reset;
 
    procedure Move_Selection (P : in out Palette; Delta_Rows : Integer) is
-      Count : constant Natural := Natural (Filtered (P).Length);
+      Count : constant Natural := Ranked_Count (P);
       Next  : Integer;
    begin
       if Count = 0 then
@@ -167,12 +151,12 @@ package body Guikit.Command_Palette is
 
    procedure Select_First (P : in out Palette) is
    begin
-      P.Selected := (if Filtered (P).Is_Empty then 0 else 1);
+      P.Selected := (if Ranked_Count (P) = 0 then 0 else 1);
    end Select_First;
 
    procedure Select_Last (P : in out Palette) is
    begin
-      P.Selected := Natural (Filtered (P).Length);
+      P.Selected := Ranked_Count (P);
    end Select_Last;
 
    procedure Page (P : in out Palette; Down : Boolean) is
@@ -198,18 +182,17 @@ package body Guikit.Command_Palette is
 
    function Selected_Index (P : Palette) return Natural is (P.Selected);
 
-   function Result_Count (P : Palette) return Natural is (Natural (Filtered (P).Length));
+   function Result_Count (P : Palette) return Natural is (Ranked_Count (P));
 
    function Selected_Id (P : Palette) return Natural is
-      Results_View : constant Command_Vectors.Vector := Filtered (P);
    begin
-      if P.Selected in 1 .. Natural (Results_View.Length) then
-         return Results_View.Element (P.Selected).Id;
+      if P.Selected in 1 .. Ranked_Count (P) then
+         return P.Ranked.Element (P.Selected).Id;
       end if;
       return 0;
    end Selected_Id;
 
-   function Results (P : Palette) return Command_Vectors.Vector is (Filtered (P));
+   function Results (P : Palette) return Command_Vectors.Vector is (P.Ranked);
 
    procedure Build_Frame
      (P             : in out Palette;
@@ -244,8 +227,7 @@ package body Guikit.Command_Palette is
       --  The icon's margin above and below it within a row, together.
       Icon_Margins : constant Natural := Guikit.Layout.Scaled (8, LH);
       Gutter  : constant Natural := (if P.Config.Show_Icons then Pad + Icon_Slot else 0);
-      Ranked  : constant Command_Vectors.Vector := Filtered (P);
-      Count   : constant Natural := Natural (Ranked.Length);
+      Count   : constant Natural := Ranked_Count (P);
       Q       : constant String := To_String (P.Query);
       Text_Y  : constant Natural :=
         (if Layout.Search_Height > LH
@@ -266,6 +248,33 @@ package body Guikit.Command_Palette is
          else Layout.Search_Width);
       Field_W : constant Natural :=
         (if Search_W > 2 * Pad then Search_W - 2 * Pad else 0);
+      Field_X : constant Natural := Layout.Search_X + Pad;
+      Caret_W : constant Natural := Natural'Max (1, Cell_W / 6);
+      --  The caret sits at the end of the query. A query longer than the field
+      --  scrolls its leading columns off the left edge (as the item grid's
+      --  rename field does) so the caret, and the text being typed, stay in the
+      --  field instead of running on under the close button.
+      Caret_Column : constant Natural := Guikit.Utf8.Display_Units (Q);
+      Scroll_Columns : constant Natural :=
+        Guikit.Layout.Input_Scroll_Columns (Caret_Column, Field_W, LH);
+
+      --  The leading text that scrolls off: at least Scroll_Columns columns,
+      --  cut on a cluster boundary (a wide character straddling the cut goes
+      --  too, rather than leaving the tail one column too wide).
+      function Scrolled_Off return String is
+         Exact : constant String := Guikit.Utf8.Prefix_By_Units (Q, Scroll_Columns);
+      begin
+         if Guikit.Utf8.Display_Units (Exact) >= Scroll_Columns then
+            return Exact;
+         end if;
+         return Guikit.Utf8.Prefix_By_Units (Q, Scroll_Columns + 1);
+      end Scrolled_Off;
+
+      Hidden       : constant String := Scrolled_Off;
+      Shown_Query  : constant String := Q (Q'First + Hidden'Length .. Q'Last);
+      Shown_Column : constant Natural := Caret_Column - Guikit.Utf8.Display_Units (Hidden);
+      Caret_X      : constant Natural :=
+        Field_X + Natural'Min (Shown_Column * Cell_W, (if Field_W > Caret_W then Field_W - Caret_W else 0));
    begin
       P.Rows.Clear;
       P.Visible_Rows := Guikit.Layout.Visible_Row_Count (Layout.Results_Height, Layout.Row_Height);
@@ -324,14 +333,15 @@ package body Guikit.Command_Palette is
         (Rectangles, Clip_Width, Clip_Height, Layout.Search_X, Layout.Search_Y,
          Search_W, Layout.Search_Height, Guikit.Draw.Input_Color, Guikit.Draw.Border_Color);
       if Q'Length > 0 then
+         --  Clipped to the field: the text command's width bounds the glyphs.
          Text.Append
            (Guikit.Draw.Text_Command'
-              (X => Layout.Search_X + Pad, Y => Text_Y, Width => Field_W, Height => LH,
-               Text => P.Query, Color => Guikit.Draw.Text_Color, others => <>));
+              (X => Field_X, Y => Text_Y, Width => Field_W, Height => LH,
+               Text => To_Unbounded_String (Shown_Query), Color => Guikit.Draw.Text_Color, others => <>));
       elsif Length (P.Config.Placeholder) > 0 then
          Text.Append
            (Guikit.Draw.Text_Command'
-              (X => Layout.Search_X + Pad, Y => Text_Y, Width => Field_W, Height => LH,
+              (X => Field_X, Y => Text_Y, Width => Field_W, Height => LH,
                Text => P.Config.Placeholder, Color => Guikit.Draw.Muted_Text_Color, others => <>));
       end if;
       if Focused then
@@ -339,9 +349,7 @@ package body Guikit.Command_Palette is
            (Rectangles, Clip_Width, Clip_Height, Layout.Search_X, Layout.Search_Y,
             Search_W, Layout.Search_Height, Guikit.Draw.Selection_Color);
          Guikit.Widgets.Draw_Caret
-           (Rectangles, Clip_Width, Clip_Height,
-            Layout.Search_X + Pad + Guikit.Utf8.Display_Units (Q) * Cell_W, Text_Y,
-            Natural'Max (1, Cell_W / 6), LH, Guikit.Draw.Text_Color);
+           (Rectangles, Clip_Width, Clip_Height, Caret_X, Text_Y, Caret_W, LH, Guikit.Draw.Text_Color);
       end if;
       Accessibility.Append
         (Guikit.Draw.Accessibility_Node'
@@ -350,7 +358,7 @@ package body Guikit.Command_Palette is
             Name => P.Query, Focused => Focused, others => <>));
 
       --  Result rows.
-      for C of Ranked loop
+      for C of P.Ranked loop
          Enabled.Append (C.Enabled);
       end loop;
       declare
@@ -359,7 +367,7 @@ package body Guikit.Command_Palette is
       begin
          for Row of Row_List loop
             declare
-               C          : constant Command := Ranked.Element (Row.Result_Index);
+               C          : constant Command := P.Ranked.Element (Row.Result_Index);
                Hovered    : constant Boolean :=
                  Hover_X >= Row.X and then Hover_X < Row.X + Row.Width
                  and then Hover_Y >= Row.Y and then Hover_Y < Row.Y + Row.Height;

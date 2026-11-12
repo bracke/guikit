@@ -477,16 +477,4 @@ package Guikit.Layout is
       Current_Offset : Natural)
       return Natural;
 
-   --  Return the result index at a window coordinate.
-   --
-   --  @param Rows Laid-out result rows from Calculate_Palette_Result_Rows.
-   --  @param X Horizontal window coordinate.
-   --  @param Y Vertical window coordinate.
-   --  @return The row's Result_Index, or zero when no row is hit.
-   function Palette_Result_At
-     (Rows : Palette_Result_Row_Vectors.Vector;
-      X    : Natural;
-      Y    : Natural)
-      return Natural;
-
 end Guikit.Layout;

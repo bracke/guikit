@@ -8,36 +8,9 @@ package body Guikit.Menu_Tree is
 
    use Guikit.Draw;
 
-   Ellipsis : constant String := Guikit.Utf8.Encode (16#2026#);
-
-   --  Truncate Text to Capacity display units, appending an ellipsis. Identical
-   --  algorithm to the callers' historic fit helpers, so output is byte-exact.
+   --  Text fitted to Capacity display columns with a trailing ellipsis.
    function Fit_Text (Text : UString; Capacity : Natural) return UString is
-      Raw : constant String := To_String (Text);
-   begin
-      if Capacity = 0 then
-         return Null_Unbounded_String;
-      elsif Guikit.Utf8.Display_Units (Raw) <= Capacity then
-         return Text;
-      elsif Capacity < 2 then
-         return To_Unbounded_String (Guikit.Utf8.Prefix_By_Units (Raw, Capacity));
-      else
-         declare
-            Prefix  : constant String := Guikit.Utf8.Prefix_By_Units (Raw, Capacity - 1);
-            Trimmed : constant String :=
-              (if Prefix'Length > 0
-                 and then (Prefix (Prefix'Last) = '.' or else Prefix (Prefix'Last) = ' ')
-               then Prefix (Prefix'First .. Prefix'Last - 1)
-               else Prefix);
-         begin
-            if Trimmed = "" then
-               return To_Unbounded_String (Guikit.Utf8.Prefix_By_Units (Raw, Capacity));
-            else
-               return To_Unbounded_String (Trimmed & Ellipsis);
-            end if;
-         end;
-      end if;
-   end Fit_Text;
+     (To_Unbounded_String (Guikit.Utf8.Fit_With_Ellipsis (To_String (Text), Capacity)));
 
    procedure Draw_Frame
      (Rectangles    : in out Rectangle_Command_Vectors.Vector;

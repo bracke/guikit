@@ -63,8 +63,11 @@ package Guikit.Utf8 is
      (Codepoint : Natural)
       return Boolean;
 
-   --  How many monospace cells a codepoint takes: 0 when it combines, 2 for
-   --  an East Asian wide or emoji codepoint, else 1. Display_Units sums this.
+   --  How many monospace cells a codepoint takes: 0 when it combines or is
+   --  an invisible format character (zero-width space, non-joiner and joiner,
+   --  directional marks, word joiner, byte-order mark, emoji tags), 2 for an
+   --  East Asian wide (including CJK Extension B and later) or emoji
+   --  codepoint, else 1. Display_Units sums this.
    --
    --  @param Codepoint A Unicode codepoint.
    --  @return Its width in cells.
@@ -81,8 +84,10 @@ package Guikit.Utf8 is
    function Encode (Codepoint : Natural) return String;
 
    --  The longest prefix of Content whose display width does not exceed
-   --  Max_Units display columns, cut on a codepoint boundary. Empty when
-   --  Max_Units is 0 or Content is empty.
+   --  Max_Units display columns, cut on a cluster boundary: never between a
+   --  codepoint and the combining marks after it, nor inside an emoji
+   --  zero-width-joiner sequence. Empty when Max_Units is 0 or Content is
+   --  empty.
    --
    --  @param Content UTF-8 text.
    --  @param Max_Units Maximum display columns.
@@ -92,9 +97,25 @@ package Guikit.Utf8 is
       Max_Units : Natural)
       return String;
 
+   --  Content fitted into Max_Units display columns: unchanged when it fits;
+   --  otherwise cut on a cluster boundary (see Prefix_By_Units) to leave one
+   --  column for a trailing U+2026 ellipsis, dropping a dangling '.' or ' '
+   --  before it. Short of two columns, or when nothing but such a dangling
+   --  character would precede the ellipsis, it hard-cuts without one. The one
+   --  truncation rule every guikit component that shortens a label uses.
+   --
+   --  @param Content UTF-8 text.
+   --  @param Max_Units Maximum display columns.
+   --  @return The fitted text.
+   function Fit_With_Ellipsis
+     (Content   : String;
+      Max_Units : Natural)
+      return String;
+
    --  The display width, in columns, of the first Cursor bytes of Content
    --  (clamped to Content's length). Used to place a text caret at a byte
-   --  offset.
+   --  offset. Measured in whole clusters: a Cursor inside a combining or
+   --  zero-width-joiner sequence measures to the end of that sequence.
    --
    --  @param Content UTF-8 text.
    --  @param Cursor Byte offset into Content.

@@ -460,38 +460,10 @@ package body Guikit.Item_Grid is
       end if;
    end Draw_Name_Field;
 
-   --  U+2026 HORIZONTAL ELLIPSIS, the truncation affordance.
-   Ellipsis : constant String := Guikit.Utf8.Encode (16#2026#);
-
-   --  The text truncated to Capacity display columns with a trailing ellipsis,
-   --  trimming a dangling '.' or ' ' before the ellipsis. Short of two columns
-   --  it hard-cuts without an ellipsis.
+   --  The text truncated to Capacity display columns with a trailing ellipsis
+   --  (Guikit.Utf8.Fit_With_Ellipsis, the toolkit's one truncation rule).
    function Fitted_Text (Text : Unbounded_String; Capacity : Natural) return Unbounded_String is
-      Raw : constant String := To_String (Text);
-   begin
-      if Capacity = 0 then
-         return Null_Unbounded_String;
-      elsif Guikit.Utf8.Display_Units (Raw) <= Capacity then
-         return Text;
-      elsif Capacity < 2 then
-         return To_Unbounded_String (Guikit.Utf8.Prefix_By_Units (Raw, Capacity));
-      else
-         declare
-            Prefix  : constant String := Guikit.Utf8.Prefix_By_Units (Raw, Capacity - 1);
-            Trimmed : constant String :=
-              (if Prefix'Length > 0
-                 and then (Prefix (Prefix'Last) = '.' or else Prefix (Prefix'Last) = ' ')
-               then Prefix (Prefix'First .. Prefix'Last - 1)
-               else Prefix);
-         begin
-            if Trimmed = "" then
-               return To_Unbounded_String (Guikit.Utf8.Prefix_By_Units (Raw, Capacity));
-            else
-               return To_Unbounded_String (Trimmed & Ellipsis);
-            end if;
-         end;
-      end if;
-   end Fitted_Text;
+     (To_Unbounded_String (Guikit.Utf8.Fit_With_Ellipsis (To_String (Text), Capacity)));
 
    procedure Draw_Fitted_Text
      (Text_Commands : in out Guikit.Draw.Text_Command_Vectors.Vector;

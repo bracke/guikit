@@ -296,6 +296,10 @@ private
       Capturing     : Natural := 0;   --  1-based Shortcut field armed for capture, 0 = none
       Active        : Natural := 1;   --  1-based active section (tab) ordinal
       Offset        : Natural := 0;   --  scroll offset in rows
+      --  The focus Build_Frame last scrolled into view (0 = none yet). The
+      --  frame follows the focus only when it differs, so a wheel scroll away
+      --  from an unchanged focus sticks; an edit resets it to re-follow.
+      Followed      : Natural := 0;
       Content_Rows  : Natural := 0;   --  total rows from the last render
       Visible_Rows  : Natural := 0;   --  visible rows from the last render
       Hits          : Hit_Rect_Vectors.Vector;   --  from the last Build_Frame

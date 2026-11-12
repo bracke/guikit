@@ -7,6 +7,7 @@ with AUnit.Test_Cases;
 with Guikit.Command_Palette;
 with Guikit.Draw;
 with Guikit.Layout;
+with Guikit.Utf8;
 
 --  Exercises the command-palette state machine (filtering, selection, id
 --  mapping) and a headless Build_Frame that emits draw commands without a GPU.
@@ -24,6 +25,9 @@ package body Guikit_Suite.Command_Palette is
    procedure Test_Filter_And_Select (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Build_Frame (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Line_Height_Scaling (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Cached_Results (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Query_Scrolls (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Label_Truncation (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function Sample return CP.Command_Vectors.Vector is
       Result : CP.Command_Vectors.Vector;
@@ -60,6 +64,15 @@ package body Guikit_Suite.Command_Palette is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Line_Height_Scaling'Access,
          "the palette's padding, title band, search box and row height scale with the line height");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Cached_Results'Access,
+         "cached results match a fresh search after every query and command-list edit");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Query_Scrolls'Access,
+         "a long query scrolls so its end and the caret stay inside the search field, clear of the close button");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Label_Truncation'Access,
+         "a row label too long for its row is truncated by the toolkit's one ellipsis rule");
    end Register_Tests;
 
    procedure Test_Filter_And_Select (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -247,6 +260,161 @@ package body Guikit_Suite.Command_Palette is
       Assert (Double.Results_Y = 2 * Base.Results_Y, "the results top doubles at 2x");
       Assert (Double.Row_Height = 2 * Base.Row_Height, "the row height doubles at 2x");
    end Test_Line_Height_Scaling;
+
+   procedure Test_Cached_Results (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      P : CP.Palette;
+
+      function Others_List return CP.Command_Vectors.Vector is
+         Labels : constant array (Positive range 1 .. 4) of Unbounded_String :=
+           [To_Unbounded_String ("Find in files"), To_Unbounded_String ("File info"),
+            To_Unbounded_String ("Fill colour"), To_Unbounded_String ("Quit")];
+         Result : CP.Command_Vectors.Vector;
+      begin
+         for Label of Labels loop
+            Result.Append
+              (CP.Command'(Id => Natural (Result.Length) + 100, Identifier => Label, Label => Label,
+                           Enabled => True, others => <>));
+         end loop;
+         return Result;
+      end Others_List;
+
+      --  The palette's results against a fresh palette given the same command
+      --  list and query, which searches from scratch.
+      procedure Check (Commands : CP.Command_Vectors.Vector; Step : String) is
+         Fresh : CP.Palette;
+      begin
+         CP.Set_Commands (Fresh, Commands);
+         CP.Set_Query (Fresh, CP.Query (P));
+         declare
+            Got  : constant CP.Command_Vectors.Vector := CP.Results (P);
+            Want : constant CP.Command_Vectors.Vector := CP.Results (Fresh);
+         begin
+            Assert (Natural (Got.Length) = Natural (Want.Length)
+                      and then CP.Result_Count (P) = CP.Result_Count (Fresh),
+                    Step & ": as many results as a fresh search");
+            for I in Want.First_Index .. Want.Last_Index loop
+               Assert (Got.Element (I).Id = Want.Element (I).Id, Step & ": the same ranking as a fresh search");
+            end loop;
+            Assert (CP.Selected_Id (P) =
+                      (if CP.Selected_Index (P) in 1 .. Natural (Want.Length)
+                       then Want.Element (CP.Selected_Index (P)).Id else 0),
+                    Step & ": the selection maps into the current results");
+         end;
+      end Check;
+   begin
+      CP.Set_Commands (P, Sample);
+      Check (Sample, "after Set_Commands");
+      CP.Insert (P, "f");
+      Check (Sample, "after typing f");
+      CP.Insert (P, "i");
+      Check (Sample, "after typing fi");
+      CP.Set_Commands (P, Others_List);
+      Check (Others_List, "after replacing the commands under a query");
+      CP.Backspace (P);
+      Check (Others_List, "after a backspace");
+      CP.Set_Query (P, "qu");
+      Check (Others_List, "after Set_Query");
+      CP.Set_Query (P, "qu");
+      Check (Others_List, "after setting the same query again");
+      CP.Reset (P);
+      Check (Others_List, "after Reset");
+      CP.Set_Commands (P, Sample);
+      Check (Sample, "after replacing the commands with an empty query");
+   end Test_Cached_Results;
+
+   procedure Test_Query_Scrolls (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use type Guikit.Draw.Render_Color;
+
+      LH      : constant := 20;
+      Width   : constant := 400;
+      Height  : constant := 300;
+      Cell_W  : constant Natural := Guikit.Layout.Caret_Advance_Width (LH);
+      Caret_W : constant Natural := Natural'Max (1, Cell_W / 6);
+      Layout  : constant Guikit.Layout.Palette_Layout :=
+        Guikit.Layout.Calculate_Palette_Layout (0, 0, Width, Height, LH);
+      Pad     : constant Natural := Guikit.Layout.Scaled (Guikit.Layout.Palette_Padding, LH);
+      --  The overlay's close button: a line-height square inset max (4, LH / 4).
+      Close_X : constant Natural := Width - Natural'Max (Guikit.Layout.Scaled (4, LH), LH / 4) - LH;
+
+      --  Render Query and check the drawn query text and caret.
+      procedure Check (Query : String; Scrolled : Boolean) is
+         P       : CP.Palette;
+         Rects   : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         Text    : Guikit.Draw.Text_Command_Vectors.Vector;
+         Icons   : Guikit.Draw.Icon_Command_Vectors.Vector;
+         Nodes   : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+         Shown   : Unbounded_String;
+         Field_X : constant Natural := Layout.Search_X + Pad;
+         Field_W : Natural := 0;
+         Carets  : Natural := 0;
+      begin
+         CP.Set_Configuration (P, CP.Configuration'(Line_Height => LH, Overlay => True, others => <>));
+         CP.Set_Commands (P, Sample);
+         CP.Set_Query (P, Query);
+         CP.Build_Frame (P, 0, 0, Width, Height, Width, Height, True, -1, -1, Rects, Text, Icons, Nodes);
+         for Command of Text loop
+            if Command.X = Field_X and then Command.Color = Guikit.Draw.Text_Color and then Command.Y < Layout.Results_Y
+            then
+               Shown := Command.Text;
+               Field_W := Command.Width;
+            end if;
+         end loop;
+         declare
+            S : constant String := To_String (Shown);
+         begin
+            Assert (S'Length > 0, Natural'Image (Query'Length) & "-byte query: the query text is drawn");
+            Assert (Field_X + Field_W <= Close_X, "the query field ends before the close button");
+            Assert (Guikit.Utf8.Display_Units (S) * Cell_W <= Field_W, "the shown query fits the field");
+            Assert (S = Query (Query'Last - S'Length + 1 .. Query'Last), "the shown query is the query's end");
+            Assert ((S'Length < Query'Length) = Scrolled,
+                    (if Scrolled then "a long query scrolls its start off" else "a short query shows whole"));
+            for R of Rects loop
+               if R.Color = Guikit.Draw.Text_Color and then R.Width = Caret_W and then R.Height = LH then
+                  Carets := Carets + 1;
+                  Assert (R.X = Field_X + Guikit.Utf8.Display_Units (S) * Cell_W,
+                          "the caret follows the end of the shown query");
+                  Assert (R.X + R.Width <= Field_X + Field_W, "the caret stays inside the field");
+               end if;
+            end loop;
+            Assert (Carets = 1, "one caret is drawn");
+         end;
+      end Check;
+
+      Digits_Run : constant String := "0123456789";
+   begin
+      Check ("abc", Scrolled => False);
+      Check (Digits_Run & Digits_Run & Digits_Run & Digits_Run & Digits_Run & Digits_Run & Digits_Run & Digits_Run,
+             Scrolled => True);
+   end Test_Query_Scrolls;
+
+   procedure Test_Label_Truncation (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      Label    : constant String := "Open. Recent. Files. And. More. Things. Here. And. Even. More. Of. Them.";
+      Cell_W   : constant Natural := Guikit.Layout.Caret_Advance_Width (20);
+      Commands : CP.Command_Vectors.Vector;
+      P        : CP.Palette;
+      Rects    : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text     : Guikit.Draw.Text_Command_Vectors.Vector;
+      Icons    : Guikit.Draw.Icon_Command_Vectors.Vector;
+      Nodes    : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+      Seen     : Boolean := False;
+   begin
+      Commands.Append
+        (CP.Command'(Id => 1, Identifier => To_Unbounded_String (Label), Label => To_Unbounded_String (Label),
+                     Enabled => True, others => <>));
+      CP.Set_Commands (P, Commands);
+      CP.Build_Frame (P, 0, 0, 240, 200, 240, 200, False, -1, -1, Rects, Text, Icons, Nodes);
+      for Command of Text loop
+         if Command.Truncated then
+            Seen := True;
+            Assert (To_String (Command.Text) = Guikit.Utf8.Fit_With_Ellipsis (Label, Command.Width / Cell_W),
+                    "the label is fitted by Guikit.Utf8.Fit_With_Ellipsis");
+         end if;
+      end loop;
+      Assert (Seen, "the too-long label is drawn truncated");
+   end Test_Label_Truncation;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

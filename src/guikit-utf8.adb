@@ -42,9 +42,59 @@ package body Guikit.Utf8 is
       return Boolean is
    begin
       return Is_Required_Zero_Width_Codepoint (Codepoint)
+        --  Variation selectors (VS1-16, VS17-256).
         or else Codepoint in 16#FE00# .. 16#FE0F#
-        or else Codepoint in 16#E0100# .. 16#E01EF#;
+        or else Codepoint in 16#E0100# .. 16#E01EF#
+        --  Common nonspacing marks of the scripts beyond Latin: Cyrillic
+        --  titlo and friends, Hebrew points, Arabic harakat, Devanagari
+        --  signs, Thai vowel and tone marks, and the combining kana
+        --  voicing marks.
+        or else Codepoint in 16#0483# .. 16#0489#
+        or else Codepoint in 16#0591# .. 16#05BD#
+        or else Codepoint = 16#05BF#
+        or else Codepoint in 16#05C1# .. 16#05C2#
+        or else Codepoint in 16#05C4# .. 16#05C5#
+        or else Codepoint = 16#05C7#
+        or else Codepoint in 16#0610# .. 16#061A#
+        or else Codepoint in 16#064B# .. 16#065F#
+        or else Codepoint = 16#0670#
+        or else Codepoint in 16#06D6# .. 16#06DC#
+        or else Codepoint in 16#06DF# .. 16#06E4#
+        or else Codepoint in 16#06E7# .. 16#06E8#
+        or else Codepoint in 16#06EA# .. 16#06ED#
+        or else Codepoint in 16#0900# .. 16#0902#
+        or else Codepoint = 16#093A#
+        or else Codepoint = 16#093C#
+        or else Codepoint in 16#0941# .. 16#0948#
+        or else Codepoint = 16#094D#
+        or else Codepoint in 16#0951# .. 16#0957#
+        or else Codepoint in 16#0962# .. 16#0963#
+        or else Codepoint = 16#0E31#
+        or else Codepoint in 16#0E34# .. 16#0E3A#
+        or else Codepoint in 16#0E47# .. 16#0E4E#
+        or else Codepoint in 16#3099# .. 16#309A#;
    end Is_Combining_Codepoint;
+
+   --  Zero-width joiner: binds the codepoints either side of it into one
+   --  sequence (an emoji ZWJ sequence such as a family or a profession).
+   Zero_Width_Joiner : constant := 16#200D#;
+
+   --  Invisible format characters that take no cell: the zero-width space,
+   --  non-joiner and joiner, the directional marks, embeddings and
+   --  isolates, the word joiner and invisible operators, the byte-order
+   --  mark, and the emoji tag characters (subdivision flags).
+   function Is_Zero_Width_Format_Codepoint
+     (Codepoint : Natural)
+      return Boolean is
+   begin
+      return Codepoint in 16#200B# .. 16#200F#
+        or else Codepoint in 16#202A# .. 16#202E#
+        or else Codepoint in 16#2060# .. 16#2064#
+        or else Codepoint in 16#2066# .. 16#2069#
+        or else Codepoint = 16#FEFF#
+        or else Codepoint = 16#E0001#
+        or else Codepoint in 16#E0020# .. 16#E007F#;
+   end Is_Zero_Width_Format_Codepoint;
 
    function Is_Wide_Codepoint
      (Codepoint : Natural)
@@ -60,14 +110,18 @@ package body Guikit.Utf8 is
         or else Codepoint in 16#FE30# .. 16#FE6F#
         or else Codepoint in 16#FF00# .. 16#FF60#
         or else Codepoint in 16#FFE0# .. 16#FFE6#
-        or else Codepoint in 16#1F300# .. 16#1FAFF#;
+        or else Codepoint in 16#1F300# .. 16#1FAFF#
+        --  CJK Unified Ideographs Extension B onwards (plane 2) and
+        --  Extension G onwards (plane 3).
+        or else Codepoint in 16#20000# .. 16#2FFFD#
+        or else Codepoint in 16#30000# .. 16#3FFFD#;
    end Is_Wide_Codepoint;
 
    function Codepoint_Display_Units
      (Codepoint : Natural)
       return Natural is
    begin
-      if Is_Combining_Codepoint (Codepoint) then
+      if Is_Combining_Codepoint (Codepoint) or else Is_Zero_Width_Format_Codepoint (Codepoint) then
          return 0;
       elsif Is_Wide_Codepoint (Codepoint) then
          return 2;
@@ -157,38 +211,56 @@ package body Guikit.Utf8 is
       return Units;
    end Display_Units;
 
+   --  Advance Index past one display cluster: the codepoint at Index, every
+   --  zero-width codepoint after it (combining marks, variation selectors,
+   --  invisible format characters), and -- across each zero-width joiner --
+   --  the codepoint the joiner binds together with its own trailing marks.
+   --  Width is the cells the whole cluster takes: the sum of its codepoints'
+   --  widths, which is what the text renderer advances over when it draws
+   --  the cluster codepoint by codepoint. Truncation and caret placement
+   --  step over whole clusters so neither ever lands inside an emoji ZWJ
+   --  sequence or between a base and its combining mark.
+   procedure Next_Cluster
+     (Content : String;
+      Index   : in out Integer;
+      Width   : out Natural)
+   is
+      Codepoint : Natural := 0;
+      Joined    : Boolean;
+      Peek      : Integer;
+   begin
+      Decode_Next_Codepoint (Content, Index, Codepoint);
+      Width := Codepoint_Display_Units (Codepoint);
+      Joined := Codepoint = Zero_Width_Joiner;
+      while Index <= Content'Last loop
+         Peek := Index;
+         Decode_Next_Codepoint (Content, Peek, Codepoint);
+         exit when not Joined and then Codepoint_Display_Units (Codepoint) > 0;
+         Width := Saturating_Add (Width, Codepoint_Display_Units (Codepoint));
+         Joined := Codepoint = Zero_Width_Joiner;
+         Index := Peek;
+      end loop;
+   end Next_Cluster;
+
    function Prefix_By_Units
      (Content   : String;
       Max_Units : Natural)
       return String
    is
-      Index     : Integer := Content'First;
-      Last      : Integer := Content'First - 1;
-      Units     : Natural := 0;
-      Codepoint : Natural := 0;
-      Width     : Natural := 0;
+      Index : Integer := Content'First;
+      Last  : Integer := Content'First - 1;
+      Units : Natural := 0;
+      Width : Natural := 0;
    begin
       if Max_Units = 0 or else Content'Length = 0 then
          return "";
       end if;
 
       while Index <= Content'Last loop
-         declare
-            Start : constant Integer := Index;
-         begin
-            Decode_Next_Codepoint (Content, Index, Codepoint);
-            Width := Codepoint_Display_Units (Codepoint);
-            exit when Saturating_Add (Units, Width) > Max_Units;
-
-            Units := Saturating_Add (Units, Width);
-            Last := Index - 1;
-         exception
-            when Constraint_Error =>
-               Index := Start + 1;
-               exit when Saturating_Add (Units, 1) > Max_Units;
-               Units := Saturating_Add (Units, 1);
-               Last := Start;
-         end;
+         Next_Cluster (Content, Index, Width);
+         exit when Saturating_Add (Units, Width) > Max_Units;
+         Units := Saturating_Add (Units, Width);
+         Last := Index - 1;
       end loop;
 
       if Last < Content'First then
@@ -198,23 +270,56 @@ package body Guikit.Utf8 is
       return Content (Content'First .. Last);
    end Prefix_By_Units;
 
+   function Fit_With_Ellipsis
+     (Content   : String;
+      Max_Units : Natural)
+      return String
+   is
+      --  U+2026 HORIZONTAL ELLIPSIS, the truncation affordance.
+      Ellipsis : constant String := Encode (16#2026#);
+   begin
+      if Max_Units = 0 then
+         return "";
+      elsif Display_Units (Content) <= Max_Units then
+         return Content;
+      elsif Max_Units < 2 then
+         return Prefix_By_Units (Content, Max_Units);
+      end if;
+
+      declare
+         Prefix  : constant String := Prefix_By_Units (Content, Max_Units - 1);
+         Trimmed : constant String :=
+           (if Prefix'Length > 0
+              and then (Prefix (Prefix'Last) = '.' or else Prefix (Prefix'Last) = ' ')
+            then Prefix (Prefix'First .. Prefix'Last - 1)
+            else Prefix);
+      begin
+         if Trimmed = "" then
+            return Prefix_By_Units (Content, Max_Units);
+         end if;
+         return Trimmed & Ellipsis;
+      end;
+   end Fit_With_Ellipsis;
+
    function Display_Units_Before
      (Content : String;
       Cursor  : Natural)
       return Natural
    is
-      Limit     : constant Natural := Natural'Min (Cursor, Content'Length);
-      Index     : Integer := Content'First;
-      Units     : Natural := 0;
-      Codepoint : Natural := 0;
+      Limit : constant Natural := Natural'Min (Cursor, Content'Length);
+      Index : Integer := Content'First;
+      Units : Natural := 0;
+      Width : Natural := 0;
    begin
       if Limit = 0 then
          return 0;
       end if;
 
+      --  Whole clusters: a cursor inside one measures to its end, so a caret
+      --  never sits inside an emoji ZWJ sequence.
       while Index <= Content'Last and then Natural (Index - Content'First) < Limit loop
-         Decode_Next_Codepoint (Content, Index, Codepoint);
-         Units := Saturating_Add (Units, Codepoint_Display_Units (Codepoint));
+         Next_Cluster (Content, Index, Width);
+         Units := Saturating_Add (Units, Width);
       end loop;
 
       return Units;

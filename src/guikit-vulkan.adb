@@ -2778,23 +2778,6 @@ package body Guikit.Vulkan is
          return False;
    end Upload_Icon_Atlas;
 
-   function Upload_Texture_Format
-     (Batch : Submission_Batch)
-      return Atlas_Texture_Format is
-   begin
-      if Batch.Text_Atlas_Used then
-         return Atlas_Texture_R8;
-      elsif Batch.Icon_Atlas_Dirty and then not Batch.Text_Atlas_Used then
-         if Batch.Icon_Atlas_Channels = 4 then
-            return Atlas_Texture_RGBA8;
-         else
-            return Atlas_Texture_R8;
-         end if;
-      else
-         return Atlas_Texture_None;
-      end if;
-   end Upload_Texture_Format;
-
    function Icon_Upload_Texture_Format
      (Batch : Submission_Batch)
       return Atlas_Texture_Format is
@@ -3895,142 +3878,12 @@ package body Guikit.Vulkan is
       Renderer.Last_Status := Vulkan_Swapchain_Recreate_Needed;
    end Request_Swapchain_Recreate;
 
-   function Validate_Resize_Request
-     (Renderer : in out Vulkan_Renderer;
-      Width    : Natural;
-      Height   : Natural)
-      return Resize_Validation_Result is
-   begin
-      Request_Swapchain_Recreate (Renderer, Width, Height);
-      Renderer.Resize_Validated := True;
-      return
-        (Requested_Width    => Width,
-         Requested_Height   => Height,
-         Recreate_Requested => Renderer.Swapchain_Pending,
-         Pending_Width      => Renderer.Pending_Width_Value,
-         Pending_Height     => Renderer.Pending_Height_Value,
-         Status             => Renderer.Last_Status);
-   end Validate_Resize_Request;
-
-   function Validate_Device_Loss
-     (Renderer : in out Vulkan_Renderer)
-      return Runtime_Validation_Result is
-   begin
-      Shutdown (Renderer);
-      Renderer.Device_Loss_Validated := True;
-      return
-        (Requested       => True,
-         Handled         => not Renderer.Device_Live,
-         Device_Ready    => Renderer.Device_Live,
-         Surface_Ready   => Renderer.Surface_Live,
-         Swapchain_Ready => Renderer.Swapchain_Configured,
-         Status          => Renderer.Last_Status);
-   end Validate_Device_Loss;
-
-   function Validate_Surface_Loss
-     (Renderer : in out Vulkan_Renderer)
-      return Runtime_Validation_Result is
-   begin
-      Destroy_Swapchain_Resources (Renderer);
-      if Renderer.Surface_Live and then Renderer.Instance_Live then
-         Vk.Destroy_Surface_KHR
-           (instance    => Renderer.Instance,
-            surface     => Renderer.Surface,
-            p_Allocator => System.Null_Address);
-      end if;
-
-      Renderer.Surface := System.Null_Address;
-      Renderer.Surface_Live := False;
-      Renderer.Swapchain_Configured := False;
-      Renderer.Swapchain_Pending := True;
-      Renderer.Surface_Loss_Validated := True;
-      Renderer.Last_Status := Vulkan_Swapchain_Recreate_Needed;
-      return
-        (Requested       => True,
-         Handled         => not Renderer.Surface_Live and then not Renderer.Swapchain_Configured,
-         Device_Ready    => Renderer.Device_Live,
-         Surface_Ready   => Renderer.Surface_Live,
-         Swapchain_Ready => Renderer.Swapchain_Configured,
-         Status          => Renderer.Last_Status);
-   end Validate_Surface_Loss;
-
-   function Validate_Runtime_Suite
-     (Renderer : in out Vulkan_Renderer;
-      Batch    : Submission_Batch;
-      Plan     : Runtime_Validation_Plan)
-      return Runtime_Validation_Suite_Result
-   is
-      Result : Runtime_Validation_Suite_Result;
-      Status : Vulkan_Status := Renderer.Last_Status;
-   begin
-      if Plan.Validate_Resize then
-         declare
-            Resize : constant Resize_Validation_Result :=
-              Validate_Resize_Request (Renderer, Plan.Width, Plan.Height);
-         begin
-            Result.Resize_Validated := Resize.Recreate_Requested;
-            Status := Resize.Status;
-         end;
-      end if;
-
-      if Plan.Validate_Long_Running then
-         for Frame_Index in 1 .. Plan.Frame_Count loop
-            Status := Present (Renderer, Batch);
-            Result.Frames_Attempted := Result.Frames_Attempted + 1;
-            case Status is
-               when Vulkan_Presented =>
-                  Result.Frames_Presented := Result.Frames_Presented + 1;
-               when Vulkan_Present_Skipped | Vulkan_Swapchain_Recreate_Needed =>
-                  Result.Frames_Skipped := Result.Frames_Skipped + 1;
-               when others =>
-                  Result.Frames_Failed := Result.Frames_Failed + 1;
-            end case;
-         end loop;
-
-         Renderer.Long_Running_Validated := Result.Frames_Attempted = Natural (Plan.Frame_Count);
-         Result.Long_Running_Validated := Renderer.Long_Running_Validated;
-      end if;
-
-      if Plan.Validate_Multi_Window then
-         Renderer.Multi_Window_Validated := Plan.Window_Count >= 2;
-         Result.Multi_Window_Validated := Renderer.Multi_Window_Validated;
-      end if;
-
-      if Plan.Validate_Surface_Loss then
-         declare
-            Surface_Loss : constant Runtime_Validation_Result := Validate_Surface_Loss (Renderer);
-         begin
-            Result.Surface_Loss_Handled := Surface_Loss.Handled;
-            Status := Surface_Loss.Status;
-         end;
-      end if;
-
-      if Plan.Validate_Device_Loss then
-         declare
-            Device_Loss : constant Runtime_Validation_Result := Validate_Device_Loss (Renderer);
-         begin
-            Result.Device_Loss_Handled := Device_Loss.Handled;
-            Status := Device_Loss.Status;
-         end;
-      end if;
-
-      Result.Last_Status := Status;
-      return Result;
-   end Validate_Runtime_Suite;
-
    function Swapchain_Ready
      (Renderer : Vulkan_Renderer)
       return Boolean is
    begin
       return Renderer.Swapchain_Configured;
    end Swapchain_Ready;
-
-   function Swapchain_Recreate_Pending
-     (Renderer : Vulkan_Renderer)
-      return Boolean is
-   begin
-      return Renderer.Swapchain_Pending;
-   end Swapchain_Recreate_Pending;
 
    function Frame_Width
      (Renderer : Vulkan_Renderer)
@@ -4060,34 +3913,6 @@ package body Guikit.Vulkan is
       return Renderer.Pending_Height_Value;
    end Pending_Frame_Height;
 
-   function Presented_Frame_Count
-     (Renderer : Vulkan_Renderer)
-      return Natural is
-   begin
-      return Renderer.Presented_Frames;
-   end Presented_Frame_Count;
-
-   function Skipped_Frame_Count
-     (Renderer : Vulkan_Renderer)
-      return Natural is
-   begin
-      return Renderer.Skipped_Frames;
-   end Skipped_Frame_Count;
-
-   function Failed_Frame_Count
-     (Renderer : Vulkan_Renderer)
-      return Natural is
-   begin
-      return Renderer.Failed_Frames;
-   end Failed_Frame_Count;
-
-   function Last_Submitted_Vertex_Count
-     (Renderer : Vulkan_Renderer)
-      return Natural is
-   begin
-      return Renderer.Last_Vertex_Count;
-   end Last_Submitted_Vertex_Count;
-
    function Diagnostics
      (Renderer : Vulkan_Renderer)
       return Renderer_Diagnostics is
@@ -4107,16 +3932,6 @@ package body Guikit.Vulkan is
          Vertex_Buffer_Ready   => Renderer.Vertex_Buffer_Live,
          Atlas_Texture_Ready   => Renderer.Atlas_Texture_Live,
          Icon_Atlas_Texture_Ready => Renderer.Icon_Atlas_Texture_Live,
-         Resize_Validated      => Renderer.Resize_Validated,
-         Long_Running_Validated => Renderer.Long_Running_Validated,
-         Device_Loss_Handled   => Renderer.Device_Loss_Validated,
-         Surface_Loss_Handled  => Renderer.Surface_Loss_Validated,
-         Multi_Window_Validated => Renderer.Multi_Window_Validated,
-         Resize_Validation_Planned => True,
-         Device_Loss_Validation_Planned => True,
-         Surface_Loss_Validation_Planned => True,
-         Multi_Window_Validation_Planned => True,
-         Long_Running_Validation_Planned => True,
          Presented_Frames      => Renderer.Presented_Frames,
          Skipped_Frames        => Renderer.Skipped_Frames,
          Failed_Frames         => Renderer.Failed_Frames,
@@ -4945,110 +4760,6 @@ package body Guikit.Vulkan is
 
       return Result;
    end Build_Submission;
-
-   function Compare_Gpu_Screenshot
-     (Actual   : Submission_Batch;
-      Expected : Submission_Batch)
-      return Gpu_Screenshot_Comparison
-   is
-      function Natural_Code
-        (Value : Natural)
-         return Interfaces.Unsigned_32 is
-      begin
-         return Interfaces.Unsigned_32 (Value mod 2_147_483_647);
-      end Natural_Code;
-
-      function Float_Code
-        (Value : Float)
-         return Interfaces.Unsigned_32
-      is
-         Scaled  : constant Integer := Integer (Value * 10_000.0);
-         Shifted : constant Long_Long_Integer := Long_Long_Integer (Scaled) + 2_000_000;
-      begin
-         --  Clamp into the unsigned range: this hash helper has no exception
-         --  handler, so an out-of-bounds coordinate must not raise here.
-         if Shifted < 0 then
-            return 0;
-         elsif Shifted > Long_Long_Integer (Interfaces.Unsigned_32'Last) then
-            return Interfaces.Unsigned_32'Last;
-         else
-            return Interfaces.Unsigned_32 (Shifted);
-         end if;
-      end Float_Code;
-
-      function Boolean_Code
-        (Value : Boolean)
-         return Interfaces.Unsigned_32 is
-      begin
-         return (if Value then 1 else 0);
-      end Boolean_Code;
-
-      function Batch_Hash
-        (Batch : Submission_Batch)
-         return Interfaces.Unsigned_32
-      is
-         Hash : Interfaces.Unsigned_32 := 2_166_136_261;
-
-         procedure Mix
-           (Value : Interfaces.Unsigned_32) is
-         begin
-            Hash := (Hash xor Value) * 16_777_619;
-         end Mix;
-      begin
-         Mix (Natural_Code (Batch.Width));
-         Mix (Natural_Code (Batch.Height));
-         Mix (Natural_Code (Batch.Rectangle_Vertex_Count));
-         Mix (Natural_Code (Batch.Triangle_Vertex_Count));
-         Mix (Natural_Code (Batch.Icon_Vertex_Count));
-         Mix (Natural_Code (Batch.Icon_Quad_Count));
-         Mix (Natural_Code (Batch.Glyph_Vertex_Count));
-         Mix (Natural_Code (Batch.Overlay_Vertex_Count));
-         Mix (Natural_Code (Batch.Texture_Count));
-         Mix (Boolean_Code (Batch.Text_Atlas_Used));
-         Mix (Boolean_Code (Batch.Uses_Separate_Text_And_Icon_Textures));
-         Mix (Natural_Code (Natural (Batch.Vertices.Length)));
-
-         for Item of Batch.Vertices loop
-            Mix (Float_Code (Item.X));
-            Mix (Float_Code (Item.Y));
-            Mix (Float_Code (Item.U));
-            Mix (Float_Code (Item.V));
-            Mix (Natural_Code (Guikit.Draw.Render_Color'Pos (Item.Color)));
-            Mix (Boolean_Code (Item.Textured));
-            Mix (Natural_Code (Texture_Source'Pos (Item.Texture)));
-         end loop;
-
-         --  Mix atlas content so the proxy distinguishes frames whose geometry
-         --  is identical but whose icon/thumbnail bitmaps differ (icon UVs
-         --  encode only the tile index, so without this they would hash equal).
-         Mix (Natural_Code (Batch.Atlas_Width));
-         Mix (Natural_Code (Batch.Atlas_Height));
-         Mix (Natural_Code (Batch.Atlas_Bytes));
-         Mix (Natural_Code (Batch.Icon_Atlas_Width));
-         Mix (Natural_Code (Batch.Icon_Atlas_Height));
-         Mix (Natural_Code (Batch.Icon_Atlas_Channels));
-         Mix (Natural_Code (Batch.Icon_Atlas_Bytes));
-         Mix (Natural_Code (Guikit.Shared_Bytes.Length (Batch.Icon_Atlas_Pixels)));
-         for Index in 1 .. Guikit.Shared_Bytes.Length (Batch.Icon_Atlas_Pixels) loop
-            Mix (Interfaces.Unsigned_32 (Guikit.Shared_Bytes.Element (Batch.Icon_Atlas_Pixels, Index)));
-         end loop;
-
-         return Hash;
-      end Batch_Hash;
-
-      Actual_Hash   : constant Interfaces.Unsigned_32 := Batch_Hash (Actual);
-      Expected_Hash : constant Interfaces.Unsigned_32 := Batch_Hash (Expected);
-   begin
-      return
-        (Supported         => True,
-         Matched           => Actual_Hash = Expected_Hash,
-         Width             => Actual.Width,
-         Height            => Actual.Height,
-         Compared_Vertices =>
-           Natural'Min (Natural (Actual.Vertices.Length), Natural (Expected.Vertices.Length)),
-         Actual_Hash       => Actual_Hash,
-         Expected_Hash     => Expected_Hash);
-   end Compare_Gpu_Screenshot;
 
    function Present
      (Renderer : in out Vulkan_Renderer;

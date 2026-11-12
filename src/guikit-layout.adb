@@ -618,19 +618,4 @@ package body Guikit.Layout is
       return Offset;
    end Scroll_Offset_For_Selection;
 
-   function Palette_Result_At
-     (Rows : Palette_Result_Row_Vectors.Vector;
-      X    : Natural;
-      Y    : Natural)
-      return Natural is
-   begin
-      for Row of Rows loop
-         if Within_Rect (X, Y, Row.X, Row.Y, Row.Width, Row.Height) then
-            return Row.Result_Index;
-         end if;
-      end loop;
-
-      return 0;
-   end Palette_Result_At;
-
 end Guikit.Layout;

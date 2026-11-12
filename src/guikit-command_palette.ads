@@ -209,10 +209,21 @@ private
      (Index_Type   => Positive,
       Element_Type => Row_Rect);
 
+   --  Counts Set_Commands calls, so the cached results know which command
+   --  list they were ranked from (wraps; only equality matters).
+   type Revision_Number is mod 2 ** 32;
+
    type Palette is record
       Config       : Configuration;
       Commands     : Command_Vectors.Vector;
+      Revision     : Revision_Number := 0;   --  bumped by every Set_Commands
       Query        : UString;
+      --  The ranked results for (Ranked_Query, Ranked_Revision). Every query or
+      --  command-list edit refreshes them, so the queries read them as they are
+      --  instead of re-running the search (and its allocations) on every call.
+      Ranked          : Command_Vectors.Vector;
+      Ranked_Query    : UString;
+      Ranked_Revision : Revision_Number := 0;
       Selected     : Natural := 0;   --  1-based into the results, 0 = none
       Offset       : Natural := 0;
       Rows         : Row_Rect_Vectors.Vector;  --  from the last Build_Frame
