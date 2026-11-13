@@ -150,6 +150,19 @@ package body Guikit.Draw is
       end case;
    end Color_For;
 
+   function Icon_Rgb_For
+     (Role  : Render_Color;
+      Theme : Theme_Kind := Theme_Dark)
+      return Icon_Rgb
+   is
+      Color : constant Palette_Color := Color_For (Role, Theme);
+
+      function Channel (Value : Float) return Interfaces.Unsigned_8 is
+        (Interfaces.Unsigned_8 (Float'Rounding (Float'Min (1.0, Float'Max (0.0, Value)) * 255.0)));
+   begin
+      return (R => Channel (Color.R), G => Channel (Color.G), B => Channel (Color.B));
+   end Icon_Rgb_For;
+
    Asset_Source : Icon_Asset_Source := null;
 
    procedure Set_Icon_Asset_Source (Source : Icon_Asset_Source) is

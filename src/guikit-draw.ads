@@ -228,6 +228,20 @@ package Guikit.Draw is
    --  command names another: a neutral grey.
    Default_Icon_Base_Color : constant Icon_Rgb := (R => 184, G => 190, B => 198);
 
+   --  The opaque colour a palette role resolves to under a theme, as an icon
+   --  command's Base_Color: a folder asset rasterized in the theme's folder
+   --  blue, say. The backend keys an asset's atlas tile by its base colour,
+   --  so a theme change draws fresh tiles rather than reusing stale ones.
+   --
+   --  @param Role Semantic color role to resolve.
+   --  @param Theme Active palette theme.
+   --  @return The role's colour with each channel rounded to 0 .. 255; its
+   --    alpha is dropped.
+   function Icon_Rgb_For
+     (Role  : Render_Color;
+      Theme : Theme_Kind := Theme_Dark)
+      return Icon_Rgb;
+
    type Icon_Command is record
       X          : Natural := 0;
       Y          : Natural := 0;
