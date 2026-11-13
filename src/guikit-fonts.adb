@@ -82,9 +82,37 @@ package body Guikit.Fonts is
 
    Last_Text_Fallback : constant Natural := 10;
 
-   Cached_Default_Key   : Unbounded_String;
-   Cached_Default_Path  : Unbounded_String;
-   Cached_Default_Ready : Boolean := False;
+   --  The last Default_Font_Path answer and what it depended on (the override
+   --  and the folders), shared by every task that asks. Only a found font is
+   --  kept: "no font" is looked for again next time, since one may have been
+   --  installed since.
+   protected Default_Cache is
+      --  The cached path for Key, or the null string when none is cached.
+      function Lookup (Key : Unbounded_String) return Unbounded_String;
+      --  Remember Path as the answer for Key; an empty Path is not kept.
+      procedure Store (Key : Unbounded_String; Path : Unbounded_String);
+   private
+      Cached_Key  : Unbounded_String;
+      Cached_Path : Unbounded_String;
+   end Default_Cache;
+
+   protected body Default_Cache is
+      function Lookup (Key : Unbounded_String) return Unbounded_String is
+      begin
+         if Length (Cached_Path) > 0 and then Cached_Key = Key then
+            return Cached_Path;
+         end if;
+         return Null_Unbounded_String;
+      end Lookup;
+
+      procedure Store (Key : Unbounded_String; Path : Unbounded_String) is
+      begin
+         if Length (Path) > 0 then
+            Cached_Key := Key;
+            Cached_Path := Path;
+         end if;
+      end Store;
+   end Default_Cache;
 
    --  ASCII-only lowering: the suffixes and names compared are ASCII, and
    --  bytes of a multi-byte UTF-8 name pass through untouched.
@@ -271,11 +299,13 @@ package body Guikit.Fonts is
       end if;
 
       --  Listed first and visited after, so the search is closed before any
-      --  recursion opens another.
+      --  recursion opens another. The listing stops at the scan budget, so
+      --  a huge folder is not read in whole only to be cut short below.
       Ada.Directories.Start_Search
         (Search, Root, "",
          [Ada.Directories.Directory | Ada.Directories.Ordinary_File => True, others => False]);
       while Ada.Directories.More_Entries (Search) loop
+         exit when Scanned + Natural (Names.Length) >= Max_Scanned_Font_Entries;
          Ada.Directories.Get_Next_Entry (Search, Item);
          declare
             Name : constant String := Ada.Directories.Simple_Name (Item);
@@ -476,17 +506,19 @@ package body Guikit.Fonts is
 
       procedure Remember (Path : String) is
       begin
-         Cached_Default_Key := Key;
-         Cached_Default_Path := To_Unbounded_String (Path);
-         Cached_Default_Ready := True;
+         Default_Cache.Store (Key, To_Unbounded_String (Path));
       end Remember;
    begin
       for Folder of Font_Directories loop
          Append (Key, ASCII.NUL & Folder);
       end loop;
-      if Cached_Default_Ready and then Cached_Default_Key = Key then
-         return To_String (Cached_Default_Path);
-      end if;
+      declare
+         Cached : constant Unbounded_String := Default_Cache.Lookup (Key);
+      begin
+         if Length (Cached) > 0 then
+            return To_String (Cached);
+         end if;
+      end;
 
       if Is_Loadable_Font (Override) then
          Remember (Override);
@@ -523,7 +555,6 @@ package body Guikit.Fonts is
          return To_String (Best_Path);
       end if;
 
-      Remember ("");
       return "";
    exception
       when Swallowed : others =>

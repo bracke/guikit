@@ -3,6 +3,7 @@ with AUnit.Assertions;
 with AUnit.Test_Cases;
 
 with Ada.Strings.Unbounded;
+with Interfaces;
 
 with Guikit.Draw;
 with Guikit.Palette;
@@ -33,6 +34,7 @@ package body Guikit_Suite.Palette is
    procedure Test_Continuation_Byte_Not_Separator (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_High_Contrast_Colors (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Modal_Backdrop_Colors (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Icon_Rgb_For (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function Item
      (Id          : Natural;
@@ -83,6 +85,8 @@ package body Guikit_Suite.Palette is
         (T, Test_High_Contrast_Colors'Access, "high contrast strengthens text and panel boundaries");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Modal_Backdrop_Colors'Access, "modal backdrops dim without becoming opaque");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Icon_Rgb_For'Access, "an icon colour is its palette role's colour, each channel rounded to 8 bits");
    end Register_Tests;
 
    procedure Test_Empty_Query_Keeps_All (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -229,6 +233,42 @@ package body Guikit_Suite.Palette is
            > Color_For (Modal_Backdrop_Color, Theme_Light).A,
          "high contrast uses the strongest modal separation");
    end Test_Modal_Backdrop_Colors;
+
+   procedure Test_Icon_Rgb_For (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      Roles : constant array (Positive range <>) of Render_Color :=
+        [Canvas_Color, Main_Color, Icon_Folder_Color, Accent_Gold_Color, Accent_Blue_Color];
+
+      --  A channel the way the spec states it: the nearest of 0 .. 255.
+      function Matches (Byte : Interfaces.Unsigned_8; Channel : Float) return Boolean is
+        (abs (Float (Byte) - Channel * 255.0) <= 0.5);
+   begin
+      --  Worked by hand from the palette: dark folder blue (0.32, 0.50, 0.82)
+      --  is 81.6, 127.5 and 209.1 of 255 -- a half rounds up -- and light
+      --  folder blue (0.18, 0.40, 0.74) is 45.9, 102.0 and 188.7.
+      Assert (Icon_Rgb_For (Icon_Folder_Color, Theme_Dark) = (R => 82, G => 128, B => 209),
+              "the dark folder blue in 8 bits");
+      Assert (Icon_Rgb_For (Icon_Folder_Color, Theme_Light) = (R => 46, G => 102, B => 189),
+              "the light folder blue in 8 bits");
+      Assert (Icon_Rgb_For (Canvas_Color, Theme_Light) = (R => 237, G => 240, B => 242),
+              "the light canvas in 8 bits");
+      Assert (Icon_Rgb_For (Icon_Folder_Color, Theme_Dark) /= Icon_Rgb_For (Icon_Folder_Color, Theme_Light),
+              "a theme change gives a folder a different base colour");
+
+      for Theme in Theme_Dark .. Theme_Light loop
+         for Role of Roles loop
+            declare
+               Color : constant Palette_Color := Color_For (Role, Theme);
+               Bytes : constant Icon_Rgb := Icon_Rgb_For (Role, Theme);
+            begin
+               Assert (Matches (Bytes.R, Color.R) and then Matches (Bytes.G, Color.G)
+                         and then Matches (Bytes.B, Color.B),
+                       Render_Color'Image (Role) & " under " & Theme_Kind'Image (Theme)
+                       & " is Color_For's colour rounded to the nearest byte");
+            end;
+         end loop;
+      end loop;
+   end Test_Icon_Rgb_For;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

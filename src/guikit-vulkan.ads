@@ -441,6 +441,8 @@ private
    type Image_View_Array is array (Positive range 1 .. Max_Swapchain_Images) of Vk.Image_View_T;
    type Framebuffer_Array is array (Positive range 1 .. Max_Swapchain_Images) of Vk.Framebuffer_T;
    type Command_Buffer_Array is array (Positive range 1 .. Max_Swapchain_Images) of Vk.Command_Buffer_T;
+   type Semaphore_Handle_Array is array (Positive range 1 .. Max_Swapchain_Images) of Vk.Semaphore_T;
+   --  One render-finished semaphore per swapchain image; see Present for why.
 
    type Retained_Frame_Access is access Guikit.Frame_Analysis.Byte_Array;
    --  Heap copy of the last read-back framebuffer, retained so layout-derived
@@ -491,7 +493,7 @@ private
       Readback_Buffer      : Vk.Buffer_T := System.Null_Address;
       Readback_Memory      : Vk.Device_Memory_T := System.Null_Address;
       Image_Available       : Vk.Semaphore_T := System.Null_Address;
-      Render_Finished       : Vk.Semaphore_T := System.Null_Address;
+      Render_Finished       : Semaphore_Handle_Array := [others => System.Null_Address];
       In_Flight             : Vk.Fence_T := System.Null_Address;
       Swapchain_Images      : Swapchain_Image_Array := [others => System.Null_Address];
       Image_Views           : Image_View_Array := [others => System.Null_Address];

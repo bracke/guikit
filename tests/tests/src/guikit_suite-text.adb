@@ -39,6 +39,12 @@ package body Guikit_Suite.Text is
       new String'("C:\Windows\Fonts\consola.ttf"),
       new String'("C:\Windows\Fonts\cour.ttf")];
 
+   --  The two faces fonts-dejavu-core installs on Debian and Ubuntu, both in
+   --  Guikit.Fonts' text fallback chain.
+   Dejavu_Faces : constant array (Positive range <>) of access constant String :=
+     [new String'("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"),
+      new String'("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")];
+
    function Font_Path return String is
    begin
       for Candidate of Font_Candidates loop
@@ -204,6 +210,20 @@ package body Guikit_Suite.Text is
                Assert (Fallbacks (Index) /= Fallbacks (Other), "the chain lists each font once");
             end loop;
          end loop;
+
+         --  Linux CI installs fonts-dejavu-core, which brings both DejaVu Sans
+         --  Mono and DejaVu Sans; both are text fallbacks, and at most one of
+         --  them can be the primary, so wherever they are the chain is never
+         --  empty and holds each that is not the primary. (No second family is
+         --  guaranteed elsewhere, so elsewhere only the properties above hold.)
+         for Face of Dejavu_Faces loop
+            if Ada.Directories.Exists (Face.all) and then Face.all /= Primary then
+               Assert (Fallbacks.Contains (Face.all), "the chain holds " & Face.all);
+            end if;
+         end loop;
+         if (for all Face of Dejavu_Faces => Ada.Directories.Exists (Face.all)) then
+            Assert (not Fallbacks.Is_Empty, "with both DejaVu faces installed there is a fallback");
+         end if;
       end;
    end Test_Font_Discovery;
 

@@ -39,14 +39,18 @@ package Glfw.Windows.Drop.Paths is
       Limit  : Positive);
 
    --  The paths a C array holds, by the rule Receive is given them by: at
-   --  most Limit, in order, null entries left out. The drop callback applies
-   --  the same rule reading GLFW's array in place, without copying it.
+   --  most Limit, in order, null entries left out. The drop callback reads
+   --  GLFW's array through this, entry by entry in place: no copy of the
+   --  array is made, so even a drop of thousands of paths puts nothing on the
+   --  callback's stack, and the result lives on the heap.
    --
-   --  @param Raw The array GLFW passes, as many entries as it says.
+   --  @param Count How many entries the array has, as GLFW says.
+   --  @param Item Entry Index (1 .. Count) of the array.
    --  @param Limit The most paths to keep.
    --  @return The paths.
    function Collect
-     (Raw   : Interfaces.C.Strings.chars_ptr_array;
+     (Count : Natural;
+      Item  : not null access function (Index : Positive) return Interfaces.C.Strings.chars_ptr;
       Limit : Positive)
       return Path_Vectors.Vector;
 

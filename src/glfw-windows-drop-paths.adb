@@ -29,18 +29,22 @@ package body Glfw.Windows.Drop.Paths is
      with Convention => C;
 
    function Collect
-     (Raw   : Interfaces.C.Strings.chars_ptr_array;
+     (Count : Natural;
+      Item  : not null access function (Index : Positive) return Interfaces.C.Strings.chars_ptr;
       Limit : Positive)
       return Path_Vectors.Vector
    is
-      use type Interfaces.C.size_t;
       Got : Path_Vectors.Vector;
    begin
-      for Item of Raw loop
+      for Index in 1 .. Count loop
          exit when Natural (Got.Length) = Limit;
-         if Item /= Interfaces.C.Strings.Null_Ptr then
-            Got.Append (Interfaces.C.Strings.Value (Item));
-         end if;
+         declare
+            Path : constant Interfaces.C.Strings.chars_ptr := Item (Index);
+         begin
+            if Path /= Interfaces.C.Strings.Null_Ptr then
+               Got.Append (Interfaces.C.Strings.Value (Path));
+            end if;
+         end;
       end loop;
       return Got;
    end Collect;
@@ -60,19 +64,14 @@ package body Glfw.Windows.Drop.Paths is
             Target := Item.Into;
             declare
                Raw : constant C_Path_Array_Pointers.Object_Pointer := C_Path_Array_Pointers.To_Pointer (Paths);
-               Got : Path_Vectors.Vector;
+
+               function Entry_At (Index : Positive) return Interfaces.C.Strings.chars_ptr is (Raw.all (Index));
             begin
                --  Read GLFW's array in place, straight into the (heap) result:
                --  no copy of it is made, so a drop of thousands of paths -- a
                --  Limit in the tens of thousands -- puts nothing on the stack
                --  of this callback, which on Windows has only about 1 MiB.
-               for Index in 1 .. Positive (Count) loop
-                  exit when Natural (Got.Length) = Item.Limit;
-                  if Raw.all (Index) /= Interfaces.C.Strings.Null_Ptr then
-                     Got.Append (Interfaces.C.Strings.Value (Raw.all (Index)));
-                  end if;
-               end loop;
-               Item.Into.Receive (Got);
+               Item.Into.Receive (Collect (Natural (Count), Entry_At'Access, Item.Limit));
             end;
             return;
          end if;

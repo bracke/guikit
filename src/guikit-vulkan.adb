@@ -338,8 +338,13 @@ package body Guikit.Vulkan is
      (Physical : Vk.Physical_Device_T)
       return Interfaces.Unsigned_32;
 
+   --  Destroy everything built on the device for the current swapchain,
+   --  after waiting for the device to go idle so nothing still in use by the
+   --  GPU is freed. Keep_Swapchain leaves the swapchain handle itself alive
+   --  so that Create_Swapchain_Resources can hand it on as oldSwapchain.
    procedure Destroy_Swapchain_Resources
-     (Renderer : in out Vulkan_Renderer);
+     (Renderer       : in out Vulkan_Renderer;
+      Keep_Swapchain : Boolean := False);
 
    function Create_Render_Targets
      (Renderer : in out Vulkan_Renderer;
@@ -721,10 +726,147 @@ package body Guikit.Vulkan is
          return False;
    end Create_Color_MSAA_Target;
 
-   procedure Destroy_Swapchain_Resources
+   --  Block until the device has finished all queued work. The result is not
+   --  acted on: a lost device has no work left either, and every caller goes
+   --  on to destroy or rebuild what it was about to.
+   procedure Wait_Device_Idle
+     (Renderer : Vulkan_Renderer) is
+   begin
+      if Renderer.Device_Live then
+         declare
+            Ignored_Result : constant Vk.Result_T := Vk.Device_Wait_Idle (Renderer.Device);
+            pragma Unreferenced (Ignored_Result);
+         begin
+            null;
+         end;
+      end if;
+   end Wait_Device_Idle;
+
+   --  Destroy the frame synchronisation objects. The caller makes sure the
+   --  device no longer uses them (Wait_Device_Idle).
+   procedure Destroy_Sync_Objects
      (Renderer : in out Vulkan_Renderer) is
    begin
       if Renderer.Device_Live then
+         if Renderer.In_Flight /= System.Null_Address then
+            Vk.Destroy_Fence
+              (device      => Renderer.Device,
+               fence       => Renderer.In_Flight,
+               p_Allocator => System.Null_Address);
+         end if;
+
+         for Index in Renderer.Render_Finished'Range loop
+            if Renderer.Render_Finished (Index) /= System.Null_Address then
+               Vk.Destroy_Semaphore
+                 (device      => Renderer.Device,
+                  semaphore   => Renderer.Render_Finished (Index),
+                  p_Allocator => System.Null_Address);
+            end if;
+         end loop;
+
+         if Renderer.Image_Available /= System.Null_Address then
+            Vk.Destroy_Semaphore
+              (device      => Renderer.Device,
+               semaphore   => Renderer.Image_Available,
+               p_Allocator => System.Null_Address);
+         end if;
+      end if;
+
+      Renderer.In_Flight := System.Null_Address;
+      Renderer.Render_Finished := [others => System.Null_Address];
+      Renderer.Image_Available := System.Null_Address;
+      Renderer.Sync_Live := False;
+   end Destroy_Sync_Objects;
+
+   --  Create fresh frame synchronisation objects for the current swapchain:
+   --  one image-available semaphore, one render-finished semaphore per
+   --  swapchain image and the in-flight fence, created signalled so the first
+   --  frame's wait returns at once. Any objects already there are destroyed
+   --  first. On failure nothing is left behind and Sync_Live stays False.
+   function Create_Sync_Objects
+     (Renderer : in out Vulkan_Renderer)
+      return Boolean
+   is
+      Semaphore_Info : aliased constant Vk.Semaphore_Create_Info_T :=
+        (s_Type => Vk.STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+         p_Next => System.Null_Address,
+         flags  => 0);
+      Fence_Info : aliased constant Vk.Fence_Create_Info_T :=
+        (s_Type => Vk.STRUCTURE_TYPE_FENCE_CREATE_INFO,
+         p_Next => System.Null_Address,
+         flags  => Vk.FENCE_CREATE_SIGNALED_BIT);
+      Semaphore_Handle : aliased Vk.Semaphore_T := System.Null_Address;
+      Fence_Handle     : aliased Vk.Fence_T := System.Null_Address;
+      Result           : Vk.Result_T;
+   begin
+      Destroy_Sync_Objects (Renderer);
+
+      if not Renderer.Device_Live
+        or else Renderer.Swapchain_Image_Count = 0
+        or else Renderer.Swapchain_Image_Count > Interfaces.Unsigned_32 (Max_Swapchain_Images)
+      then
+         return False;
+      end if;
+
+      Result :=
+        Vk.Create_Semaphore
+          (device        => Renderer.Device,
+           p_Create_Info => Semaphore_Info'Address,
+           p_Allocator   => System.Null_Address,
+           p_Semaphore   => Semaphore_Handle'Address);
+
+      if Result /= Vk.SUCCESS or else Semaphore_Handle = System.Null_Address then
+         Destroy_Sync_Objects (Renderer);
+         return False;
+      end if;
+      Renderer.Image_Available := Semaphore_Handle;
+
+      for Index in 1 .. Natural (Renderer.Swapchain_Image_Count) loop
+         Semaphore_Handle := System.Null_Address;
+         Result :=
+           Vk.Create_Semaphore
+             (device        => Renderer.Device,
+              p_Create_Info => Semaphore_Info'Address,
+              p_Allocator   => System.Null_Address,
+              p_Semaphore   => Semaphore_Handle'Address);
+
+         if Result /= Vk.SUCCESS or else Semaphore_Handle = System.Null_Address then
+            Destroy_Sync_Objects (Renderer);
+            return False;
+         end if;
+         Renderer.Render_Finished (Index) := Semaphore_Handle;
+      end loop;
+
+      Result :=
+        Vk.Create_Fence
+          (device        => Renderer.Device,
+           p_Create_Info => Fence_Info'Address,
+           p_Allocator   => System.Null_Address,
+           p_Fence       => Fence_Handle'Address);
+
+      if Result /= Vk.SUCCESS or else Fence_Handle = System.Null_Address then
+         Destroy_Sync_Objects (Renderer);
+         return False;
+      end if;
+      Renderer.In_Flight := Fence_Handle;
+      Renderer.Sync_Live := True;
+      return True;
+   exception
+      when Error : others =>
+         Guikit.Errors.Note (Error, "Guikit.Vulkan");
+         Destroy_Sync_Objects (Renderer);
+         return False;
+   end Create_Sync_Objects;
+
+   procedure Destroy_Swapchain_Resources
+     (Renderer       : in out Vulkan_Renderer;
+      Keep_Swapchain : Boolean := False) is
+   begin
+      if Renderer.Device_Live then
+         --  Command buffers, pipelines, atlases and the swapchain images may
+         --  all still be referenced by a submitted frame or a pending present.
+         Wait_Device_Idle (Renderer);
+
          if Renderer.Command_Buffer_Count > 0 and then Renderer.Command_Pool /= System.Null_Address then
             Vk.Free_Command_Buffers
               (device               => Renderer.Device,
@@ -946,32 +1088,9 @@ package body Guikit.Vulkan is
             end if;
          end loop;
 
-         if Renderer.Sync_Live then
-            if Renderer.In_Flight /= System.Null_Address then
-               Vk.Destroy_Fence
-                 (device      => Renderer.Device,
-                  fence       => Renderer.In_Flight,
-                  p_Allocator => System.Null_Address);
-               Renderer.In_Flight := System.Null_Address;
-            end if;
+         Destroy_Sync_Objects (Renderer);
 
-            if Renderer.Render_Finished /= System.Null_Address then
-               Vk.Destroy_Semaphore
-                 (device      => Renderer.Device,
-                  semaphore   => Renderer.Render_Finished,
-                  p_Allocator => System.Null_Address);
-               Renderer.Render_Finished := System.Null_Address;
-            end if;
-
-            Vk.Destroy_Semaphore
-              (device      => Renderer.Device,
-               semaphore   => Renderer.Image_Available,
-               p_Allocator => System.Null_Address);
-            Renderer.Image_Available := System.Null_Address;
-            Renderer.Sync_Live := False;
-         end if;
-
-         if Renderer.Swapchain_Live then
+         if Renderer.Swapchain_Live and then not Keep_Swapchain then
             Vk.Destroy_Swapchain_KHR
               (device      => Renderer.Device,
                swapchain   => Renderer.Swapchain,
@@ -981,7 +1100,7 @@ package body Guikit.Vulkan is
          end if;
       else
          Renderer.Image_Available := System.Null_Address;
-         Renderer.Render_Finished := System.Null_Address;
+         Renderer.Render_Finished := [others => System.Null_Address];
          Renderer.In_Flight := System.Null_Address;
          Renderer.Swapchain := System.Null_Address;
          Renderer.Render_Pass := System.Null_Address;
@@ -3194,19 +3313,31 @@ package body Guikit.Vulkan is
       Swapchain_Info : aliased Vk.Swapchain_Create_Info_KHR_T;
       Swapchain_Handle : aliased Vk.Swapchain_KHR_T := System.Null_Address;
       Swapchain_Result : Vk.Result_T;
-      Semaphore_Info : aliased Vk.Semaphore_Create_Info_T :=
-        (s_Type => Vk.STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-         p_Next => System.Null_Address,
-         flags  => 0);
-      Fence_Info : aliased Vk.Fence_Create_Info_T :=
-        (s_Type => Vk.STRUCTURE_TYPE_FENCE_CREATE_INFO,
-         p_Next => System.Null_Address,
-         flags  => Vk.FENCE_CREATE_SIGNALED_BIT);
-      Image_Available_Handle : aliased Vk.Semaphore_T := System.Null_Address;
-      Render_Finished_Handle : aliased Vk.Semaphore_T := System.Null_Address;
-      Fence_Handle           : aliased Vk.Fence_T := System.Null_Address;
+      --  The swapchain being replaced, if any. It is handed to the driver as
+      --  oldSwapchain, which retires it (it can no longer acquire) and lets
+      --  the driver reuse its resources, and is destroyed once the new one has
+      --  been created -- or as soon as it is clear none will be.
+      Old_Swapchain : Vk.Swapchain_KHR_T := System.Null_Address;
+
+      procedure Retire_Old_Swapchain is
+      begin
+         if Old_Swapchain /= System.Null_Address then
+            Vk.Destroy_Swapchain_KHR
+              (device      => Renderer.Device,
+               swapchain   => Old_Swapchain,
+               p_Allocator => System.Null_Address);
+            Old_Swapchain := System.Null_Address;
+         end if;
+      end Retire_Old_Swapchain;
    begin
-      Destroy_Swapchain_Resources (Renderer);
+      --  Everything but the swapchain handle goes now, after the device has
+      --  gone idle; the handle survives only until the new swapchain exists.
+      Destroy_Swapchain_Resources (Renderer, Keep_Swapchain => True);
+      if Renderer.Swapchain_Live then
+         Old_Swapchain := Renderer.Swapchain;
+         Renderer.Swapchain := System.Null_Address;
+         Renderer.Swapchain_Live := False;
+      end if;
 
       Surface_Result :=
         Vk.Get_Physical_Device_Surface_Support_KHR
@@ -3216,6 +3347,7 @@ package body Guikit.Vulkan is
            p_Supported        => Surface_Supported'Address);
 
       if Surface_Result /= Vk.SUCCESS or else Surface_Supported = 0 then
+         Retire_Old_Swapchain;
          Renderer.Last_Status := Vulkan_Surface_Unsupported;
          return Renderer.Last_Status;
       end if;
@@ -3227,6 +3359,7 @@ package body Guikit.Vulkan is
            p_Surface_Capabilities => Capabilities'Address);
 
       if Surface_Result /= Vk.SUCCESS then
+         Retire_Old_Swapchain;
          Renderer.Last_Status := Vulkan_Swapchain_Create_Failed;
          return Renderer.Last_Status;
       end if;
@@ -3239,6 +3372,7 @@ package body Guikit.Vulkan is
            p_Surface_Formats      => System.Null_Address);
 
       if Surface_Result /= Vk.SUCCESS or else Format_Count = 0 then
+         Retire_Old_Swapchain;
          Renderer.Last_Status := Vulkan_Swapchain_Create_Failed;
          return Renderer.Last_Status;
       end if;
@@ -3255,6 +3389,7 @@ package body Guikit.Vulkan is
            p_Surface_Formats      => Formats (Formats'First)'Address);
 
       if Surface_Result /= Vk.SUCCESS then
+         Retire_Old_Swapchain;
          Renderer.Last_Status := Vulkan_Swapchain_Create_Failed;
          return Renderer.Last_Status;
       end if;
@@ -3284,6 +3419,7 @@ package body Guikit.Vulkan is
          end loop;
 
          if not Found_Srgb then
+            Retire_Old_Swapchain;
             Renderer.Last_Status := Vulkan_Swapchain_Create_Failed;
             return Renderer.Last_Status;
          end if;
@@ -3328,7 +3464,7 @@ package body Guikit.Vulkan is
          composite_Alpha         => Vk.COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
          present_Mode            => Vk.PRESENT_MODE_FIFO_KHR,
          clipped                 => 1,
-         old_Swapchain           => System.Null_Address);
+         old_Swapchain           => Old_Swapchain);
 
       Swapchain_Result :=
         Vk.Create_Swapchain_KHR
@@ -3336,6 +3472,9 @@ package body Guikit.Vulkan is
            p_Create_Info  => Swapchain_Info'Address,
            p_Allocator    => System.Null_Address,
            p_Swapchain    => Swapchain_Handle'Address);
+
+      --  Retired either way: a failed create still retires oldSwapchain.
+      Retire_Old_Swapchain;
 
       if Swapchain_Result /= Vk.SUCCESS or else Swapchain_Handle = System.Null_Address then
          Renderer.Last_Status := Vulkan_Swapchain_Create_Failed;
@@ -3414,54 +3553,12 @@ package body Guikit.Vulkan is
          return Renderer.Last_Status;
       end if;
 
-      Swapchain_Result :=
-        Vk.Create_Semaphore
-          (device        => Renderer.Device,
-           p_Create_Info => Semaphore_Info'Address,
-           p_Allocator   => System.Null_Address,
-           p_Semaphore   => Image_Available_Handle'Address);
-
-      if Swapchain_Result /= Vk.SUCCESS or else Image_Available_Handle = System.Null_Address then
+      if not Create_Sync_Objects (Renderer) then
          Destroy_Swapchain_Resources (Renderer);
          Renderer.Last_Status := Vulkan_Sync_Create_Failed;
          return Renderer.Last_Status;
       end if;
 
-      Swapchain_Result :=
-        Vk.Create_Semaphore
-          (device        => Renderer.Device,
-           p_Create_Info => Semaphore_Info'Address,
-           p_Allocator   => System.Null_Address,
-           p_Semaphore   => Render_Finished_Handle'Address);
-
-      if Swapchain_Result /= Vk.SUCCESS or else Render_Finished_Handle = System.Null_Address then
-         Renderer.Image_Available := Image_Available_Handle;
-         Renderer.Sync_Live := True;
-         Destroy_Swapchain_Resources (Renderer);
-         Renderer.Last_Status := Vulkan_Sync_Create_Failed;
-         return Renderer.Last_Status;
-      end if;
-
-      Swapchain_Result :=
-        Vk.Create_Fence
-          (device        => Renderer.Device,
-           p_Create_Info => Fence_Info'Address,
-           p_Allocator   => System.Null_Address,
-           p_Fence       => Fence_Handle'Address);
-
-      if Swapchain_Result /= Vk.SUCCESS or else Fence_Handle = System.Null_Address then
-         Renderer.Image_Available := Image_Available_Handle;
-         Renderer.Render_Finished := Render_Finished_Handle;
-         Renderer.Sync_Live := True;
-         Destroy_Swapchain_Resources (Renderer);
-         Renderer.Last_Status := Vulkan_Sync_Create_Failed;
-         return Renderer.Last_Status;
-      end if;
-
-      Renderer.Image_Available := Image_Available_Handle;
-      Renderer.Render_Finished := Render_Finished_Handle;
-      Renderer.In_Flight := Fence_Handle;
-      Renderer.Sync_Live := True;
       Renderer.Swapchain_Configured := True;
       Renderer.Swapchain_Pending := False;
       Renderer.Pending_Width_Value := 0;
@@ -3471,6 +3568,7 @@ package body Guikit.Vulkan is
    exception
       when Error : others =>
          Guikit.Errors.Note (Error, "Guikit.Vulkan");
+         Retire_Old_Swapchain;
          Destroy_Swapchain_Resources (Renderer);
          Renderer.Last_Status := Vulkan_Swapchain_Create_Failed;
          return Renderer.Last_Status;
@@ -4761,6 +4859,58 @@ package body Guikit.Vulkan is
       return Result;
    end Build_Submission;
 
+   --  A frame was abandoned after its image was acquired: the acquire left
+   --  Image_Available signalled with nothing to wait on it, the fence may have
+   --  been reset with no submit to signal it again, and the acquired image is
+   --  never presented. Rebuild the synchronisation objects at once, so the
+   --  next Present neither reuses a signalled semaphore nor waits forever on
+   --  an unsignalled fence, and ask for the swapchain to be rebuilt as well,
+   --  which is the only way to hand the stranded image back (an application
+   --  may hold only a few images acquired at a time). The frame's failure
+   --  status is kept.
+   procedure Abandon_Acquired_Frame
+     (Renderer : in out Vulkan_Renderer;
+      Width    : Natural;
+      Height   : Natural)
+   is
+      Failed_Status : constant Vulkan_Status := Renderer.Last_Status;
+   begin
+      Wait_Device_Idle (Renderer);
+      declare
+         --  When this fails Sync_Live is False, so Present skips until the
+         --  swapchain rebuild requested below creates them again.
+         Rebuilt : constant Boolean := Create_Sync_Objects (Renderer);
+         pragma Unreferenced (Rebuilt);
+      begin
+         null;
+      end;
+      Request_Swapchain_Recreate (Renderer, Width, Height);
+      Renderer.Last_Status := Failed_Status;
+   end Abandon_Acquired_Frame;
+
+   --  Frame synchronisation. One frame is in flight at a time:
+   --
+   --  * In_Flight (fence) is signalled by each frame's submit. Present waits
+   --    on it first, so when a frame starts the previous submit -- and with it
+   --    every command buffer, vertex and atlas upload it used -- is finished.
+   --    It is reset only immediately before a Queue_Submit that will happen,
+   --    so it never stays unsignalled with no submit pending.
+   --  * Image_Available (one semaphore) is signalled by the acquire and
+   --    waited on by the same frame's submit. Because of the fence wait, by
+   --    the next acquire that wait has executed and the semaphore is unsignalled
+   --    again, so one is enough.
+   --  * Render_Finished (one semaphore per swapchain image) is signalled by
+   --    the submit and waited on by the present. The fence does not cover the
+   --    present, so a single semaphore could be re-signalled by the next
+   --    submit while the previous present still waits on it. Indexed by the
+   --    image instead, it is reused only when that image is acquired again,
+   --    and the presentation engine hands an image back only after its
+   --    present -- and so its semaphore wait -- has executed.
+   --
+   --  Any failure between a successful acquire and a successful submit
+   --  breaks these invariants; Abandon_Acquired_Frame restores them.
+   --  Destroying or rebuilding any of this waits for the device to go idle
+   --  (Destroy_Swapchain_Resources).
    function Present
      (Renderer : in out Vulkan_Renderer;
       Batch    : Submission_Batch)
@@ -4768,9 +4918,11 @@ package body Guikit.Vulkan is
       Image_Index : aliased Interfaces.Unsigned_32 := 0;
       Swapchains  : aliased Swapchain_Array (1 .. 1) := [1 => Renderer.Swapchain];
       Indices     : aliased Image_Index_Array (1 .. 1);
-      Present_Waits : aliased Semaphore_Array (1 .. 1) := [1 => Renderer.Render_Finished];
+      --  The render-finished semaphore is the acquired image's own, set once
+      --  the acquire has said which image that is.
+      Present_Waits : aliased Semaphore_Array (1 .. 1) := [1 => System.Null_Address];
       Submit_Waits  : aliased Semaphore_Array (1 .. 1) := [1 => Renderer.Image_Available];
-      Submit_Signals : aliased Semaphore_Array (1 .. 1) := [1 => Renderer.Render_Finished];
+      Submit_Signals : aliased Semaphore_Array (1 .. 1) := [1 => System.Null_Address];
       Wait_Stages : aliased Interfaces.Unsigned_32 := Vk.PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
       Fence_Array : aliased Fence_Array_C (1 .. 1) := [1 => Renderer.In_Flight];
       Submit_Commands : aliased Command_Buffer_Array_C (1 .. 1);
@@ -4794,6 +4946,8 @@ package body Guikit.Vulkan is
          p_Image_Indices      => Indices'Address,
          p_Results            => System.Null_Address);
       Present_Result : Vk.Result_T;
+      --  An image is acquired and its submit has not been made yet.
+      Acquired : Boolean := False;
    begin
       Renderer.Last_Vk_Result := -10_000;
       Renderer.Last_Vertex_Count := Natural (Batch.Vertices.Length);
@@ -4865,6 +5019,7 @@ package body Guikit.Vulkan is
                     semaphore     => Renderer.Image_Available,
                     fence         => System.Null_Address,
                     p_Image_Index => Image_Index'Address);
+               Acquired := Present_Result = Vk.SUCCESS or else Present_Result = Suboptimal_KHR;
 
                if Present_Result = Error_Out_Of_Date_KHR then
                   Renderer.Last_Vk_Result := Interfaces.Integer_32 (Present_Result);
@@ -4877,12 +5032,17 @@ package body Guikit.Vulkan is
                  (Renderer, Natural (Batch.Vertices.Length), Only_Image => Positive (Image_Index + 1))
                then
                   Renderer.Last_Status := Vulkan_Command_Record_Failed;
+                  Abandon_Acquired_Frame (Renderer, Batch.Width, Batch.Height);
                else
                   Renderer.Last_Vk_Result := -10_040;
                   Renderer.Current_Image_Index := Image_Index;
                   Indices (1) := Image_Index;
                   Submit_Commands (1) := Renderer.Command_Buffers (Positive (Image_Index + 1));
+                  Submit_Signals (1) := Renderer.Render_Finished (Positive (Image_Index + 1));
+                  Present_Waits (1) := Submit_Signals (1);
                   Renderer.Last_Vk_Result := -10_050;
+                  --  Nothing that can fail lies between this reset and the
+                  --  submit that signals the fence again.
                   Present_Result :=
                     Vk.Reset_Fences
                       (device      => Renderer.Device,
@@ -4892,6 +5052,7 @@ package body Guikit.Vulkan is
                   if Present_Result /= Vk.SUCCESS then
                      Renderer.Last_Vk_Result := Interfaces.Integer_32 (Present_Result);
                      Renderer.Last_Status := Vulkan_Submit_Failed;
+                     Abandon_Acquired_Frame (Renderer, Batch.Width, Batch.Height);
                   else
                      Renderer.Last_Vk_Result := -10_060;
                      Present_Result :=
@@ -4904,7 +5065,9 @@ package body Guikit.Vulkan is
                      if Present_Result /= Vk.SUCCESS then
                         Renderer.Last_Vk_Result := Interfaces.Integer_32 (Present_Result);
                         Renderer.Last_Status := Vulkan_Submit_Failed;
+                        Abandon_Acquired_Frame (Renderer, Batch.Width, Batch.Height);
                      else
+                        Acquired := False;
                         Renderer.Submitted_Frames := Renderer.Submitted_Frames + 1;
                         Renderer.Readback_Pending := Renderer.Readback_Enabled;
                         Renderer.Readback_Pending_Frame := Renderer.Submitted_Frames;
@@ -4952,6 +5115,9 @@ package body Guikit.Vulkan is
       when Error : others =>
          Guikit.Errors.Note (Error, "Guikit.Vulkan");
          Renderer.Last_Status := Vulkan_Present_Failed;
+         if Acquired then
+            Abandon_Acquired_Frame (Renderer, Batch.Width, Batch.Height);
+         end if;
          Renderer.Failed_Frames := Renderer.Failed_Frames + 1;
          return Renderer.Last_Status;
    end Present;
