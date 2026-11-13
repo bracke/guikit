@@ -68,6 +68,9 @@ package Guikit.Settings_Panel is
       --  Hover tooltip shown over the section-tab switcher (empty for none). The
       --  caller supplies the localized text; the panel keeps no domain wording.
       Switch_Tooltip  : UString;
+      --  The close button's accessible name; the caller supplies the localized
+      --  word.
+      Close_Label     : UString := Ada.Strings.Unbounded.To_Unbounded_String ("Close");
    end record;
 
    type Panel is private;

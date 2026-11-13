@@ -346,6 +346,30 @@ package body Guikit.Utf8 is
         or else Codepoint = 16#3000#;
    end Is_Whitespace_Separator_Codepoint;
 
+   --  Whether the byte at Index is a continuation byte of a well-formed
+   --  sequence that starts before it (the 85 of "Å", C3 85), rather than a
+   --  stray byte of its own.
+   function Inside_Sequence
+     (Content : String;
+      Index   : Integer)
+      return Boolean
+   is
+      Lead      : Integer := Index - 1;
+      Next      : Integer;
+      Ignored   : Natural;
+   begin
+      --  A sequence is at most four bytes, so its lead is at most three back.
+      while Lead >= Content'First and then Index - Lead <= 3 loop
+         if not Is_Continuation (Content (Lead)) then
+            Next := Lead;
+            Decode_Next_Codepoint (Content, Next, Ignored);
+            return Next > Index;
+         end if;
+         Lead := Lead - 1;
+      end loop;
+      return False;
+   end Inside_Sequence;
+
    function Whitespace_Separator_Length
      (Content  : String;
       Position : Natural)
@@ -358,9 +382,12 @@ package body Guikit.Utf8 is
       if Position >= Content'Length then
          return 0;
       elsif Byte_At (Content, Index) = 16#85# then
-         --  A bare C1 next-line byte is not a valid UTF-8 start, so treat it as
-         --  a one-byte separator before attempting to decode.
-         return 1;
+         --  A stray C1 next-line byte (legacy Latin-1 text) is not a valid
+         --  UTF-8 start, so it is a one-byte separator of its own. The same
+         --  byte as the tail of a well-formed sequence -- the second byte of
+         --  "Å" (C3 85), "х" (D1 85), "ą" (C4 85), or of many CJK characters
+         --  -- is part of that letter, not whitespace.
+         return (if Inside_Sequence (Content, Index) then 0 else 1);
       end if;
 
       Decode_Next_Codepoint
@@ -374,6 +401,83 @@ package body Guikit.Utf8 is
 
       return 0;
    end Whitespace_Separator_Length;
+
+   function Byte_Offset_For_Display_Column
+     (Content : String;
+      Column  : Natural)
+      return Natural
+   is
+      Index     : Integer := Content'First;
+      Units     : Natural := 0;
+      Codepoint : Natural := 0;
+      Width     : Natural := 0;
+      Offset    : Natural := 0;
+
+      function After_Trailing_Zero_Width (Start : Integer) return Natural is
+         Scan            : Integer := Start;
+         Scanned_Point   : Natural := 0;
+         Scanned_Width   : Natural := 0;
+      begin
+         while Scan <= Content'Last loop
+            declare
+               Unit_Start : constant Integer := Scan;
+            begin
+               Decode_Next_Codepoint (Content, Scan, Scanned_Point);
+               Scanned_Width := Codepoint_Display_Units (Scanned_Point);
+               exit when Scanned_Width > 0;
+               Offset := Natural (Scan - Content'First);
+            exception
+               when Constraint_Error =>
+                  return Natural (Unit_Start - Content'First);
+            end;
+         end loop;
+
+         return Offset;
+      end After_Trailing_Zero_Width;
+   begin
+      if Content'Length = 0 or else Column = 0 then
+         return 0;
+      end if;
+
+      while Index <= Content'Last loop
+         Offset := Natural (Index - Content'First);
+         if Units >= Column then
+            return After_Trailing_Zero_Width (Index);
+         end if;
+
+         Decode_Next_Codepoint (Content, Index, Codepoint);
+         Width := Codepoint_Display_Units (Codepoint);
+         if Width > 0 and then Saturating_Add (Units, Width) > Column then
+            return Offset;
+         end if;
+
+         Units := Saturating_Add (Units, Width);
+      end loop;
+
+      return Content'Length;
+   end Byte_Offset_For_Display_Column;
+
+   function Is_Valid
+     (Content : String)
+      return Boolean
+   is
+      Invalid_Codepoint : constant Natural := 16#110000#;
+      Index             : Integer := Content'First;
+      Codepoint         : Natural := 0;
+   begin
+      while Index <= Content'Last loop
+         Decode_Next_Codepoint
+           (Content,
+            Index,
+            Codepoint,
+            Replacement_Codepoint => Invalid_Codepoint);
+         if Codepoint = Invalid_Codepoint then
+            return False;
+         end if;
+      end loop;
+
+      return True;
+   end Is_Valid;
 
    function Encode (Codepoint : Natural) return String is
       function Byte (Value : Natural) return Character is (Character'Val (Value));

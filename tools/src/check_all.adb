@@ -998,7 +998,9 @@ procedure Check_All is
           To_Unbounded_String ("Guikit.Shared_Bytes")]);
       Require_Layer ("guikit-frame_analysis", No_Deps);
       Require_Layer ("guikit-input", No_Deps);
+      Require_Layer ("guikit-input-mouse_buttons", No_Deps);
       Require_Layer ("guikit-utf8", No_Deps);
+      Require_Layer ("guikit-utf8-editing", No_Deps);
       Require_Layer ("guikit-layout", [1 => To_Unbounded_String ("Guikit.Utf8")]);
       Require_Layer
         ("guikit-widgets",
@@ -1010,6 +1012,12 @@ procedure Check_All is
           To_Unbounded_String ("Guikit.Errors"),
           To_Unbounded_String ("Guikit.Frame_Analysis"),
           To_Unbounded_String ("Guikit.Shared_Bytes")]);
+      --  Font discovery feeds the text layer and reports what it carries on
+      --  past; it draws nothing itself.
+      Require_Layer
+        ("guikit-fonts",
+         [To_Unbounded_String ("Guikit.Errors"),
+          To_Unbounded_String ("Guikit.Text")]);
       --  The GLFW glue is the bottom layer: it may name only the input
       --  vocabulary (the modifiers it reports), nothing that draws.
       Require_Layer ("glfw-input-keys-codes", [1 => To_Unbounded_String ("Guikit.Input")]);

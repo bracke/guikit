@@ -59,16 +59,20 @@ package body Glfw.Windows.Drop.Paths is
          if Item.Raw = Window then
             Target := Item.Into;
             declare
-               Raw  : constant C_Path_Array_Pointers.Object_Pointer := C_Path_Array_Pointers.To_Pointer (Paths);
-               --  No more of GLFW's array than can be kept: a drop of
-               --  thousands of paths is not copied onto the stack.
-               Given : Interfaces.C.Strings.chars_ptr_array
-                 (1 .. Interfaces.C.size_t (Natural'Min (Natural (Count), Item.Limit)));
+               Raw : constant C_Path_Array_Pointers.Object_Pointer := C_Path_Array_Pointers.To_Pointer (Paths);
+               Got : Path_Vectors.Vector;
             begin
-               for Index in Given'Range loop
-                  Given (Index) := Raw.all (Positive (Index));
+               --  Read GLFW's array in place, straight into the (heap) result:
+               --  no copy of it is made, so a drop of thousands of paths -- a
+               --  Limit in the tens of thousands -- puts nothing on the stack
+               --  of this callback, which on Windows has only about 1 MiB.
+               for Index in 1 .. Positive (Count) loop
+                  exit when Natural (Got.Length) = Item.Limit;
+                  if Raw.all (Index) /= Interfaces.C.Strings.Null_Ptr then
+                     Got.Append (Interfaces.C.Strings.Value (Raw.all (Index)));
+                  end if;
                end loop;
-               Item.Into.Receive (Collect (Given, Item.Limit));
+               Item.Into.Receive (Got);
             end;
             return;
          end if;

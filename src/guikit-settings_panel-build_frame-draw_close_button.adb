@@ -25,5 +25,5 @@ begin
    Accessibility.Append
      (Guikit.Draw.Accessibility_Node'
         (Role => Guikit.Draw.Role_Button, X => Bx, Y => By,
-         Width => Btn, Height => Btn, Name => To_Unbounded_String ("Close"), others => <>));
+         Width => Btn, Height => Btn, Name => P.Config.Close_Label, others => <>));
 end Draw_Close_Button;

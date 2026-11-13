@@ -36,10 +36,16 @@ applications; the `launcher` app is its second consumer.
   bottom-bar, filter, settings and palette layouts + result-row/hit-testing,
   label measuring, and overflow-safe arithmetic.
 - **`Guikit.Input`** — input primitives (`Key_Code`, `Modifier_Set`,
-  `Navigation_Direction`).
+  `Navigation_Direction`); **`Guikit.Input.Mouse_Buttons`** — the ordered mouse
+  button queue with the left-press debounce and the double-click interval.
 - **`Guikit.Utf8`** — UTF-8 helpers: display-width measurement, whitespace token
   splitting (ASCII/C1/Unicode separators), codepoint decode (`Decode_Next_Codepoint`)
-  and encode (`Encode`, the inverse), and zero-width-mark classification.
+  and encode (`Encode`, the inverse), column-to-byte mapping, validity, and
+  zero-width-mark classification; **`Guikit.Utf8.Editing`** — text-field caret
+  and word boundaries, range removal and the shared `Delete_At` rule.
+- **`Guikit.Fonts`** — font discovery: the monospace primary and the per-glyph
+  fallback chain for `Guikit.Text`, from known locations and a scan of the
+  host's font folders (which the caller may supply).
 - **`Guikit.Frame_Analysis`** — structural framebuffer analysis for headless GPU
   test gates.
 

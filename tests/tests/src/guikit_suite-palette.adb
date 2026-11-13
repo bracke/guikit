@@ -6,6 +6,7 @@ with Ada.Strings.Unbounded;
 
 with Guikit.Draw;
 with Guikit.Palette;
+with Guikit.Utf8;
 
 --  Search/ranking tests for Guikit.Palette.Search: an empty query keeps every
 --  item in order, a query drops non-matching items, matches are ranked
@@ -29,6 +30,7 @@ package body Guikit_Suite.Palette is
    procedure Test_Ranks_By_Relevance (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Stable_Tiebreaker (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Whitespace_Tokenizing (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Continuation_Byte_Not_Separator (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_High_Contrast_Colors (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Modal_Backdrop_Colors (T : in out AUnit.Test_Cases.Test_Case'Class);
 
@@ -74,6 +76,9 @@ package body Guikit_Suite.Palette is
         (T, Test_Stable_Tiebreaker'Access, "equally scored items keep their input order");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Whitespace_Tokenizing'Access, "a query splits on ASCII and Unicode whitespace into tokens");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Continuation_Byte_Not_Separator'Access,
+         "a letter whose UTF-8 tail is the next-line byte (A-ring, Cyrillic ha) is not split");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_High_Contrast_Colors'Access, "high contrast strengthens text and panel boundaries");
       AUnit.Test_Cases.Registration.Register_Routine
@@ -149,6 +154,38 @@ package body Guikit_Suite.Palette is
       Assert (Split.Element (1).Id = 10, "both tokens match the Open command's fields");
       Assert (Natural (Joined.Length) = 0, "the un-separated concatenation matches no field");
    end Test_Whitespace_Tokenizing;
+
+   procedure Test_Continuation_Byte_Not_Separator (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      function B (Code : Natural) return Character is (Character'Val (Code));
+      --  "Åbn" and "åbn": Å is C3 85, whose second byte is the C1 next-line
+      --  byte; å is C3 A5.
+      Upper_Abn : constant String := B (16#C3#) & B (16#85#) & "bn";
+      Lower_Abn : constant String := B (16#C3#) & B (16#A5#) & "bn";
+      --  "Подход": its х is D1 85.
+      Approach  : constant String :=
+        B (16#D0#) & B (16#9F#) & B (16#D0#) & B (16#BE#) & B (16#D0#) & B (16#B4#)
+        & B (16#D1#) & B (16#85#) & B (16#D0#) & B (16#BE#) & B (16#D0#) & B (16#B4#);
+      Items     : Guikit.Palette.Item_Vectors.Vector;
+
+      function Finds (Query : String; Id : Natural) return Boolean is
+         Results : constant Guikit.Palette.Item_Vectors.Vector := Guikit.Palette.Search (Query, Items);
+      begin
+         return Natural (Results.Length) = 1 and then Results.Element (1).Id = Id;
+      end Finds;
+   begin
+      Items.Append (Item (1, "open", Upper_Abn));
+      Items.Append (Item (2, "approach", Approach));
+      Assert (Finds (Upper_Abn, 1), "the query A-ring-bn finds the A-ring-bn command");
+      Assert (Finds (Lower_Abn, 1), "the lower-case query a-ring-bn finds the A-ring-bn command");
+      Assert (Finds (Approach, 2), "a Cyrillic query containing ha (D1 85) finds its command");
+      Assert
+        (Guikit.Utf8.Whitespace_Separator_Length (Upper_Abn, 1) = 0,
+         "the tail byte of A-ring is not a separator on its own");
+      Assert
+        (Guikit.Utf8.Whitespace_Separator_Length ("a" & B (16#85#) & "b", 1) = 1,
+         "a stray next-line byte after ASCII still separates");
+   end Test_Continuation_Byte_Not_Separator;
 
    procedure Test_High_Contrast_Colors (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);

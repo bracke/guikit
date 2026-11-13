@@ -3,6 +3,7 @@ with AUnit.Assertions;
 with AUnit.Test_Cases;
 
 with Ada.Exceptions;
+with Ada.Real_Time;
 with Ada.Strings.Unbounded;
 with Interfaces.C.Strings;
 
@@ -11,6 +12,7 @@ with Glfw.Input.Keys.Layout;
 with Glfw.Windows.Drop.Paths;
 with Guikit.Errors;
 with Guikit.Input;
+with Guikit.Input.Mouse_Buttons;
 
 --  Smoke tests for the domain-free input value types. They confirm the empty
 --  modifier set holds no modifiers, that setting one modifier reads back
@@ -33,6 +35,7 @@ package body Guikit_Suite.Input is
    procedure Test_Glfw_Codes (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Drop_Collect (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Error_Reporter (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Mouse_Debounce (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    overriding function Name (T : Input_Test_Case) return AUnit.Message_String is
       pragma Unreferenced (T);
@@ -56,6 +59,9 @@ package body Guikit_Suite.Input is
         (T, Test_Drop_Collect'Access, "a drop's paths are kept in order, nulls left out, up to the limit");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Error_Reporter'Access, "a noted exception reaches the application's reporter, and never raises");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Mouse_Debounce'Access,
+         "mouse changes queue in order; a bounce press withdraws its held-back release");
    end Register_Tests;
 
    procedure Test_No_Modifiers (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -184,5 +190,45 @@ package body Guikit_Suite.Input is
             Assert (Reported = "", "without a reporter nothing is told");
       end;
    end Test_Error_Reporter;
+
+   procedure Test_Mouse_Debounce (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      package MB renames Guikit.Input.Mouse_Buttons;
+      use type Ada.Real_Time.Time;
+      use type Ada.Real_Time.Time_Span;
+      use type MB.Button_Kind;
+      Queue   : MB.Button_Event_Vectors.Vector;
+      Last    : Ada.Real_Time.Time := Ada.Real_Time.Time_First;
+      Start   : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
+      Bounced : Boolean;
+      Taken   : Boolean;
+      Drained : MB.Button_Event;
+
+      function Millis (Count : Natural) return Ada.Real_Time.Time is (Start + Ada.Real_Time.Milliseconds (Count));
+
+      function Change (Button : MB.Button_Kind; Pressed : Boolean; At_Millis : Natural) return MB.Button_Event is
+        (Button => Button, Pressed => Pressed, X => 5.0, Y => 5.0, Modifiers => No_Modifiers, Dragged => False,
+         At_Time => Millis (At_Millis));
+   begin
+      Assert (MB.Left_Press_Debounce < MB.Double_Click_Interval, "the debounce never swallows a double click");
+      MB.Queue_Event (Queue, Last, Change (MB.Left_Mouse_Button, True, 0), Bounced);
+      Assert (not Bounced, "a first press is no bounce");
+      MB.Next_Ready (Queue, Millis (1), Drained, Taken);
+      Assert (Taken and then Drained.Pressed, "a press drains at once");
+
+      MB.Queue_Event (Queue, Last, Change (MB.Left_Mouse_Button, False, 5), Bounced);
+      MB.Next_Ready (Queue, Millis (6), Drained, Taken);
+      Assert (not Taken, "a release inside its debounce window is held back");
+      MB.Queue_Event (Queue, Last, Change (MB.Left_Mouse_Button, True, 10), Bounced);
+      Assert (Bounced and then Queue.Is_Empty, "a bounce press withdraws the held-back release with itself");
+
+      MB.Queue_Event (Queue, Last, Change (MB.Left_Mouse_Button, False, 500), Bounced);
+      MB.Queue_Event (Queue, Last, Change (MB.Right_Mouse_Button, True, 510), Bounced);
+      MB.Next_Ready (Queue, Millis (500) + MB.Left_Press_Debounce, Drained, Taken);
+      Assert (Taken and then Drained.Button = MB.Left_Mouse_Button, "an old enough release drains first");
+      MB.Next_Ready (Queue, Millis (600), Drained, Taken);
+      Assert (Taken and then Drained.Button = MB.Right_Mouse_Button, "the change after it follows, in order");
+      Assert (MB.Ready_At (Queue) = Ada.Real_Time.Time_Last, "an empty queue never wakes the loop");
+   end Test_Mouse_Debounce;
 
 end Guikit_Suite.Input;

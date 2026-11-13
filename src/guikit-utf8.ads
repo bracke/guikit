@@ -18,10 +18,12 @@ package Guikit.Utf8 is
    --  Return the byte length of the whitespace token separator that starts at
    --  Position, or zero when the codepoint there is not whitespace.
    --
-   --  Recognises ASCII spaces and controls (space, HT..CR), the raw C1
-   --  next-line byte, and the Unicode space separators (NBSP, the U+2000..200A
-   --  range, line/paragraph separators, ideographic space, etc.). Used to split
-   --  a query string into search tokens.
+   --  Recognises ASCII spaces and controls (space, HT..CR), the C1 next-line
+   --  control (encoded, or as a stray legacy byte that is not the tail of a
+   --  well-formed sequence before it), and the Unicode space separators (NBSP,
+   --  the U+2000..200A range, line/paragraph separators, ideographic space,
+   --  etc.). Used to split a query string into search tokens; step Position by
+   --  whole sequences.
    --
    --  @param Content UTF-8 encoded byte string.
    --  @param Position Byte offset into Content (zero-based) to test.
@@ -124,5 +126,28 @@ package Guikit.Utf8 is
      (Content : String;
       Cursor  : Natural)
       return Natural;
+
+   --  Return the byte offset corresponding to a display-cell column: the
+   --  inverse of Display_Units_Before, for placing a caret where a click
+   --  landed. Zero-width codepoints after the column stay with the cluster
+   --  before it; a wide codepoint straddling the column is not entered.
+   --
+   --  Invalid bytes count as one replacement display cell.
+   --
+   --  @param Content UTF-8 encoded byte string.
+   --  @param Column Zero-based display-cell column.
+   --  @return Zero-based byte offset at the requested display-cell column.
+   function Byte_Offset_For_Display_Column
+     (Content : String;
+      Column  : Natural)
+      return Natural;
+
+   --  Return whether Content is well-formed UTF-8.
+   --
+   --  @param Content UTF-8 encoded byte string.
+   --  @return True when every byte belongs to a valid UTF-8 sequence.
+   function Is_Valid
+     (Content : String)
+      return Boolean;
 
 end Guikit.Utf8;

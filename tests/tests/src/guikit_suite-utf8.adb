@@ -2,7 +2,10 @@ with AUnit;
 with AUnit.Assertions;
 with AUnit.Test_Cases;
 
+with Ada.Strings.Unbounded;
+
 with Guikit.Utf8;
+with Guikit.Utf8.Editing;
 
 --  Display-width tests for Guikit.Utf8.Display_Units. UTF-8 sequences are
 --  built from explicit bytes (Character'Val) so the assertions do not depend on
@@ -26,6 +29,9 @@ package body Guikit_Suite.Utf8 is
    procedure Test_Joiners_And_Planes (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Cluster_Boundaries (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Fit_With_Ellipsis (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Delete_At (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Editing_Boundaries (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Column_Offsets_And_Validity (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    type Byte_Values is array (Positive range <>) of Natural;
 
@@ -69,6 +75,15 @@ package body Guikit_Suite.Utf8 is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Fit_With_Ellipsis'Access,
          "Fit_With_Ellipsis keeps text that fits, trims a dangling '.'/' ' before the ellipsis, hard-cuts tiny widths");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Delete_At'Access,
+         "Delete_At removes a whole character, a base with its mark, or a word, and nothing at the edges");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Editing_Boundaries'Access,
+         "caret boundaries step whole characters and words; malformed bytes stay separate units");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Column_Offsets_And_Validity'Access,
+         "a display column maps back to its byte offset; well-formed UTF-8 is told from malformed");
    end Register_Tests;
 
    procedure Test_Ascii_And_Empty (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -232,6 +247,88 @@ package body Guikit_Suite.Utf8 is
       Assert (Guikit.Utf8.Fit_With_Ellipsis ("a" & Family & "b", 5) = "a" & Ellipsis,
               "the ellipsis never splits a ZWJ sequence");
    end Test_Fit_With_Ellipsis;
+
+   procedure Test_Delete_At (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Ada.Strings.Unbounded;
+      --  "a", e-acute (two bytes), "b".
+      Accented : constant String := "a" & Guikit.Utf8.Encode (16#E9#) & "b";
+      --  "e" with a combining acute accent (two bytes), then "x".
+      Combined : constant String := "e" & Guikit.Utf8.Encode (16#301#) & "x";
+      Words    : constant String := "alpha beta-gamma";
+      New_Text   : Unbounded_String;
+      New_Cursor : Natural;
+
+      procedure Check
+        (Text            : String;
+         Cursor          : Natural;
+         Backward        : Boolean;
+         By_Word         : Boolean;
+         Expected_Text   : String;
+         Expected_Cursor : Natural;
+         Context         : String) is
+      begin
+         Guikit.Utf8.Editing.Delete_At (Text, Cursor, Backward, By_Word, New_Text, New_Cursor);
+         Assert (To_String (New_Text) = Expected_Text, Context & ": text");
+         Assert (New_Cursor = Expected_Cursor, Context & ": cursor");
+      end Check;
+   begin
+      Check ("ab", 2, True, False, "a", 1, "Backspace deletes the character before the caret");
+      Check ("ab", 0, True, False, "ab", 0, "Backspace at the start deletes nothing");
+      Check ("ab", 0, False, False, "b", 0, "Delete deletes the character after the caret");
+      Check ("ab", 2, False, False, "ab", 2, "Delete at the end deletes nothing");
+      Check ("", 0, True, True, "", 0, "an empty field deletes nothing");
+      Check (Accented, 3, True, False, "ab", 1, "Backspace deletes a whole multibyte character");
+      Check (Accented, 1, False, False, "ab", 1, "Delete deletes a whole multibyte character");
+      Check (Combined, 3, True, False, "x", 0, "Backspace deletes a base character with its combining mark");
+      Check (Words, Words'Length, True, True, "alpha beta-", 11, "word Backspace deletes the word before the caret");
+      Check (Words, 0, False, True, " beta-gamma", 0, "word Delete deletes to the next word boundary");
+      Assert (Guikit.Utf8.Editing.Remove_Range ("abcdef", 1, 3) = "adef", "Remove_Range removes [First, Last)");
+      Assert (Guikit.Utf8.Editing.Remove_Range ("abc", 2, 1) = "abc", "an empty range removes nothing");
+      Assert (Guikit.Utf8.Editing.Remove_Range ("abc", 1, 99) = "a", "a range past the end is clamped");
+   end Test_Delete_At;
+
+   procedure Test_Editing_Boundaries (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      Words     : constant String := "alpha beta-gamma";
+      Combined  : constant String := "e" & Guikit.Utf8.Encode (16#301#) & "x";
+      --  An overlong encoding: three bytes that are not one character.
+      Malformed : constant String := Bytes ([16#E0#, 16#80#, 16#80#]);
+      NEL       : constant Character := Character'Val (16#85#);
+   begin
+      Assert (Guikit.Utf8.Editing.Next_Boundary (Combined, 0) = 3, "a base and its mark are one step forward");
+      Assert (Guikit.Utf8.Editing.Previous_Boundary (Combined, 3) = 0, "and one step back");
+      Assert (Guikit.Utf8.Editing.Boundary_At_Or_Before (Combined, 1) = 0,
+              "a caret before a combining mark snaps back to its base");
+      Assert (Guikit.Utf8.Editing.Next_Boundary (Malformed, 0) = 1,
+              "overlong UTF-8 bytes remain separate units (next from 0)");
+      Assert (Guikit.Utf8.Editing.Next_Boundary (Malformed, 1) = 2,
+              "overlong UTF-8 bytes remain separate units (next from 1)");
+      Assert (Guikit.Utf8.Editing.Previous_Boundary (Malformed, 3) = 2,
+              "overlong UTF-8 bytes remain separate units (previous from 3)");
+      Assert (Guikit.Utf8.Editing.Previous_Word_Boundary (Words, Words'Length) = 11,
+              "the previous word boundary stops after punctuation");
+      Assert (Guikit.Utf8.Editing.Next_Word_Boundary (Words, 0) = 5, "the next word boundary is the word's end");
+      Assert (Guikit.Utf8.Editing.Word_Separator_Length ("x", Natural'Last) = 0,
+              "an extreme out-of-range offset is no separator and does not raise");
+      Assert (Guikit.Utf8.Editing.Previous_Word_Boundary ("alpha" & NEL & "beta", 10) = 6,
+              "a stray next-line byte separates words");
+   end Test_Editing_Boundaries;
+
+   procedure Test_Column_Offsets_And_Validity (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      Wide : constant String := Guikit.Utf8.Encode (16#4E2D#);   --  a CJK ideograph, two columns
+   begin
+      Assert (Guikit.Utf8.Byte_Offset_For_Display_Column ("abc", 2) = 2, "ASCII columns are bytes");
+      Assert (Guikit.Utf8.Byte_Offset_For_Display_Column ("abc", 9) = 3, "a column past the end is the end");
+      Assert (Guikit.Utf8.Byte_Offset_For_Display_Column ("a" & Wide & "b", 2) = 1,
+              "a column inside a wide character stays before it");
+      Assert (Guikit.Utf8.Byte_Offset_For_Display_Column ("a" & Wide & "b", 3) = 4,
+              "the column after a wide character is past its bytes");
+      Assert (Guikit.Utf8.Is_Valid ("a" & Wide), "well-formed UTF-8 is valid");
+      Assert (not Guikit.Utf8.Is_Valid (Bytes ([16#E0#, 16#80#, 16#80#])), "an overlong encoding is not");
+      Assert (not Guikit.Utf8.Is_Valid (Bytes ([16#C3#])), "a truncated sequence is not");
+   end Test_Column_Offsets_And_Validity;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

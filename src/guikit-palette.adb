@@ -137,6 +137,21 @@ package body Guikit.Palette is
       end if;
    end Field_Score;
 
+   --  The zero-based offset just past the UTF-8 sequence at Position: a whole
+   --  well-formed sequence, else the one stray byte.
+   function Next_Sequence
+     (Text     : String;
+      Position : Natural)
+      return Natural
+   is
+      Index     : Integer := Text'First + Position;
+      Codepoint : Natural;
+   begin
+      Guikit.Utf8.Decode_Next_Codepoint (Text, Index, Codepoint);
+      pragma Unreferenced (Codepoint);
+      return Natural (Index - Text'First);
+   end Next_Sequence;
+
    function Query_Score
      (Identifier  : String;
       Label       : String;
@@ -163,9 +178,11 @@ package body Guikit.Palette is
 
          exit when Position >= Query'Length;
 
+         --  Step whole UTF-8 sequences, so the token never ends inside a
+         --  letter whose continuation byte happens to equal a separator byte.
          Last := Position;
          while Last < Query'Length and then Guikit.Utf8.Whitespace_Separator_Length (Query, Last) = 0 loop
-            Last := Last + 1;
+            Last := Next_Sequence (Query, Last);
          end loop;
 
          declare

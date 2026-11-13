@@ -1,6 +1,7 @@
 with Guikit.Layout;
 with Guikit.Palette;
 with Guikit.Utf8;
+with Guikit.Utf8.Editing;
 with Guikit.Widgets;
 
 package body Guikit.Command_Palette is
@@ -17,7 +18,10 @@ package body Guikit.Command_Palette is
    --  Re-rank the commands for the current query unless the cached results
    --  already belong to this query and command list. Each Guikit.Palette
    --  item's Id is the one-based index into Commands, so results map straight
-   --  back. An empty query keeps input order.
+   --  back. An empty query keeps input order. A new ranking also drops the
+   --  rows the last Build_Frame laid out: they map screen positions to the
+   --  old ranking's indexes, so a click before the next frame must not pick
+   --  from them.
    procedure Refresh_Results (P : in out Palette) is
       Items : Guikit.Palette.Item_Vectors.Vector;
    begin
@@ -45,6 +49,7 @@ package body Guikit.Command_Palette is
       end loop;
       P.Ranked_Query    := P.Query;
       P.Ranked_Revision := P.Revision;
+      P.Rows.Clear;
    end Refresh_Results;
 
    --  The number of commands matching the current query: the cached ranking,
@@ -98,16 +103,22 @@ package body Guikit.Command_Palette is
    end Insert;
 
    procedure Backspace (P : in out Palette) is
-      S    : constant String := To_String (P.Query);
-      Last : Integer := S'Last;
+      S          : constant String := To_String (P.Query);
+      New_Cursor : Natural;
    begin
       if S'Length = 0 then
          return;
       end if;
-      while Last > S'First and then Character'Pos (S (Last)) in 16#80# .. 16#BF# loop
-         Last := Last - 1;
-      end loop;
-      P.Query := To_Unbounded_String (S (S'First .. Last - 1));
+      --  The shared text-field rule: a whole character, with any combining
+      --  marks after it, at the caret (which is the query's end).
+      Guikit.Utf8.Editing.Delete_At
+        (Text       => S,
+         Cursor     => S'Length,
+         Backward   => True,
+         By_Word    => False,
+         New_Text   => P.Query,
+         New_Cursor => New_Cursor);
+      pragma Unreferenced (New_Cursor);
       Reset_Selection (P);
    end Backspace;
 
@@ -168,7 +179,10 @@ package body Guikit.Command_Palette is
    function Click (P : in out Palette; X : Integer; Y : Integer) return Boolean is
    begin
       for Row of P.Rows loop
-         if X >= Row.X and then X < Row.X + Row.W
+         --  Rows always belong to the current ranking (a re-rank clears them),
+         --  but a row that names no current result is never a hit.
+         if Row.Result_Index <= Ranked_Count (P)
+           and then X >= Row.X and then X < Row.X + Row.W
            and then Y >= Row.Y and then Y < Row.Y + Row.H
          then
             P.Selected := Row.Result_Index;
@@ -259,15 +273,22 @@ package body Guikit.Command_Palette is
         Guikit.Layout.Input_Scroll_Columns (Caret_Column, Field_W, LH);
 
       --  The leading text that scrolls off: at least Scroll_Columns columns,
-      --  cut on a cluster boundary (a wide character straddling the cut goes
-      --  too, rather than leaving the tail one column too wide).
+      --  cut on a cluster boundary. A cluster straddling the cut goes too,
+      --  however wide it is -- a wide character, or an emoji family several
+      --  columns wide -- rather than leaving the tail too wide for the field:
+      --  the prefix widens a column at a time until it takes that cluster.
       function Scrolled_Off return String is
-         Exact : constant String := Guikit.Utf8.Prefix_By_Units (Q, Scroll_Columns);
       begin
-         if Guikit.Utf8.Display_Units (Exact) >= Scroll_Columns then
-            return Exact;
-         end if;
-         return Guikit.Utf8.Prefix_By_Units (Q, Scroll_Columns + 1);
+         for Columns in Scroll_Columns .. Caret_Column loop
+            declare
+               Prefix : constant String := Guikit.Utf8.Prefix_By_Units (Q, Columns);
+            begin
+               if Guikit.Utf8.Display_Units (Prefix) >= Scroll_Columns then
+                  return Prefix;
+               end if;
+            end;
+         end loop;
+         return Q;
       end Scrolled_Off;
 
       Hidden       : constant String := Scrolled_Off;
@@ -537,7 +558,7 @@ package body Guikit.Command_Palette is
             Accessibility.Append
               (Guikit.Draw.Accessibility_Node'
                  (Role => Guikit.Draw.Role_Button, X => Bx, Y => By,
-                  Width => Btn, Height => Btn, Name => To_Unbounded_String ("Close"), others => <>));
+                  Width => Btn, Height => Btn, Name => P.Config.Close_Label, others => <>));
          end;
       end if;
    end Build_Frame;

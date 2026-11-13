@@ -58,6 +58,9 @@ package Guikit.Command_Palette is
       Placeholder    : UString;            --  shown in the search box when empty
       Empty_State    : UString;            --  shown when no command matches
       Title          : UString;            --  panel heading (empty = no title row)
+      --  The overlay close button's accessible name; the caller supplies the
+      --  localized word.
+      Close_Label    : UString := Ada.Strings.Unbounded.To_Unbounded_String ("Close");
    end record;
 
    type Palette is private;
@@ -80,7 +83,9 @@ package Guikit.Command_Palette is
    --  @param Text UTF-8 text to append.
    procedure Insert (P : in out Palette; Text : String);
 
-   --  Delete the last query character (UTF-8 aware) and reset the selection.
+   --  Delete the last query character -- a whole UTF-8 character with any
+   --  combining marks after it, by Guikit.Utf8.Editing's rule -- and reset
+   --  the selection.
    --
    --  @param P Palette to update.
    procedure Backspace (P : in out Palette);
@@ -121,6 +126,8 @@ package Guikit.Command_Palette is
    procedure Page (P : in out Palette; Down : Boolean);
 
    --  Select the result at a window coordinate, using the most recent layout.
+   --  A query or command-list change since then drops that layout (it maps to
+   --  the old results), so a click before the next Build_Frame hits nothing.
    --
    --  @param P Palette to update.
    --  @param X Horizontal window coordinate in pixels.

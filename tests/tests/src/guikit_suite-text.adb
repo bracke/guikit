@@ -1,5 +1,7 @@
 with Ada.Directories;
+with Ada.Environment_Variables;
 with Ada.Strings.Unbounded;
+with Ada.Text_IO;
 with Interfaces;
 
 with AUnit;
@@ -7,6 +9,7 @@ with AUnit.Assertions;
 with AUnit.Test_Cases;
 
 with Guikit.Draw;
+with Guikit.Fonts;
 with Guikit.Text;
 
 --  Glyph atlas tests for Guikit.Text.Build_Glyphs: a frame whose glyphs no
@@ -23,6 +26,7 @@ package body Guikit_Suite.Text is
    overriding procedure Register_Tests (T : in out Text_Test_Case);
 
    procedure Test_Full_Atlas_Rebuilds_Frame (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Font_Discovery (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  A monospace face each host has, as textrender's own tests look for.
    Font_Candidates : constant array (Positive range <>) of access constant String :=
@@ -44,6 +48,23 @@ package body Guikit_Suite.Text is
       end loop;
       return "";
    end Font_Path;
+
+   --  Whether a test that needs Font_Path may run: True when a font is there.
+   --  Without one it says so on the output, so a skip is never mistaken for a
+   --  pass -- and where CI installs a font (GUIKIT_TEST_REQUIRE_FONT=1), a
+   --  missing one fails instead of skipping.
+   function Font_Available (Test : String) return Boolean is
+   begin
+      if Font_Path /= "" then
+         return True;
+      end if;
+      Ada.Text_IO.Put_Line ("SKIPPED: " & Test & ": no font found at any known location");
+      Assert
+        (not Ada.Environment_Variables.Exists ("GUIKIT_TEST_REQUIRE_FONT")
+           or else Ada.Environment_Variables.Value ("GUIKIT_TEST_REQUIRE_FONT") /= "1",
+         Test & ": GUIKIT_TEST_REQUIRE_FONT=1, but no font was found");
+      return False;
+   end Font_Available;
 
    function Line (Text : String) return Text_Command_Vectors.Vector is
       Result : Text_Command_Vectors.Vector;
@@ -76,7 +97,7 @@ package body Guikit_Suite.Text is
       Used, Fresh : Guikit.Text.Renderer;
       First, Second, Alone : Text_Render_Result;
    begin
-      if Font_Path = "" then
+      if not Font_Available ("full atlas rebuilds frame") then
          return;
       end if;
       Assert (Start (Used) and then Start (Fresh), "the renderers load the font");
@@ -153,7 +174,38 @@ package body Guikit_Suite.Text is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Full_Atlas_Rebuilds_Frame'Access,
          "a frame that fills the atlas partway through is built again on the emptied atlas");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Font_Discovery'Access,
+         "font discovery finds a loadable primary and a fallback chain without it or duplicates");
    end Register_Tests;
+
+   procedure Test_Font_Discovery (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+   begin
+      if not Font_Available ("font discovery") then
+         return;
+      end if;
+
+      declare
+         Folders   : constant Guikit.Fonts.Path_List := Guikit.Fonts.Default_Font_Directories;
+         Primary   : constant String := Guikit.Fonts.Default_Font_Path (Folders);
+         Fallbacks : constant Guikit.Fonts.Path_List := Guikit.Fonts.Fallback_Font_Paths (Primary, Folders);
+         Overridden : constant String := Guikit.Fonts.Default_Font_Path (Folders, Override => Font_Path);
+      begin
+         Assert (Primary /= "", "a primary font is found where the tests find one");
+         Assert (Guikit.Fonts.Is_Loadable_Font (Primary), "the primary font loads");
+         Assert (Guikit.Fonts.Default_Font_Path (Folders) = Primary, "the answer is stable");
+         Assert (Overridden = Font_Path or else not Guikit.Fonts.Is_Loadable_Font (Font_Path),
+                 "a loadable override is the primary");
+         Assert (not Guikit.Fonts.Is_Loadable_Font (Font_Path & ".missing"), "a missing file is not loadable");
+         for Index in Fallbacks.First_Index .. Fallbacks.Last_Index loop
+            Assert (Fallbacks (Index) /= Primary, "the chain leaves the primary out");
+            for Other in Index + 1 .. Fallbacks.Last_Index loop
+               Assert (Fallbacks (Index) /= Fallbacks (Other), "the chain lists each font once");
+            end loop;
+         end loop;
+      end;
+   end Test_Font_Discovery;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

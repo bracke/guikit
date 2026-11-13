@@ -204,6 +204,12 @@ jobs:
         timeout-minutes: 20
         shell: bash
         working-directory: guikit/tests
+        env:
+          # A test that needs a font fails rather than skips where one is
+          # certain: fonts-dejavu-core is installed above on Linux, and Windows
+          # ships Consolas. The macOS images guarantee no .ttf face the tests
+          # look for, so a skip there is reported, not failed.
+          GUIKIT_TEST_REQUIRE_FONT: ${{ (runner.os == 'Linux' || runner.os == 'Windows') && '1' || '0' }}
         run: |
           alr --non-interactive build
           # The binary is guikit_tests.exe on Windows, and bash will not find it under

@@ -38,8 +38,9 @@ package Glfw.Windows.Drop.Paths is
       Into   : not null access Receiver'Class;
       Limit  : Positive);
 
-   --  The paths a drop's C array holds, as Receive is given them: at most
-   --  Limit, in order, null entries left out.
+   --  The paths a C array holds, by the rule Receive is given them by: at
+   --  most Limit, in order, null entries left out. The drop callback applies
+   --  the same rule reading GLFW's array in place, without copying it.
    --
    --  @param Raw The array GLFW passes, as many entries as it says.
    --  @param Limit The most paths to keep.

@@ -28,6 +28,8 @@ package body Guikit_Suite.Command_Palette is
    procedure Test_Cached_Results (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Query_Scrolls (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Label_Truncation (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Click_After_Query_Change (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Backspace_Whole_Character (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function Sample return CP.Command_Vectors.Vector is
       Result : CP.Command_Vectors.Vector;
@@ -73,6 +75,12 @@ package body Guikit_Suite.Command_Palette is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Label_Truncation'Access,
          "a row label too long for its row is truncated by the toolkit's one ellipsis rule");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Click_After_Query_Change'Access,
+         "a click between a query change and the next frame selects nothing stale");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Backspace_Whole_Character'Access,
+         "Backspace deletes a whole character with its combining marks");
    end Register_Tests;
 
    procedure Test_Filter_And_Select (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -383,10 +391,29 @@ package body Guikit_Suite.Command_Palette is
       end Check;
 
       Digits_Run : constant String := "0123456789";
+
+      --  Man, woman, girl, boy joined by zero-width joiners: one cluster
+      --  several columns wide.
+      Joiner : constant String := Guikit.Utf8.Encode (16#200D#);
+      Family : constant String :=
+        Guikit.Utf8.Encode (16#1F468#) & Joiner & Guikit.Utf8.Encode (16#1F469#) & Joiner
+        & Guikit.Utf8.Encode (16#1F467#) & Joiner & Guikit.Utf8.Encode (16#1F466#);
+      --  The query field's width in columns, as Build_Frame lays it out: the
+      --  search box ends before the overlay's close button.
+      Inset    : constant Natural := Natural'Max (Guikit.Layout.Scaled (4, LH), LH / 4);
+      Search_W : constant Natural := (Layout.X + Layout.Width - LH - 2 * Inset) - Layout.Search_X;
+      Capacity : constant Natural := (Search_W - 2 * Pad) / Cell_W;
+      --  The family, then enough digits that the caret is two columns past the
+      --  field: two columns must scroll off, and the cluster is wider than
+      --  that, so the whole family goes.
+      Tail_Length : constant Natural := Capacity + 1 - Guikit.Utf8.Display_Units (Family);
+      Tail        : constant String (1 .. Tail_Length) := [others => '7'];
    begin
       Check ("abc", Scrolled => False);
       Check (Digits_Run & Digits_Run & Digits_Run & Digits_Run & Digits_Run & Digits_Run & Digits_Run & Digits_Run,
              Scrolled => True);
+      Assert (Guikit.Utf8.Display_Units (Family) > 2, "the family cluster is wider than the scrolled columns");
+      Check (Family & Tail, Scrolled => True);
    end Test_Query_Scrolls;
 
    procedure Test_Label_Truncation (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -415,6 +442,62 @@ package body Guikit_Suite.Command_Palette is
       end loop;
       Assert (Seen, "the too-long label is drawn truncated");
    end Test_Label_Truncation;
+
+   procedure Test_Click_After_Query_Change (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use type Guikit.Draw.Accessibility_Role;
+      P     : CP.Palette;
+      Rects : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text  : Guikit.Draw.Text_Command_Vectors.Vector;
+      Icons : Guikit.Draw.Icon_Command_Vectors.Vector;
+      Nodes : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+      Rows  : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+
+      function Centre_X (Row : Positive) return Integer is (Rows (Row).X + Rows (Row).Width / 2);
+      function Centre_Y (Row : Positive) return Integer is (Rows (Row).Y + Rows (Row).Height / 2);
+   begin
+      CP.Set_Commands (P, Sample);
+      CP.Build_Frame (P, 0, 0, 400, 300, 400, 300, True, -1, -1, Rects, Text, Icons, Nodes);
+      for Node of Nodes loop
+         if Node.Role = Guikit.Draw.Role_List_Item then
+            Rows.Append (Node);
+         end if;
+      end loop;
+      Assert (Natural (Rows.Length) = 3, "every command is laid out as a row");
+
+      --  Narrow to one result without a new frame: the third row's place now
+      --  names no result, and the first row's names one ranked differently.
+      CP.Insert (P, "fire");
+      Assert (CP.Result_Count (P) = 1, "the query narrows to one result");
+      Assert (not CP.Click (P, Centre_X (3), Centre_Y (3)),
+              "a click where a stale row was laid out is not a hit");
+      Assert (CP.Selected_Index (P) = 1, "the stale click leaves the selection in the results");
+      Assert (not CP.Click (P, Centre_X (1), Centre_Y (1)),
+              "no row is hit until the next frame lays the new results out");
+
+      CP.Set_Commands (P, Sample);
+      CP.Build_Frame (P, 0, 0, 400, 300, 400, 300, True, -1, -1, Rects, Text, Icons, Nodes);
+      Assert (CP.Click (P, Centre_X (1), Centre_Y (1)), "after a frame the new first row is hit");
+      Assert (CP.Selected_Id (P) = 10, "and selects the one result");
+      CP.Set_Commands (P, Sample);
+      Assert (not CP.Click (P, Centre_X (1), Centre_Y (1)), "a new command list drops the laid-out rows too");
+   end Test_Click_After_Query_Change;
+
+   procedure Test_Backspace_Whole_Character (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      P : CP.Palette;
+      --  "e" with a combining acute accent, after an "a-ring".
+      Accented : constant String := Guikit.Utf8.Encode (16#E5#) & "e" & Guikit.Utf8.Encode (16#301#);
+   begin
+      CP.Set_Commands (P, Sample);
+      CP.Set_Query (P, Accented);
+      CP.Backspace (P);
+      Assert (CP.Query (P) = Guikit.Utf8.Encode (16#E5#), "the base letter goes with its combining mark");
+      CP.Backspace (P);
+      Assert (CP.Query (P) = "", "a two-byte letter goes whole");
+      CP.Backspace (P);
+      Assert (CP.Query (P) = "", "Backspace on an empty query does nothing");
+   end Test_Backspace_Whole_Character;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;
