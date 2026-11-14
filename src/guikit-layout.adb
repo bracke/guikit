@@ -159,7 +159,13 @@ package body Guikit.Layout is
       Inset   : constant Natural := Panel_Edge_Inset (Line_Height);
       Reserve : constant Natural := Close_Button_Reserve (Line_Height);
    begin
-      if Panel_Width < Reserve or else Panel_Height < Reserve then
+      --  Room for the inset on both sides plus the square. Reserve saturates
+      --  at an extreme line height, so the square past one inset is checked
+      --  on its own (Panel_Width - Inset cannot underflow: Reserve >= Inset).
+      if Panel_Width < Reserve
+        or else Panel_Height < Reserve
+        or else Panel_Width - Inset < Line_Height
+      then
          return (others => <>);
       end if;
       return

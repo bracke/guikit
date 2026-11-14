@@ -538,6 +538,10 @@ package body Guikit_Suite.Command_Palette is
                     "the close button is drawn iff a click can hit it, at width" & Width'Image);
          end;
       end loop;
+      --  An extreme line height saturates the reserve; no overflow, no button.
+      Assert (not Guikit.Layout.Panel_Close_Button
+                (0, 0, Natural'Last, Natural'Last, Positive'Last).Visible,
+              "a line height too large for any panel gives no close button");
    end Test_Close_Button_Drawn_Where_Hit;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
