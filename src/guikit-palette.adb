@@ -101,20 +101,6 @@ package body Guikit.Palette is
       return Left + Right;
    end Saturating_Add;
 
-   function Saturating_Score
-     (Base_Score     : Natural;
-      Registry_Index : Natural)
-      return Natural
-   is
-      Scale : constant Natural := 100;
-   begin
-      if Base_Score > Natural'Last / Scale then
-         return Natural'Last;
-      end if;
-
-      return Saturating_Add (Base_Score * Scale, Registry_Index);
-   end Saturating_Score;
-
    function Field_Score
      (Field : String;
       Token : String;
@@ -230,39 +216,57 @@ package body Guikit.Palette is
       Items : Item_Vectors.Vector)
       return Item_Vectors.Vector
    is
+      --  A match and where it stood among Items: the order is the pair, the
+      --  match first and the position only between equal matches. Packed into
+      --  one number (match * 100 + position) the position overtook the match
+      --  once there were a thousand items, and an exact match far down the
+      --  list ranked below a mere substring match near the top.
+      type Ranked is record
+         Value    : Item;
+         Position : Natural := 0;
+      end record;
+
+      package Ranked_Vectors is new Ada.Containers.Vectors
+        (Index_Type   => Positive,
+         Element_Type => Ranked);
+
+      Matches   : Ranked_Vectors.Vector;
       Results   : Item_Vectors.Vector;
       Has_Token : constant Boolean := Has_Query_Token (Query);
    begin
       for I in Items.First_Index .. Items.Last_Index loop
          declare
-            Entry_Item     : Item := Items.Element (I);
-            Base_Score     : constant Natural :=
+            Entry_Item : Item := Items.Element (I);
+            Base_Score : constant Natural :=
               Query_Score
                 (To_String (Entry_Item.Identifier),
                  To_String (Entry_Item.Label),
                  To_String (Entry_Item.Description),
                  To_String (Entry_Item.Shortcut),
                  Query);
-            Registry_Index : constant Natural := I - Items.First_Index;
          begin
             if Base_Score /= No_Match_Score then
-               Entry_Item.Score := Saturating_Score (Base_Score, Registry_Index);
-               Results.Append (Entry_Item);
+               Entry_Item.Score := Base_Score;
+               Matches.Append (Ranked'(Value => Entry_Item, Position => I - Items.First_Index));
             end if;
          end;
       end loop;
 
       if Has_Token then
          declare
-            function Less (Left, Right : Item) return Boolean is
-              (Left.Score < Right.Score);
+            function Less (Left, Right : Ranked) return Boolean is
+              (Left.Value.Score < Right.Value.Score
+               or else (Left.Value.Score = Right.Value.Score and then Left.Position < Right.Position));
 
-            package Sorting is new Item_Vectors.Generic_Sorting ("<" => Less);
+            package Sorting is new Ranked_Vectors.Generic_Sorting ("<" => Less);
          begin
-            Sorting.Sort (Results);
+            Sorting.Sort (Matches);
          end;
       end if;
 
+      for Match of Matches loop
+         Results.Append (Match.Value);
+      end loop;
       return Results;
    end Search;
 

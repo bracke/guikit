@@ -33,11 +33,12 @@ package Guikit.Palette is
 
    --  Filter and rank Items against a query.
    --
-   --  Each returned Item's Score combines its best per-token field match with a
-   --  stable tiebreaker on the Item's original position, so equally good matches
-   --  keep their input order. A non-empty query drops Items that no token
-   --  matches and orders the rest by ascending Score (best first); an empty or
-   --  all-whitespace query keeps every Item in its original order.
+   --  Each returned Item's Score is its match: the sum over the query's tokens
+   --  of each token's best field match, lower being better. A non-empty query
+   --  drops Items that no token matches and orders the rest by Score, best
+   --  first, and Items with equal Scores by their original position, so equally
+   --  good matches keep their input order -- however many Items there are; an
+   --  empty or all-whitespace query keeps every Item in its original order.
    --
    --  @param Query Search text; split into whitespace-separated tokens.
    --  @param Items Candidate entries in their natural (e.g. registry) order.

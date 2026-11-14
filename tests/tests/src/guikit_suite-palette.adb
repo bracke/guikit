@@ -30,6 +30,7 @@ package body Guikit_Suite.Palette is
    procedure Test_Drops_Non_Matching (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Ranks_By_Relevance (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Stable_Tiebreaker (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Match_Outranks_Position (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Whitespace_Tokenizing (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Continuation_Byte_Not_Separator (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_High_Contrast_Colors (T : in out AUnit.Test_Cases.Test_Case'Class);
@@ -76,6 +77,9 @@ package body Guikit_Suite.Palette is
         (T, Test_Ranks_By_Relevance'Access, "matches rank best-first (prefix over substring)");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Stable_Tiebreaker'Access, "equally scored items keep their input order");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Match_Outranks_Position'Access,
+         "a better match far down a long list outranks a weaker one at its top");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Whitespace_Tokenizing'Access, "a query splits on ASCII and Unicode whitespace into tokens");
       AUnit.Test_Cases.Registration.Register_Routine
@@ -142,6 +146,29 @@ package body Guikit_Suite.Palette is
          Assert (Results.Element (2).Id = 2, "the later item follows");
       end;
    end Test_Stable_Tiebreaker;
+
+   procedure Test_Match_Outranks_Position (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      Count : constant := 2_500;
+      Items : Guikit.Palette.Item_Vectors.Vector;
+   begin
+      --  The first item only contains "go"; the exact match is item 2_400.
+      --  Ranked by match * 100 + position, as it once was, 2_400 positions
+      --  outweighed the 20 between an exact and a substring match.
+      Items.Append (Item (1, "cargo", "Cargo"));
+      for Index in 2 .. Count loop
+         Items.Append
+           (Item (Index, (if Index = 2_400 then "go" else "filler"), "Filler" & Natural'Image (Index)));
+      end loop;
+      declare
+         Results : constant Guikit.Palette.Item_Vectors.Vector := Guikit.Palette.Search ("go", Items);
+      begin
+         Assert (Natural (Results.Length) = 2, "only the two items with ""go"" match");
+         Assert (Results.Element (1).Id = 2_400, "the exact match ranks first, however far down it was");
+         Assert (Results.Element (2).Id = 1, "and the substring match second");
+         Assert (Results.Element (1).Score < Results.Element (2).Score, "the better match scores lower");
+      end;
+   end Test_Match_Outranks_Position;
 
    procedure Test_Whitespace_Tokenizing (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);
