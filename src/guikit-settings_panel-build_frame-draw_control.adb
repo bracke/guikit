@@ -153,7 +153,9 @@ begin
          begin
             if Count > 0 and then Ctrl_W > 0 then
                declare
-                  Even_W : constant Natural := (Ctrl_W - (Count - 1) * Button_Gap) / Count;
+                  --  A column too narrow even for the gaps leaves no width.
+                  Even_W : constant Natural :=
+                    (if Ctrl_W > (Count - 1) * Button_Gap then (Ctrl_W - (Count - 1) * Button_Gap) / Count else 0);
                   BH : constant Natural := Ctrl_H;
                   BY : constant Natural := Row_Y + (Row_H - BH) / 2;
 

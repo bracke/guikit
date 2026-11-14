@@ -229,7 +229,7 @@ package body Guikit.Command_Palette is
       --  configured, so the search box and results sit below it.
       Title_H : constant Natural :=
         (if Length (P.Config.Title) > 0
-         then Guikit.Layout.Saturating_Add (LH, Guikit.Layout.Scaled (Guikit.Layout.Palette_Padding, LH)) else 0);
+         then Guikit.Layout.Palette_Title_Height (LH) else 0);
       Layout  : constant Guikit.Layout.Palette_Layout :=
         Guikit.Layout.Calculate_Palette_Layout
           (Region_X, Region_Y, Region_Width, Region_Height, LH, Title_H);
@@ -253,7 +253,7 @@ package body Guikit.Command_Palette is
       --  with a title the close icon sits in the title row and the search is full
       --  width.
       Close_Btn   : constant Natural := LH;
-      Close_Inset : constant Natural := Natural'Max (Guikit.Layout.Scaled (4, LH), LH / 4);
+      Close_Inset : constant Natural := Guikit.Layout.Panel_Edge_Inset (LH);
       Search_W    : constant Natural :=
         (if Title_H > 0 then Layout.Search_Width
          elsif P.Config.Overlay
@@ -331,7 +331,7 @@ package body Guikit.Command_Palette is
       if Title_H > 0 then
          declare
             Title_X : constant Natural := Layout.X + Pad;
-            Title_Y : constant Natural := Layout.Y + Natural'Max (Guikit.Layout.Scaled (4, LH), LH / 4);
+            Title_Y : constant Natural := Layout.Y + Close_Inset;
             Title_W : constant Natural :=
               (if Layout.Width > Pad + Close_Btn + 2 * Close_Inset
                then Layout.Width - Pad - Close_Btn - 2 * Close_Inset else 0);
@@ -535,30 +535,32 @@ package body Guikit.Command_Palette is
          end if;
       end;
 
-      --  Overlay close button, at the panel's top-right (matching the common
-      --  panel-close geometry: inset = max(4 scaled, line/4), a line-height square).
+      --  Overlay close button, at the panel's top-right: drawn exactly where,
+      --  and only when, Guikit.Layout.Panel_Close_Button says a click hits it.
       if P.Config.Overlay then
          declare
-            Inset : constant Natural := Close_Inset;
-            Btn   : constant Natural := Close_Btn;
-            Bx    : constant Natural :=
-              (if Layout.Width > Inset + Btn then Layout.X + Layout.Width - Inset - Btn else Layout.X);
-            By    : constant Natural := Layout.Y + Inset;
+            Button : constant Guikit.Layout.Close_Button_Layout :=
+              Guikit.Layout.Panel_Close_Button (Layout.X, Layout.Y, Layout.Width, Layout.Height, LH);
+            Bx     : constant Natural := Button.X;
+            By     : constant Natural := Button.Y;
+            Btn    : constant Natural := Button.Width;
          begin
-            Guikit.Widgets.Draw_Close_Button
-              (Rectangles => Rectangles, Text => Text, Clip_Width => Clip_Width, Clip_Height => Clip_Height,
-               Button_X => Bx, Button_Y => By, Button_Width => Btn, Button_Height => Btn,
-               Fill_Color => Guikit.Draw.Pane_Color, Border_Color => Guikit.Draw.Border_Color,
-               Glyph_X => Bx, Glyph_Y => By, Glyph_Width => Btn, Glyph_Height => Btn,
-               --  U+00D7 (times), which sits on the math axis so it centres in
-               --  the button, matching the other panels' close glyph.
-               Glyph => To_Unbounded_String (Character'Val (16#C3#) & Character'Val (16#97#)),
-               Glyph_Color => Guikit.Draw.Muted_Text_Color,
-               Show_Glyph => True);
-            Accessibility.Append
-              (Guikit.Draw.Accessibility_Node'
-                 (Role => Guikit.Draw.Role_Button, X => Bx, Y => By,
-                  Width => Btn, Height => Btn, Name => P.Config.Close_Label, others => <>));
+            if Button.Visible then
+               Guikit.Widgets.Draw_Close_Button
+                 (Rectangles => Rectangles, Text => Text, Clip_Width => Clip_Width, Clip_Height => Clip_Height,
+                  Button_X => Bx, Button_Y => By, Button_Width => Btn, Button_Height => Btn,
+                  Fill_Color => Guikit.Draw.Pane_Color, Border_Color => Guikit.Draw.Border_Color,
+                  Glyph_X => Bx, Glyph_Y => By, Glyph_Width => Btn, Glyph_Height => Btn,
+                  --  U+00D7 (times), which sits on the math axis so it centres in
+                  --  the button, matching the other panels' close glyph.
+                  Glyph => To_Unbounded_String (Character'Val (16#C3#) & Character'Val (16#97#)),
+                  Glyph_Color => Guikit.Draw.Muted_Text_Color,
+                  Show_Glyph => True);
+               Accessibility.Append
+                 (Guikit.Draw.Accessibility_Node'
+                    (Role => Guikit.Draw.Role_Button, X => Bx, Y => By,
+                     Width => Btn, Height => Btn, Name => P.Config.Close_Label, others => <>));
+            end if;
          end;
       end if;
    end Build_Frame;

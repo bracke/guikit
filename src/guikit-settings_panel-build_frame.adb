@@ -27,7 +27,7 @@ is
    Field_Inset : constant Natural := Guikit.Layout.Scaled (4, LH);
    Button_Pad  : constant Natural := Guikit.Layout.Scaled (6, LH);
    Button_Gap  : constant Natural := Guikit.Layout.Scaled (4, LH);
-   Edge_Inset  : constant Natural := Natural'Max (Guikit.Layout.Scaled (4, LH), LH / 4);
+   Edge_Inset  : constant Natural := Guikit.Layout.Panel_Edge_Inset (LH);
    --  Shared height for interactive controls: fill the row band (leaving a
    --  small margin) so fields and buttons are comfortably tall, not a short
    --  fraction of the line height.

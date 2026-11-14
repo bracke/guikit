@@ -30,6 +30,7 @@ package body Guikit_Suite.Command_Palette is
    procedure Test_Label_Truncation (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Click_After_Query_Change (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Backspace_Whole_Character (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Close_Button_Drawn_Where_Hit (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function Sample return CP.Command_Vectors.Vector is
       Result : CP.Command_Vectors.Vector;
@@ -81,6 +82,9 @@ package body Guikit_Suite.Command_Palette is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Backspace_Whole_Character'Access,
          "Backspace deletes a whole character with its combining marks");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Close_Button_Drawn_Where_Hit'Access,
+         "the overlay close button is drawn exactly where, and only when, Panel_Close_Button places it");
    end Register_Tests;
 
    procedure Test_Filter_And_Select (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -344,7 +348,7 @@ package body Guikit_Suite.Command_Palette is
         Guikit.Layout.Calculate_Palette_Layout (0, 0, Width, Height, LH);
       Pad     : constant Natural := Guikit.Layout.Scaled (Guikit.Layout.Palette_Padding, LH);
       --  The overlay's close button: a line-height square inset max (4, LH / 4).
-      Close_X : constant Natural := Width - Natural'Max (Guikit.Layout.Scaled (4, LH), LH / 4) - LH;
+      Close_X : constant Natural := Width - Guikit.Layout.Panel_Edge_Inset (LH) - LH;
 
       --  Render Query and check the drawn query text and caret.
       procedure Check (Query : String; Scrolled : Boolean) is
@@ -498,6 +502,43 @@ package body Guikit_Suite.Command_Palette is
       CP.Backspace (P);
       Assert (CP.Query (P) = "", "Backspace on an empty query does nothing");
    end Test_Backspace_Whole_Character;
+
+   procedure Test_Close_Button_Drawn_Where_Hit (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use type Guikit.Draw.Accessibility_Role;
+      LH : constant := 20;
+   begin
+      --  Around the width where the button stops fitting, and well past it.
+      for Width in 0 .. 4 * LH loop
+         declare
+            P      : CP.Palette;
+            Config : CP.Configuration;
+            Rects  : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+            Text   : Guikit.Draw.Text_Command_Vectors.Vector;
+            Icons  : Guikit.Draw.Icon_Command_Vectors.Vector;
+            Nodes  : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+            Button : constant Guikit.Layout.Close_Button_Layout :=
+              Guikit.Layout.Panel_Close_Button (0, 0, Width, 300, LH);
+            Drawn  : Natural := 0;
+         begin
+            Config.Overlay := True;
+            Config.Line_Height := LH;
+            CP.Set_Configuration (P, Config);
+            CP.Set_Commands (P, Sample);
+            CP.Build_Frame (P, 0, 0, Width, 300, 400, 300, True, -1, -1, Rects, Text, Icons, Nodes);
+            for Node of Nodes loop
+               if Node.Role = Guikit.Draw.Role_Button and then Node.Name = Config.Close_Label then
+                  Drawn := Drawn + 1;
+                  Assert (Node.X = Button.X and then Node.Y = Button.Y
+                          and then Node.Width = Button.Width and then Node.Height = Button.Height,
+                          "the close button is drawn on its hit rectangle at width" & Width'Image);
+               end if;
+            end loop;
+            Assert ((Drawn = 1) = Button.Visible,
+                    "the close button is drawn iff a click can hit it, at width" & Width'Image);
+         end;
+      end loop;
+   end Test_Close_Button_Drawn_Where_Hit;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

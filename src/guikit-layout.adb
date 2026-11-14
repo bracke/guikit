@@ -142,6 +142,34 @@ package body Guikit.Layout is
       end if;
    end Saturating_Add;
 
+   function Panel_Edge_Inset (Line_Height : Positive) return Natural is
+     (Natural'Max (Scaled (4, Line_Height), Line_Height / 4));
+
+   function Panel_Close_Button
+     (Panel_X      : Natural;
+      Panel_Y      : Natural;
+      Panel_Width  : Natural;
+      Panel_Height : Natural;
+      Line_Height  : Positive)
+      return Close_Button_Layout
+   is
+      Inset   : constant Natural := Panel_Edge_Inset (Line_Height);
+      Reserve : constant Natural := Saturating_Add (Saturating_Multiply (Inset, 2), Line_Height);
+   begin
+      if Panel_Width < Reserve or else Panel_Height < Reserve then
+         return (others => <>);
+      end if;
+      return
+        (Visible => True,
+         X       => Saturating_Add (Panel_X, Panel_Width - Inset - Line_Height),
+         Y       => Saturating_Add (Panel_Y, Inset),
+         Width   => Line_Height,
+         Height  => Line_Height);
+   end Panel_Close_Button;
+
+   function Palette_Title_Height (Line_Height : Positive) return Natural is
+     (Saturating_Add (Line_Height, Scaled (Palette_Padding, Line_Height)));
+
    function Scaled_Down
      (Value       : Natural;
       Numerator   : Natural;

@@ -27,6 +27,7 @@ package body Guikit_Suite.Settings_Panel is
 
    procedure Test_Edit_And_Emit (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Build_Frame (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Close_Button_Drawn_Where_Hit (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Sections (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Shortcut_Capture (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Switch_Tooltip (T : in out AUnit.Test_Cases.Test_Case'Class);
@@ -87,6 +88,9 @@ package body Guikit_Suite.Settings_Panel is
         (T, Test_Edit_And_Emit'Access, "editing each field kind emits the right change; focus skips sections");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Build_Frame'Access, "Build_Frame emits draw commands and lays out clickable hit rects");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Close_Button_Drawn_Where_Hit'Access,
+         "the close button is drawn exactly where, and only when, Panel_Close_Button places it");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Choice_Fits_Options'Access,
          "a choice too wide for the value column widens instead of clipping its options");
@@ -1009,6 +1013,41 @@ package body Guikit_Suite.Settings_Panel is
       Assert (Change.Kind = SP.No_Change, "a disabled button does not press");
       Assert (Colour = Guikit.Draw.Disabled_Text_Color, "a disabled button's label is muted");
    end Test_Disabled_Buttons;
+
+   procedure Test_Close_Button_Drawn_Where_Hit (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use type Guikit.Draw.Accessibility_Role;
+      LH : constant := 20;
+   begin
+      --  Around the width where the button stops fitting, and past it.
+      for Width in 0 .. 4 * LH loop
+         declare
+            P      : SP.Panel;
+            Config : SP.Configuration;
+            Rects  : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+            Text   : Guikit.Draw.Text_Command_Vectors.Vector;
+            Nodes  : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+            Button : constant Guikit.Layout.Close_Button_Layout :=
+              Guikit.Layout.Panel_Close_Button (0, 0, Width, 400, LH);
+            Drawn  : Natural := 0;
+         begin
+            Config.Line_Height := LH;
+            SP.Set_Configuration (P, Config);
+            SP.Set_Fields (P, Sample);
+            SP.Build_Frame (P, 0, 0, Width, 400, 500, 400, True, -1, -1, Rects, Text, Nodes);
+            for Node of Nodes loop
+               if Node.Role = Guikit.Draw.Role_Button and then Node.Name = Config.Close_Label then
+                  Drawn := Drawn + 1;
+                  Assert (Node.X = Button.X and then Node.Y = Button.Y
+                          and then Node.Width = Button.Width and then Node.Height = Button.Height,
+                          "the close button is drawn on its hit rectangle at width" & Width'Image);
+               end if;
+            end loop;
+            Assert ((Drawn = 1) = Button.Visible,
+                    "the close button is drawn iff a click can hit it, at width" & Width'Image);
+         end;
+      end loop;
+   end Test_Close_Button_Drawn_Where_Hit;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

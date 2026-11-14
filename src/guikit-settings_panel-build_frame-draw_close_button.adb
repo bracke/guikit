@@ -2,16 +2,20 @@ separate (Guikit.Settings_Panel.Build_Frame)
 --  Close button (top-right), matching the common panel-close geometry and,
 --  crucially, its glyph sizing/colour so every panel's close button is
 --  identical: a narrow, line-height-tall glyph cell centred in the square, in
---  the regular text colour (the other panels use Files.Rendering's geometry).
+--  the regular text colour (Guikit.Layout.Panel_Close_Button's geometry).
 procedure Draw_Close_Button is
-   Inset : constant Natural := Edge_Inset;
-   Btn   : constant Natural := LH;
-   Bx    : constant Natural :=
-     (if Region_Width > Inset + Btn then Region_X + Region_Width - Inset - Btn else Region_X);
-   By    : constant Natural := Region_Y + Inset;
-   Gw    : constant Natural := Guikit.Layout.Caret_Advance_Width (LH);
-   Gx    : constant Natural := (if Btn > Gw then Bx + (Btn - Gw) / 2 else Bx);
+   --  Drawn exactly where, and only when, a click hits it.
+   Button : constant Guikit.Layout.Close_Button_Layout :=
+     Guikit.Layout.Panel_Close_Button (Region_X, Region_Y, Region_Width, Region_Height, LH);
+   Bx     : constant Natural := Button.X;
+   By     : constant Natural := Button.Y;
+   Btn    : constant Natural := Button.Width;
+   Gw     : constant Natural := Guikit.Layout.Caret_Advance_Width (LH);
+   Gx     : constant Natural := (if Btn > Gw then Bx + (Btn - Gw) / 2 else Bx);
 begin
+   if not Button.Visible then
+      return;
+   end if;
    Guikit.Widgets.Draw_Close_Button
      (Rectangles => Rectangles, Text => Text, Clip_Width => Clip_Width, Clip_Height => Clip_Height,
       Button_X => Bx, Button_Y => By, Button_Width => Btn, Button_Height => Btn,

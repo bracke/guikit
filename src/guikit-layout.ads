@@ -92,6 +92,42 @@ package Guikit.Layout is
       Right : Natural)
       return Natural;
 
+   --  How far a panel's title and close button sit in from its top and
+   --  right edges: 4 px at the reference line height, never under a quarter
+   --  line.
+   --
+   --  @param Line_Height The line height in use, in framebuffer pixels.
+   --  @return The inset in pixels.
+   function Panel_Edge_Inset (Line_Height : Positive) return Natural;
+
+   --  A panel's top-right close (X) button: a line-height square.
+   type Close_Button_Layout is record
+      Visible : Boolean := False;
+      X       : Natural := 0;
+      Y       : Natural := 0;
+      Width   : Natural := 0;
+      Height  : Natural := 0;
+   end record;
+
+   --  The close button of a panel, Panel_Edge_Inset in from its top-right
+   --  corner. The one rule every panel draws and hit-tests its close button
+   --  by: Visible is False when the panel has no room for the inset on both
+   --  sides of the square, and then the button is neither drawn nor hit.
+   --
+   --  @param Panel_X Panel left edge in pixels.
+   --  @param Panel_Y Panel top edge in pixels.
+   --  @param Panel_Width Panel width in pixels.
+   --  @param Panel_Height Panel height in pixels.
+   --  @param Line_Height Text line height in pixels.
+   --  @return The button's rectangle; Visible is False when it does not fit.
+   function Panel_Close_Button
+     (Panel_X      : Natural;
+      Panel_Y      : Natural;
+      Panel_Width  : Natural;
+      Panel_Height : Natural;
+      Line_Height  : Positive)
+      return Close_Button_Layout;
+
    --  Geometry of a scrollbar thumb within its track.
    type Scrollbar_Thumb is record
       Length : Natural := 0;  --  thumb extent along the track, in pixels
@@ -384,6 +420,14 @@ package Guikit.Layout is
    --  padding inside each result row.
    Palette_Padding            : constant Natural := 8;
    Palette_Result_Row_Padding : constant Natural := 4;
+
+   --  The title band a titled palette reserves above its search box: one
+   --  line and the palette padding. The component draws it; a caller that
+   --  hit-tests the palette lays it out with the same band.
+   --
+   --  @param Line_Height Text line height in pixels.
+   --  @return The band's height in pixels.
+   function Palette_Title_Height (Line_Height : Positive) return Natural;
 
    --  Geometry of a searchable palette overlay: the outer panel, the search
    --  input box, the scrollable results region, and the height of one result
