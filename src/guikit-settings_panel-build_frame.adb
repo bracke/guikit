@@ -102,8 +102,8 @@ is
    --  title bar at the very top of the panel; keep its text clear of the icon.
    Title_Y   : constant Natural  := Region_Y + Edge_Inset;
    Title_W   : constant Natural  :=
-     (if Region_Width > Pad + LH + 2 * Edge_Inset
-      then Region_Width - Pad - LH - 2 * Edge_Inset
+     (if Region_Width > Pad + Guikit.Layout.Close_Button_Reserve (LH)
+      then Region_Width - Pad - Guikit.Layout.Close_Button_Reserve (LH)
       else Content_W);
    Switch_Y  : constant Natural  := Title_Y + Row_H;
    --  Leave a gap between the tab bar and the first row (the action buttons)

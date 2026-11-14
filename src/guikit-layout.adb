@@ -145,6 +145,9 @@ package body Guikit.Layout is
    function Panel_Edge_Inset (Line_Height : Positive) return Natural is
      (Natural'Max (Scaled (4, Line_Height), Line_Height / 4));
 
+   function Close_Button_Reserve (Line_Height : Positive) return Natural is
+     (Saturating_Add (Saturating_Multiply (Panel_Edge_Inset (Line_Height), 2), Line_Height));
+
    function Panel_Close_Button
      (Panel_X      : Natural;
       Panel_Y      : Natural;
@@ -154,7 +157,7 @@ package body Guikit.Layout is
       return Close_Button_Layout
    is
       Inset   : constant Natural := Panel_Edge_Inset (Line_Height);
-      Reserve : constant Natural := Saturating_Add (Saturating_Multiply (Inset, 2), Line_Height);
+      Reserve : constant Natural := Close_Button_Reserve (Line_Height);
    begin
       if Panel_Width < Reserve or else Panel_Height < Reserve then
          return (others => <>);

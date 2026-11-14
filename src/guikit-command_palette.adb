@@ -252,13 +252,13 @@ package body Guikit.Command_Palette is
       --  shares the search row, so the search field is shortened to end before it;
       --  with a title the close icon sits in the title row and the search is full
       --  width.
-      Close_Btn   : constant Natural := LH;
-      Close_Inset : constant Natural := Guikit.Layout.Panel_Edge_Inset (LH);
+      Close_Inset   : constant Natural := Guikit.Layout.Panel_Edge_Inset (LH);
+      Close_Reserve : constant Natural := Guikit.Layout.Close_Button_Reserve (LH);
       Search_W    : constant Natural :=
         (if Title_H > 0 then Layout.Search_Width
          elsif P.Config.Overlay
-           and then Layout.X + Layout.Width > Layout.Search_X + Close_Btn + 2 * Close_Inset
-         then (Layout.X + Layout.Width - Close_Btn - 2 * Close_Inset) - Layout.Search_X
+           and then Layout.X + Layout.Width > Layout.Search_X + Close_Reserve
+         then (Layout.X + Layout.Width - Close_Reserve) - Layout.Search_X
          else Layout.Search_Width);
       Field_W : constant Natural :=
         (if Search_W > 2 * Pad then Search_W - 2 * Pad else 0);
@@ -333,8 +333,8 @@ package body Guikit.Command_Palette is
             Title_X : constant Natural := Layout.X + Pad;
             Title_Y : constant Natural := Layout.Y + Close_Inset;
             Title_W : constant Natural :=
-              (if Layout.Width > Pad + Close_Btn + 2 * Close_Inset
-               then Layout.Width - Pad - Close_Btn - 2 * Close_Inset else 0);
+              (if Layout.Width > Pad + Close_Reserve
+               then Layout.Width - Pad - Close_Reserve else 0);
          begin
             if Title_W > 0 then
                Text.Append

@@ -100,6 +100,14 @@ package Guikit.Layout is
    --  @return The inset in pixels.
    function Panel_Edge_Inset (Line_Height : Positive) return Natural;
 
+   --  The width a panel's close button takes from the right end of the row
+   --  it sits in (a title, or a search field without one): the line-height
+   --  square and Panel_Edge_Inset on both sides of it.
+   --
+   --  @param Line_Height The line height in use, in framebuffer pixels.
+   --  @return The reserved width in pixels.
+   function Close_Button_Reserve (Line_Height : Positive) return Natural;
+
    --  A panel's top-right close (X) button: a line-height square.
    type Close_Button_Layout is record
       Visible : Boolean := False;
