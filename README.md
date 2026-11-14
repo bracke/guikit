@@ -37,7 +37,12 @@ applications; the `launcher` app is its second consumer.
   label measuring, and overflow-safe arithmetic.
 - **`Guikit.Input`** — input primitives (`Key_Code`, `Modifier_Set`,
   `Navigation_Direction`); **`Guikit.Input.Mouse_Buttons`** — the ordered mouse
-  button queue with the left-press debounce and the double-click interval.
+  button queue with the left-press debounce and the double-click interval;
+  **`Guikit.Input.Pending`** — a GLFW window (`Pending_Window`) whose callbacks
+  queue characters, keys, mouse buttons and wheel notches in arrival order for
+  the main loop to `Take`, keep the pointer's position and a dirty flag, and
+  never let an exception unwind into GLFW's C callbacks (it goes to
+  `Guikit.Errors.Note`).
 - **`Guikit.Utf8`** — UTF-8 helpers: display-width measurement, whitespace token
   splitting (ASCII/C1/Unicode separators), codepoint decode (`Decode_Next_Codepoint`)
   and encode (`Encode`, the inverse), column-to-byte mapping, validity, and

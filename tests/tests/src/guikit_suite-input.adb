@@ -13,6 +13,8 @@ with Glfw.Windows.Drop.Paths;
 with Guikit.Errors;
 with Guikit.Input;
 with Guikit.Input.Mouse_Buttons;
+with Guikit.Input.Pending;
+with Glfw.Input.Mouse;
 
 --  Smoke tests for the domain-free input value types. They confirm the empty
 --  modifier set holds no modifiers, that setting one modifier reads back
@@ -37,12 +39,62 @@ package body Guikit_Suite.Input is
    procedure Test_Error_Reporter (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Mouse_Debounce (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Mouse_Queue_Order (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Pending_Window_Queue (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    overriding function Name (T : Input_Test_Case) return AUnit.Message_String is
       pragma Unreferenced (T);
    begin
       return AUnit.Format ("guikit input value types");
    end Name;
+
+   --  The window's callbacks only queue: typing, a key, more typing come out
+   --  in the order they happened (an app that read characters before keys
+   --  turned "ab", Backspace, "c" into "ab"); a control character is a key,
+   --  not text; a bounced left press and its release are dropped; touchpad
+   --  fractions add up to whole notches.
+   procedure Test_Pending_Window_Queue (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use type Guikit.Input.Pending.Event_Kind;
+      use type Glfw.Input.Keys.Key;
+      Window : aliased Guikit.Input.Pending.Pending_Window;
+      Item   : Guikit.Input.Pending.Event;
+      Taken  : Boolean;
+      None   : constant Glfw.Input.Keys.Modifiers := (others => False);
+
+      procedure Expect (Kind : Guikit.Input.Pending.Event_Kind; What : String) is
+      begin
+         Window.Take (Item, Taken);
+         AUnit.Assertions.Assert (Taken and then Item.Kind = Kind, What);
+      end Expect;
+   begin
+      Window'Access.Character_Entered ('a');
+      Window'Access.Key_Changed (Glfw.Input.Keys.Backspace, 0, Glfw.Input.Keys.Press, None);
+      Window'Access.Character_Entered (Wide_Wide_Character'Val (8));
+      Window'Access.Character_Entered ('c');
+      Expect (Guikit.Input.Pending.Character_Input, "the first character comes first");
+      AUnit.Assertions.Assert (Item.Code = Character'Pos ('a'), "and it is 'a'");
+      Expect (Guikit.Input.Pending.Key_Input, "then the key pressed between the characters");
+      AUnit.Assertions.Assert (Item.Key = Glfw.Input.Keys.Backspace, "which is Backspace");
+      Expect (Guikit.Input.Pending.Character_Input, "then the next character; a control character is no text");
+      AUnit.Assertions.Assert (Item.Code = Character'Pos ('c'), "and it is 'c'");
+
+      Window'Access.Mouse_Button_Changed (Glfw.Input.Mouse.Left_Button, Glfw.Input.Pressed, None);
+      Window'Access.Mouse_Button_Changed (Glfw.Input.Mouse.Left_Button, Glfw.Input.Released, None);
+      Window'Access.Mouse_Button_Changed (Glfw.Input.Mouse.Left_Button, Glfw.Input.Pressed, None);
+      Window'Access.Mouse_Button_Changed (Glfw.Input.Mouse.Left_Button, Glfw.Input.Released, None);
+      Expect (Guikit.Input.Pending.Button_Input, "the press is queued");
+      AUnit.Assertions.Assert (Item.Pressed, "as a press");
+      Expect (Guikit.Input.Pending.Button_Input, "and its release");
+      AUnit.Assertions.Assert (not Item.Pressed, "as a release");
+
+      for Swipe in 1 .. 3 loop
+         Window'Access.Mouse_Scrolled (0.0, 0.4);
+      end loop;
+      Expect (Guikit.Input.Pending.Scroll_Input, "three small swipes make a whole notch, not none");
+      AUnit.Assertions.Assert (Item.Notches = 1, "of one");
+      Window.Take (Item, Taken);
+      AUnit.Assertions.Assert (not Taken, "the bounced press and release were dropped, and nothing else waits");
+   end Test_Pending_Window_Queue;
 
    overriding procedure Register_Tests (T : in out Input_Test_Case) is
    begin
@@ -66,6 +118,9 @@ package body Guikit_Suite.Input is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Mouse_Queue_Order'Access,
          "mouse changes keep their order, place and modifiers; bounces are dropped; the queue is bounded");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Pending_Window_Queue'Access,
+         "a pending window queues typing, keys, buttons and whole scroll notches in order");
    end Register_Tests;
 
    procedure Test_No_Modifiers (T : in out AUnit.Test_Cases.Test_Case'Class) is

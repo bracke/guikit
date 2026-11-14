@@ -83,6 +83,12 @@ package Guikit.Text is
    --  box; Truncated/Italic follow the command's flags. Missing glyphs fall back
    --  to a '?' and are counted.
    --
+   --  When the atlas is emptied to make room partway through, the frame is
+   --  built again on the emptied atlas. If even that does not fit -- the
+   --  frame needs more distinct glyphs than the whole atlas holds -- the
+   --  glyphs placed before the last emptying are left out, since their cells
+   --  now hold other glyphs; the glyphs returned are always drawn correctly.
+   --
    --  @param R A loaded renderer.
    --  @param Commands The primary text commands.
    --  @param Overlay The overlay text commands.

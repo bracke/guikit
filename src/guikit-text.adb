@@ -10,6 +10,7 @@ with Guikit.Utf8;
 
 package body Guikit.Text is
 
+   use type Ada.Containers.Count_Type;
    use type Textrender.Status_Code;
 
    --  The last atlas version handed out, across every renderer, so a version
@@ -123,6 +124,27 @@ package body Guikit.Text is
 
       --  Spans both layers: an overlay emoji shares the main layer's tile.
       Carried : Codepoint_Vectors.Vector;
+
+      --  The atlas generation the glyphs appended so far were placed in, and
+      --  how many of each layer's glyphs were appended before the atlas was
+      --  last emptied: those index cells that may since have been reused.
+      Placed_Generation : Natural := 0;
+      Stale_Glyphs      : Ada.Containers.Count_Type := 0;
+      Stale_Overlay     : Ada.Containers.Count_Type := 0;
+
+      --  Called once a glyph's metrics are in hand and before it is appended:
+      --  if fetching them emptied the atlas, every glyph already appended, in
+      --  either layer, is stale, and this one -- packed after the emptying --
+      --  is not.
+      procedure Note_Atlas_Generation is
+         Now : constant Natural := Textrender.Atlas_Generation (R.Backend);
+      begin
+         if Now /= Placed_Generation then
+            Placed_Generation := Now;
+            Stale_Glyphs := Result.Glyphs.Length;
+            Stale_Overlay := Result.Overlay_Glyphs.Length;
+         end if;
+      end Note_Atlas_Generation;
 
       function Pixel_Snapped (Value : Float) return Float is
       begin
@@ -325,6 +347,8 @@ package body Guikit.Text is
                         end if;
                      end if;
 
+                     Note_Atlas_Generation;
+
                      if Metrics.W > 0 and then Metrics.H > 0 then
                         declare
                            Origin_X : constant Float := (if Unit_Width = 0 then Base_X else Cell_X);
@@ -424,9 +448,25 @@ package body Guikit.Text is
          if Textrender.Atlas_Generation (R.Backend) /= Generation then
             Result := (others => <>);
             Carried.Clear;
+            Placed_Generation := Textrender.Atlas_Generation (R.Backend);
+            Stale_Glyphs := 0;
+            Stale_Overlay := 0;
             Result.Status := Text_Render_Success;
             Append_Glyphs (Commands, Result.Glyphs, Overlay => False);
             Append_Glyphs (Overlay, Result.Overlay_Glyphs, Overlay => True);
+
+            --  It did not fit: the atlas was emptied again while the frame
+            --  was being built a second time. The glyphs appended before the
+            --  last emptying would draw whatever now occupies their cells, so
+            --  they are left out; the rest of the frame is drawn correctly.
+            --  No atlas size makes this frame whole, so building it a third
+            --  time would only repeat the loss.
+            if Stale_Glyphs > 0 then
+               Result.Glyphs.Delete_First (Stale_Glyphs);
+            end if;
+            if Stale_Overlay > 0 then
+               Result.Overlay_Glyphs.Delete_First (Stale_Overlay);
+            end if;
          end if;
       end;
 

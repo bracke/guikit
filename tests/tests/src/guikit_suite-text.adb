@@ -26,6 +26,7 @@ package body Guikit_Suite.Text is
    overriding procedure Register_Tests (T : in out Text_Test_Case);
 
    procedure Test_Full_Atlas_Rebuilds_Frame (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Oversized_Frame_Drops_Stale_Glyphs (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Font_Discovery (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  A monospace face each host has, as textrender's own tests look for.
@@ -169,6 +170,90 @@ package body Guikit_Suite.Text is
       end;
    end Test_Full_Atlas_Rebuilds_Frame;
 
+   --  A frame with more distinct glyphs than the whole atlas holds empties it
+   --  again while it is being built the second time. The glyphs placed before
+   --  that last emptying index cells now holding other glyphs; they used to
+   --  come back anyway, under a success status, and drew the wrong letters.
+   --  They are left out: what is drawn is the tail of the frame, each glyph
+   --  from its own picture and no two sharing room.
+   procedure Test_Oversized_Frame_Drops_Stale_Glyphs (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      Text  : constant String := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+      Empty : Text_Command_Vectors.Vector;
+      Big, Ref : Guikit.Text.Renderer;
+      Frame : Text_Render_Result;
+   begin
+      if not Font_Available ("oversized frame drops stale glyphs") then
+         return;
+      end if;
+      Assert (Start (Big) and then Start (Ref), "the renderers load the font");
+
+      Frame := Guikit.Text.Build_Glyphs (Big, Line (Text), Empty);
+      Assert (Frame.Status = Text_Render_Success, "the frame builds");
+      Assert (not Frame.Glyphs.Is_Empty, "the glyphs placed after the last emptying are kept");
+      Assert (Natural (Frame.Glyphs.Length) < Text'Length,
+              "the frame needs more than the atlas holds, so some glyphs are left out (kept"
+              & Natural'Image (Natural (Frame.Glyphs.Length)) & ")");
+
+      declare
+         use type Interfaces.Unsigned_8;
+         type Bytes is array (Natural range <>) of Interfaces.Unsigned_8;
+         Here : Bytes (0 .. Frame.Atlas_Width * Frame.Atlas_Height - 1)
+           with Import, Address => Frame.Atlas_Pixels;
+         Kept  : constant Natural := Natural (Frame.Glyphs.Length);
+         Skip  : constant Natural := Text'Length - Kept;
+      begin
+         for Index in Frame.Glyphs.First_Index .. Frame.Glyphs.Last_Index loop
+            declare
+               Got      : constant Glyph_Command := Frame.Glyphs (Index);
+               Position : constant Natural := Index - Frame.Glyphs.First_Index;
+               Letter   : constant Character := Text (Text'First + Skip + Position);
+            begin
+               Assert (Got.Codepoint = Character'Pos (Letter),
+                       "kept glyph" & Index'Image & " is " & Letter & ", the frame's tail in order");
+               Assert (Got.Atlas_X + Got.Atlas_W <= Frame.Atlas_Width
+                       and then Got.Atlas_Y + Got.Atlas_H <= Frame.Atlas_Height,
+                       "glyph" & Index'Image & " lies inside the atlas");
+
+               --  The same letter alone, on an atlas of its own.
+               declare
+                  Alone : constant Text_Render_Result :=
+                    Guikit.Text.Build_Glyphs (Ref, Line ([1 => Letter]), Empty);
+                  There : Bytes (0 .. Alone.Atlas_Width * Alone.Atlas_Height - 1)
+                    with Import, Address => Alone.Atlas_Pixels;
+                  Want  : constant Glyph_Command := Alone.Glyphs.First_Element;
+                  Same  : Boolean := Got.Atlas_W = Want.Atlas_W and then Got.Atlas_H = Want.Atlas_H;
+               begin
+                  for Row in 0 .. Got.Atlas_H - 1 loop
+                     exit when not Same;
+                     for Column in 0 .. Got.Atlas_W - 1 loop
+                        if Here ((Got.Atlas_Y + Row) * Frame.Atlas_Width + Got.Atlas_X + Column)
+                          /= There ((Want.Atlas_Y + Row) * Alone.Atlas_Width + Want.Atlas_X + Column)
+                        then
+                           Same := False;
+                           exit;
+                        end if;
+                     end loop;
+                  end loop;
+                  Assert (Same, "glyph" & Index'Image & " (" & Letter & ") is drawn from its own picture");
+               end;
+
+               for Other in Index + 1 .. Frame.Glyphs.Last_Index loop
+                  declare
+                     O : constant Glyph_Command := Frame.Glyphs (Other);
+                  begin
+                     Assert (O.Atlas_X >= Got.Atlas_X + Got.Atlas_W
+                             or else Got.Atlas_X >= O.Atlas_X + O.Atlas_W
+                             or else O.Atlas_Y >= Got.Atlas_Y + Got.Atlas_H
+                             or else Got.Atlas_Y >= O.Atlas_Y + O.Atlas_H,
+                             "glyphs" & Index'Image & " and" & Other'Image & " do not share room");
+                  end;
+               end loop;
+            end;
+         end loop;
+      end;
+   end Test_Oversized_Frame_Drops_Stale_Glyphs;
+
    overriding function Name (T : Text_Test_Case) return AUnit.Message_String is
       pragma Unreferenced (T);
    begin
@@ -180,6 +265,9 @@ package body Guikit_Suite.Text is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Full_Atlas_Rebuilds_Frame'Access,
          "a frame that fills the atlas partway through is built again on the emptied atlas");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Oversized_Frame_Drops_Stale_Glyphs'Access,
+         "a frame bigger than the whole atlas leaves out the glyphs whose cells were reused");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Font_Discovery'Access,
          "font discovery finds a loadable primary and a fallback chain without it or duplicates");
