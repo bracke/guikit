@@ -200,8 +200,12 @@ package body Guikit.Layout is
    end Label_Pixel_Width;
 
    --  Horizontal gap between the filter field, the scope chip, and the right
-   --  edge of the toolbar section, matching the renderer's field margin.
+   --  edge of the toolbar section, at the reference line height; the input
+   --  boxes' inset is the same margin (Toolbar_Field_Margin).
    Scope_Chip_Margin : constant Natural := 6;
+
+   function Toolbar_Field_Margin (Line_Height : Positive) return Natural is
+     (Scaled (Scope_Chip_Margin, Line_Height));
 
    function Filter_Scope_Chip_Region_Of
      (Toolbar     : Toolbar_Layout;

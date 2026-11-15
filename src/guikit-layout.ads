@@ -273,6 +273,14 @@ package Guikit.Layout is
       Line_Height : Positive := 20)
       return Scope_Chip_Region;
 
+   --  Inset of a toolbar input box (the path and filter fields) inside its
+   --  section, and the gap between the filter box and the scope chip: one
+   --  margin, scaled with the text like the rest of the toolbar chrome.
+   --
+   --  @param Line_Height Text line height in pixels.
+   --  @return The margin in pixels.
+   function Toolbar_Field_Margin (Line_Height : Positive) return Natural;
+
    --  Return the width of the filter input field once the scope chip has been
    --  carved out of the toolbar's right section, matching the renderer's layout.
    --
