@@ -128,15 +128,28 @@ package body Guikit.Widgets is
          Fill_W := Width;
       elsif Filled_Num <= 0 then
          Fill_W := 0;
+      elsif Filled_Num >= Filled_Den then
+         Fill_W := Width;
       else
          declare
-            Scaled : constant Long_Long_Integer :=
-              Filled_Num * Long_Long_Integer (Width) / Filled_Den;
+            --  Num * Width can pass Long_Long_Integer'Last for a huge volume
+            --  (a saturated capacity); halving both keeps the ratio and lets
+            --  the product fit. Den > Num throughout, so Den stays positive.
+            Num : Long_Long_Integer := Filled_Num;
+            Den : Long_Long_Integer := Filled_Den;
          begin
-            Fill_W :=
-              (if Scaled >= Long_Long_Integer (Width) then Width
-               elsif Scaled <= 0 then 0
-               else Natural (Scaled));
+            while Num > Long_Long_Integer'Last / Long_Long_Integer (Width) loop
+               Num := Num / 2;
+               Den := Den / 2;
+            end loop;
+            declare
+               Scaled : constant Long_Long_Integer := Num * Long_Long_Integer (Width) / Den;
+            begin
+               Fill_W :=
+                 (if Scaled >= Long_Long_Integer (Width) then Width
+                  elsif Scaled <= 0 then 0
+                  else Natural (Scaled));
+            end;
          end;
       end if;
 

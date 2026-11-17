@@ -46,6 +46,7 @@ package body Guikit_Suite.Widgets is
    procedure Test_Number_Stepper (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Button (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Menu_Tree_Button_Scaling (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Meter_Huge_Values (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  Number of rectangle commands in a vector, as a plain Natural.
    function Count (V : Rectangle_Command_Vectors.Vector) return Natural is
@@ -94,7 +95,32 @@ package body Guikit_Suite.Widgets is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Menu_Tree_Button_Scaling'Access,
          "Menu_Tree footer buttons pad their labels by the line-height-scaled input padding");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Meter_Huge_Values'Access,
+         "Draw_Meter fills in proportion even when the counts times the width pass Long_Long_Integer'Last");
    end Register_Tests;
+
+   procedure Test_Meter_Huge_Values (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      Huge : constant Long_Long_Integer := Long_Long_Integer'Last;
+      Rects : Rectangle_Command_Vectors.Vector;
+   begin
+      --  Half of a saturated capacity on a 200-pixel bar: the product would
+      --  overflow, the fill is still half the track.
+      Draw_Meter (Rects, Big, Big, 0, 0, 200, 10, Huge / 2, Huge, Pane_Color, Selection_Color);
+      Assert (Count (Rects) = 2, "a half-full meter is a track and a fill");
+      Assert (Rects (2).Width in 99 .. 100, "half of Long_Long_Integer'Last fills half the bar");
+
+      --  Everything used fills the whole bar; more than the capacity too.
+      Rects.Clear;
+      Draw_Meter (Rects, Big, Big, 0, 0, 200, 10, Huge, Huge, Pane_Color, Selection_Color);
+      Assert (Count (Rects) = 2 and then Rects (2).Width = 200, "a full saturated meter fills the bar");
+
+      --  A sliver of a huge capacity rounds down to nothing, without raising.
+      Rects.Clear;
+      Draw_Meter (Rects, Big, Big, 0, 0, 200, 10, 1, Huge, Pane_Color, Selection_Color);
+      Assert (Count (Rects) = 1, "one byte of a saturated capacity draws only the track");
+   end Test_Meter_Huge_Values;
 
    procedure Test_Focus_Ring (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);
