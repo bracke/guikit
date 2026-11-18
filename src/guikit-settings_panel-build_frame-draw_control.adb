@@ -1,3 +1,5 @@
+with Guikit.Bidi;
+
 separate (Guikit.Settings_Panel.Build_Frame)
 --  The value control of one field row -- toggle, segmented choice, number
 --  stepper, text or shortcut box, or button row -- and its hit rects. I is
@@ -113,7 +115,9 @@ begin
             if Focused and then I = P.Focused then
                Guikit.Widgets.Draw_Caret
                  (Rectangles, Clip_Width, Clip_Height,
-                  Ctrl_X + Field_Inset + Guikit.Utf8.Display_Units (To_String (F.Value)) * Cell_W, VY,
+                  Ctrl_X + Field_Inset
+                  + Guikit.Bidi.Caret_Column (To_String (F.Value), Length (F.Value)) * Cell_W,
+                  VY,
                   Natural'Max (1, Cell_W / 6), LH, Guikit.Draw.Text_Color);
             end if;
          end;

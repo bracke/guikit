@@ -56,8 +56,11 @@ package body Guikit.Fonts is
    --  drawing), DejaVu Sans for broad proportional symbol coverage, VL Gothic
    --  for CJK ideographs and kana (a TrueType glyf face the renderer can
    --  rasterize; the CFF/.ttc Noto CJK fonts are not), Noto Sans for broad
-   --  international Latin, and the Windows/macOS system faces for hosts without
-   --  those. A missing font is simply skipped.
+   --  international Latin, the Windows/macOS system faces for hosts without
+   --  those, and last Noto Sans Hebrew and Arabic UI for a host whose other
+   --  faces lack those scripts (Guikit.Bidi still shapes Arabic through the
+   --  presentation forms when a face before them has those). A missing font is
+   --  simply skipped.
    Known_Fonts : constant array (Positive range <>) of Known_Font :=
      [At_Path ("/usr/share/fonts/truetype/noto/NotoSansMono-Regular.ttf", Primary => True),
       At_Path ("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", Primary => True, Text_Fallback => 1),
@@ -73,6 +76,8 @@ package body Guikit.Fonts is
       At_Path ("/usr/share/fonts/truetype/freefont/FreeSans.ttf", Primary => True),
       At_Path ("/usr/share/fonts/truetype/fonts-japanese-gothic.ttf", Primary => True),
       At_Path ("/System/Library/Fonts/Supplemental/Arial.ttf", Primary => False, Text_Fallback => 10),
+      At_Path ("/usr/share/fonts/truetype/noto/NotoSansHebrew-Regular.ttf", Primary => False, Text_Fallback => 11),
+      At_Path ("/usr/share/fonts/truetype/noto/NotoSansArabicUI-Regular.ttf", Primary => False, Text_Fallback => 12),
       Named ("consola.ttf", Primary => True),
       Named ("Monaco.ttf", Primary => True),
       Named ("malgun.ttf", Primary => True),
@@ -80,7 +85,7 @@ package body Guikit.Fonts is
       Named ("segoeui.ttf", Primary => True, Text_Fallback => 8),
       Named ("arial.ttf", Primary => True, Text_Fallback => 9)];
 
-   Last_Text_Fallback : constant Natural := 10;
+   Last_Text_Fallback : constant Natural := 12;
 
    --  The last Default_Font_Path answer and what it depended on (the override
    --  and the folders), shared by every task that asks. Only a found font is

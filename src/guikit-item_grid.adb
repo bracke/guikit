@@ -1,3 +1,4 @@
+with Guikit.Bidi;
 with Guikit.Utf8;
 with Guikit.Widgets;
 
@@ -393,12 +394,11 @@ package body Guikit.Item_Grid is
         (if Wide then Natural'Min (Add (Line_Height, Mul (Pad_F, 2)), Label_H) else Cell.Height);
       Editing : constant Boolean := Renaming and then Focused;
       Raw     : constant String := To_String (Text);
-      --  Display columns before the caret, and how many leading columns
-      --  (whole codepoints, as Skip_Bytes cuts them) scroll off the left.
+      --  Display columns before the caret, and how many leading bytes
+      --  (whole codepoints, as Prefix_By_Units cuts them) scroll off the left.
       Caret_Column : constant Natural :=
         Guikit.Utf8.Display_Units_Before (Raw, Natural'Min (Cursor, Raw'Length));
       Skip_Bytes   : Natural := 0;
-      Skip_Columns : Natural := 0;
    begin
       Rename_Field_Extent (Cell, View, Renaming, Field_X, Field_W, Line_Height);
       if Editing then
@@ -408,7 +408,6 @@ package body Guikit.Item_Grid is
                 (Raw, Guikit.Layout.Input_Scroll_Columns (Caret_Column, Field_W, Line_Height));
          begin
             Skip_Bytes := Skipped'Length;
-            Skip_Columns := Guikit.Utf8.Display_Units (Skipped);
          end;
       end if;
       --  A focused rename field scrolls its leading columns off the left edge
@@ -437,8 +436,14 @@ package body Guikit.Item_Grid is
             Inset   : constant Natural := Field_X - Base;
             Total_W : constant Natural := Add (Field_W, Inset);
             Char_W  : constant Positive := Guikit.Layout.Caret_Advance_Width (Line_Height);
+            --  Where the caret falls in what is drawn: the text after the
+            --  scrolled-off columns, in the order and cells it is drawn in.
             Shown   : constant Natural :=
-              (if Caret_Column > Skip_Columns then Caret_Column - Skip_Columns else 0);
+              (if Natural'Min (Cursor, Raw'Length) < Skip_Bytes then 0
+               else Guikit.Bidi.Caret_Column
+                 (Raw (Raw'First + Skip_Bytes .. Raw'Last),
+                  Natural'Min (Cursor, Raw'Length) - Skip_Bytes,
+                  Columns => Field_W / Char_W));
             Raw_X   : constant Natural := Add (Add (Base, Pad_F), Mul (Shown, Char_W));
             Max_X   : constant Natural := (if Total_W > 2 then Add (Base, Total_W - 2) else Base);
             Caret_H : constant Natural :=

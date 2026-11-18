@@ -4,6 +4,7 @@ with Ada.Strings.Unbounded;
 
 with Interfaces;
 
+with Guikit.Bidi;
 with Guikit.Layout;
 with Guikit.Shared_Bytes;
 with Guikit.Utf8;
@@ -269,6 +270,203 @@ package body Guikit.Text is
             Result.Colour_Icons.Append (Icon);
             return True;
          end Emit_Colour_Glyph;
+         --  Draw one code point of Text: its colour picture or outline glyph,
+         --  or the '?' standing in for a missing one. Origin_X is the left
+         --  edge of its cell -- of the cell before it for a zero-width mark.
+         procedure Emit_Codepoint
+           (Text              : Text_Command;
+            Decoded_Codepoint : Natural;
+            Unit_Width        : Natural;
+            Origin_X          : Float;
+            Cell_Y            : Float;
+            Hug_Right         : Boolean)
+         is
+            Codepoint : Textrender.Codepoint;
+            Metrics   : Textrender.Glyph_Metric;
+            Placement : Textrender.Glyph_Placement;
+            Status    : Textrender.Status_Code;
+            In_Colour : Boolean := False;
+         begin
+            Codepoint := Textrender.Codepoint (Decoded_Codepoint);
+
+            if Textrender.Has_Colour_Glyph (R.Backend, Codepoint) then
+               In_Colour :=
+                 Emit_Colour_Glyph
+                   (Codepoint,
+                    Origin_X,
+                    Cell_Y);
+            end if;
+
+            if In_Colour then
+               --  Drawn as an icon; leave nothing for the glyph pass.
+               Metrics :=
+                 (X => 0, Y => 0, W => 0, H => 0,
+                  U0 => 0.0, V0 => 0.0, U1 => 0.0, V1 => 0.0,
+                  Advance_X => 0.0, Bearing_X => 0.0, Bearing_Y => 0.0);
+               Status := Textrender.Success;
+            else
+               Status :=
+                 Textrender.Get_Glyph
+                   (R.Backend, Codepoint, Metrics,
+                    Style => (if Text.Italic then Textrender.Italic else Textrender.Regular));
+            end if;
+
+            if not In_Colour and then Status /= Textrender.Success then
+               if Unit_Width > 0 then
+                  Result.Missing_Glyph_Count := Sat_Add (Result.Missing_Glyph_Count, 1);
+                  Codepoint := Textrender.Codepoint (Character'Pos ('?'));
+                  Status :=
+                    Textrender.Get_Glyph
+                      (R.Backend, Codepoint, Metrics,
+                       Style => (if Text.Italic then Textrender.Italic else Textrender.Regular));
+                  if Status /= Textrender.Success then
+                     Metrics :=
+                       (X => 0, Y => 0, W => 0, H => 0,
+                        U0 => 0.0, V0 => 0.0, U1 => 0.0, V1 => 0.0,
+                        Advance_X => 0.0, Bearing_X => 0.0, Bearing_Y => 0.0);
+                  end if;
+               else
+                  if Guikit.Utf8.Is_Required_Zero_Width_Codepoint (Decoded_Codepoint) then
+                     Result.Missing_Glyph_Count := Sat_Add (Result.Missing_Glyph_Count, 1);
+                  end if;
+                  Metrics :=
+                    (X => 0, Y => 0, W => 0, H => 0,
+                     U0 => 0.0, V0 => 0.0, U1 => 0.0, V1 => 0.0,
+                     Advance_X => 0.0, Bearing_X => 0.0, Bearing_Y => 0.0);
+               end if;
+            end if;
+
+            Note_Atlas_Generation;
+
+            if Metrics.W > 0 and then Metrics.H > 0 then
+               declare
+
+                  --  How much of the box a fitted glyph fills, before
+                  --  rounding: 86% of the tighter of the two axes.
+                  Box_Fit  : constant Float :=
+                    (if Text.Scale_To_Box
+                     then Float'Max
+                       (1.0,
+                        0.86 * Float'Min
+                          (Float (Text.Width) / Float (Metrics.W),
+                           Float (Text.Height) / Float (Metrics.H)))
+                     else 1.0);
+
+                  --  Whole numbers only, because the atlas is sampled
+                  --  with FILTER_NEAREST. A fractional magnification
+                  --  duplicates some source columns and not others: at
+                  --  1.29x an 8-pixel glyph becomes 10 pixels by using
+                  --  two of its columns twice, which on a diagonal like
+                  --  the close button's multiplication sign makes one
+                  --  stroke visibly thicker than the other. At a whole
+                  --  factor every source pixel becomes the same size
+                  --  block and the shape survives; below 2x that means
+                  --  drawing it at its rasterized size, which is sharp
+                  --  rather than merely bigger.
+                  --
+                  --  Linear filtering would be the other answer and is
+                  --  not available per quad: the sampler is fixed in the
+                  --  descriptor set, the shaders are embedded SPIR-V
+                  --  with no source to branch in, and making the one
+                  --  sampler linear would soften every 1:1 glyph in the
+                  --  interface to fix magnified ones.
+                  Scale    : constant Float := Float (Natural (Float'Floor (Box_Fit)));
+                  Scaled_W : constant Float := Float (Metrics.W) * Scale;
+                  Scaled_H : constant Float := Float (Metrics.H) * Scale;
+                  Draw_X   : Float;
+                  Draw_Y   : Float;
+               begin
+                  Placement := Textrender.Place_Glyph_In_Cell (R.Backend, Metrics, Origin_X, Cell_Y);
+                  if Text.Scale_To_Box then
+                     Draw_X := Float (Text.X) + (Float (Text.Width) - Scaled_W) / 2.0;
+                     Draw_Y := Float (Text.Y) + (Float (Text.Height) - Scaled_H) / 2.0;
+                  elsif Decoded_Codepoint = 16#2026# then
+                     --  Snap the ellipsis to the left of its cell so it
+                     --  hugs the preceding character.
+                     Draw_X := Origin_X;
+                     Draw_Y := Placement.Y;
+                  else
+                     Draw_X := Placement.X;
+                     Draw_Y := Placement.Y;
+                  end if;
+                  Glyphs.Append
+                    (Glyph_Command'
+                       (X         => Pixel_Snapped (Draw_X),
+                        Y         => Pixel_Snapped (Draw_Y),
+                        Width     => Pixel_Snapped (Scaled_W),
+                        Height    => Pixel_Snapped (Scaled_H),
+                        U0        => Metrics.U0,
+                        V0        => Metrics.V0,
+                        U1        => Metrics.U1,
+                        V1        => Metrics.V1,
+                        Color     => Text.Color,
+                        Codepoint => Natural (Codepoint),
+                        Atlas_X   => Metrics.X,
+                        Atlas_Y   => Metrics.Y,
+                        Atlas_W   => Metrics.W,
+                        Atlas_H   => Metrics.H));
+               end;
+            end if;
+         end Emit_Codepoint;
+
+         --  Whether the font chain can draw a code point: the shaper keeps an
+         --  Arabic letter plain rather than pick a form drawn as '?'.
+         function Font_Has (Codepoint : Natural) return Boolean is
+           (Codepoint <= Natural (Textrender.Codepoint'Last)
+            and then Textrender.Can_Draw (R.Backend, Textrender.Codepoint (Codepoint)));
+
+         --  Text that draws in another order or shape than stored: lay it
+         --  out with Guikit.Bidi and draw its clusters left to right. A
+         --  right-to-left paragraph too long for its box loses its end -- the
+         --  left -- not its start.
+         procedure Append_Laid_Out (Text : Text_Command; Content : String) is
+            Laid    : constant Guikit.Bidi.Line := Guikit.Bidi.Lay_Out (Content, Font_Has'Access);
+            Cell_X  : Float := Float (Text.X);
+            Cell_Y  : constant Float := Float (Text.Y);
+            Limit_X : constant Float := Float (Sat_Add (Text.X, Text.Width));
+            Total   : Natural := 0;
+            Skip    : Natural := 0;
+         begin
+            for Item of Laid.Clusters loop
+               Total := Sat_Add (Total, Item.Units);
+            end loop;
+            if Laid.Right_To_Left and then Total > Text.Width / R.Cell_Width then
+               Skip := Total - Text.Width / R.Cell_Width;
+            end if;
+
+            for Item of Laid.Clusters loop
+               if Skip > 0 and then Item.Units > 0 then
+                  --  Cut off: a wide cluster the cut runs through leaves its
+                  --  remaining cells blank.
+                  if Item.Units > Skip then
+                     Cell_X := Cell_X + Float (Sat_Mul (Item.Units - Skip, R.Cell_Width));
+                  end if;
+                  Skip := Skip - Natural'Min (Skip, Item.Units);
+               elsif Skip = 0 or else Item.Units > 0 then
+                  exit when Item.Units > 0
+                    and then Cell_X + Float (Sat_Mul (Item.Units, R.Cell_Width)) > Limit_X;
+                  for G in Item.Glyph_First .. Item.Glyph_First + Item.Glyph_Count - 1 loop
+                     declare
+                        Base : constant Boolean := G = Item.Glyph_First and then Item.Units > 0;
+                     begin
+                        Emit_Codepoint
+                          (Text,
+                           Laid.Glyphs (G),
+                           Unit_Width => (if Base then Item.Units else 0),
+                           --  A lam-alef ligature is one glyph over two
+                           --  letters' cells: centred across them.
+                           Origin_X   =>
+                             (if Base and then Item.Ligature
+                              then Cell_X + Float (Sat_Mul (Item.Units - 1, R.Cell_Width)) / 2.0
+                              else Cell_X),
+                           Cell_Y     => Cell_Y,
+                           Hug_Right  => Item.Right_To_Left);
+                     end;
+                  end loop;
+                  Cell_X := Cell_X + Float (Sat_Mul (Item.Units, R.Cell_Width));
+               end if;
+            end loop;
+         end Append_Laid_Out;
       begin
          for Text of Cmds loop
             declare
@@ -279,153 +477,36 @@ package body Guikit.Text is
                Base_X  : Float := Float (Text.X);
                Index   : Integer := Content'First;
             begin
-               while Index <= Content'Last loop
-                  declare
-                     Unit_Start        : constant Integer := Index;
-                     Decoded_Codepoint : Natural;
-                     Codepoint         : Textrender.Codepoint;
-                     Metrics           : Textrender.Glyph_Metric;
-                     Placement         : Textrender.Glyph_Placement;
-                     Status            : Textrender.Status_Code;
-                     Unit_Width        : Natural;
-                     In_Colour         : Boolean := False;
-                  begin
-                     Guikit.Utf8.Decode_Next_Codepoint (Content, Index, Decoded_Codepoint);
-                     Unit_Width := Guikit.Utf8.Display_Units (Content (Unit_Start .. Index - 1));
-                     if Unit_Width > 0
-                       and then Cell_X + Float (Sat_Mul (Unit_Width, R.Cell_Width)) > Limit_X
-                     then
-                        exit;
-                     end if;
-
-                     Codepoint := Textrender.Codepoint (Decoded_Codepoint);
-
-                     if Textrender.Has_Colour_Glyph (R.Backend, Codepoint) then
-                        In_Colour :=
-                          Emit_Colour_Glyph
-                            (Codepoint,
-                             (if Unit_Width = 0 then Base_X else Cell_X),
-                             Cell_Y);
-                     end if;
-
-                     if In_Colour then
-                        --  Drawn as an icon; leave nothing for the glyph pass.
-                        Metrics :=
-                          (X => 0, Y => 0, W => 0, H => 0,
-                           U0 => 0.0, V0 => 0.0, U1 => 0.0, V1 => 0.0,
-                           Advance_X => 0.0, Bearing_X => 0.0, Bearing_Y => 0.0);
-                        Status := Textrender.Success;
-                     else
-                        Status :=
-                          Textrender.Get_Glyph
-                            (R.Backend, Codepoint, Metrics,
-                             Style => (if Text.Italic then Textrender.Italic else Textrender.Regular));
-                     end if;
-
-                     if not In_Colour and then Status /= Textrender.Success then
-                        if Unit_Width > 0 then
-                           Result.Missing_Glyph_Count := Sat_Add (Result.Missing_Glyph_Count, 1);
-                           Codepoint := Textrender.Codepoint (Character'Pos ('?'));
-                           Status :=
-                             Textrender.Get_Glyph
-                               (R.Backend, Codepoint, Metrics,
-                                Style => (if Text.Italic then Textrender.Italic else Textrender.Regular));
-                           if Status /= Textrender.Success then
-                              Metrics :=
-                                (X => 0, Y => 0, W => 0, H => 0,
-                                 U0 => 0.0, V0 => 0.0, U1 => 0.0, V1 => 0.0,
-                                 Advance_X => 0.0, Bearing_X => 0.0, Bearing_Y => 0.0);
-                           end if;
-                        else
-                           if Guikit.Utf8.Is_Required_Zero_Width_Codepoint (Decoded_Codepoint) then
-                              Result.Missing_Glyph_Count := Sat_Add (Result.Missing_Glyph_Count, 1);
-                           end if;
-                           Metrics :=
-                             (X => 0, Y => 0, W => 0, H => 0,
-                              U0 => 0.0, V0 => 0.0, U1 => 0.0, V1 => 0.0,
-                              Advance_X => 0.0, Bearing_X => 0.0, Bearing_Y => 0.0);
+               if Guikit.Bidi.Needs_Layout (Content) then
+                  Append_Laid_Out (Text, Content);
+               else
+                  while Index <= Content'Last loop
+                     declare
+                        Unit_Start        : constant Integer := Index;
+                        Decoded_Codepoint : Natural;
+                        Unit_Width        : Natural;
+                     begin
+                        Guikit.Utf8.Decode_Next_Codepoint (Content, Index, Decoded_Codepoint);
+                        Unit_Width := Guikit.Utf8.Display_Units (Content (Unit_Start .. Index - 1));
+                        if Unit_Width > 0
+                          and then Cell_X + Float (Sat_Mul (Unit_Width, R.Cell_Width)) > Limit_X
+                        then
+                           exit;
                         end if;
-                     end if;
 
-                     Note_Atlas_Generation;
+                        Emit_Codepoint
+                          (Text, Decoded_Codepoint, Unit_Width,
+                           Origin_X  => (if Unit_Width = 0 then Base_X else Cell_X),
+                           Cell_Y    => Cell_Y,
+                           Hug_Right => False);
 
-                     if Metrics.W > 0 and then Metrics.H > 0 then
-                        declare
-                           Origin_X : constant Float := (if Unit_Width = 0 then Base_X else Cell_X);
-
-                           --  How much of the box a fitted glyph fills, before
-                           --  rounding: 86% of the tighter of the two axes.
-                           Box_Fit  : constant Float :=
-                             (if Text.Scale_To_Box
-                              then Float'Max
-                                (1.0,
-                                 0.86 * Float'Min
-                                   (Float (Text.Width) / Float (Metrics.W),
-                                    Float (Text.Height) / Float (Metrics.H)))
-                              else 1.0);
-
-                           --  Whole numbers only, because the atlas is sampled
-                           --  with FILTER_NEAREST. A fractional magnification
-                           --  duplicates some source columns and not others: at
-                           --  1.29x an 8-pixel glyph becomes 10 pixels by using
-                           --  two of its columns twice, which on a diagonal like
-                           --  the close button's multiplication sign makes one
-                           --  stroke visibly thicker than the other. At a whole
-                           --  factor every source pixel becomes the same size
-                           --  block and the shape survives; below 2x that means
-                           --  drawing it at its rasterized size, which is sharp
-                           --  rather than merely bigger.
-                           --
-                           --  Linear filtering would be the other answer and is
-                           --  not available per quad: the sampler is fixed in the
-                           --  descriptor set, the shaders are embedded SPIR-V
-                           --  with no source to branch in, and making the one
-                           --  sampler linear would soften every 1:1 glyph in the
-                           --  interface to fix magnified ones.
-                           Scale    : constant Float := Float (Natural (Float'Floor (Box_Fit)));
-                           Scaled_W : constant Float := Float (Metrics.W) * Scale;
-                           Scaled_H : constant Float := Float (Metrics.H) * Scale;
-                           Draw_X   : Float;
-                           Draw_Y   : Float;
-                        begin
-                           Placement := Textrender.Place_Glyph_In_Cell (R.Backend, Metrics, Origin_X, Cell_Y);
-                           if Text.Scale_To_Box then
-                              Draw_X := Float (Text.X) + (Float (Text.Width) - Scaled_W) / 2.0;
-                              Draw_Y := Float (Text.Y) + (Float (Text.Height) - Scaled_H) / 2.0;
-                           elsif Decoded_Codepoint = 16#2026# then
-                              --  Snap the ellipsis to the left of its cell so it
-                              --  hugs the preceding character.
-                              Draw_X := Origin_X;
-                              Draw_Y := Placement.Y;
-                           else
-                              Draw_X := Placement.X;
-                              Draw_Y := Placement.Y;
-                           end if;
-                           Glyphs.Append
-                             (Glyph_Command'
-                                (X         => Pixel_Snapped (Draw_X),
-                                 Y         => Pixel_Snapped (Draw_Y),
-                                 Width     => Pixel_Snapped (Scaled_W),
-                                 Height    => Pixel_Snapped (Scaled_H),
-                                 U0        => Metrics.U0,
-                                 V0        => Metrics.V0,
-                                 U1        => Metrics.U1,
-                                 V1        => Metrics.V1,
-                                 Color     => Text.Color,
-                                 Codepoint => Natural (Codepoint),
-                                 Atlas_X   => Metrics.X,
-                                 Atlas_Y   => Metrics.Y,
-                                 Atlas_W   => Metrics.W,
-                                 Atlas_H   => Metrics.H));
-                        end;
-                     end if;
-
-                     if Unit_Width > 0 then
-                        Base_X := Cell_X;
-                        Cell_X := Cell_X + Float (Sat_Mul (Unit_Width, R.Cell_Width));
-                     end if;
-                  end;
-               end loop;
+                        if Unit_Width > 0 then
+                           Base_X := Cell_X;
+                           Cell_X := Cell_X + Float (Sat_Mul (Unit_Width, R.Cell_Width));
+                        end if;
+                     end;
+                  end loop;
+               end if;
             end;
          end loop;
       end Append_Glyphs;

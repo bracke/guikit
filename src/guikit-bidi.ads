@@ -1,0 +1,155 @@
+with Ada.Containers.Vectors;
+
+--  Right-to-left text: the Unicode Bidirectional Algorithm (UAX #9) for one
+--  paragraph, Arabic joining (UAX #9's companion, ArabicShaping.txt) through
+--  the presentation forms fonts carry, and the mapping between where a
+--  character is stored and where it is drawn.
+--
+--  Each text guikit draws is one paragraph whose direction is that of its
+--  first strong character, so a Hebrew name reads right to left and a Latin
+--  sentence with a Hebrew word in it stays left to right. The text is laid
+--  out in display cells exactly as before -- only their order and, for
+--  Arabic, the glyph each one shows change -- so every width already measured
+--  with Guikit.Utf8 still holds.
+package Guikit.Bidi is
+
+   type Bidi_Class is
+     (L, R, AL, EN, ES, ET, AN, CS, NSM, BN, B, S, WS, ON,
+      LRE, LRO, RLE, RLO, PDF, LRI, RLI, FSI, PDI);
+
+   --  The Bidi_Class property of a code point.
+   --
+   --  @param Codepoint A Unicode code point.
+   --  @return Its bidi class.
+   function Class_Of (Codepoint : Natural) return Bidi_Class;
+
+   --  The Bidi_Mirroring_Glyph of a code point: ')' for '(' and so on.
+   --
+   --  @param Codepoint A Unicode code point.
+   --  @return Its mirrored counterpart, or Codepoint itself when it has none.
+   function Mirror_Of (Codepoint : Natural) return Natural;
+
+   type Paragraph_Direction is (Auto, Left_To_Right, Right_To_Left);
+
+   type Codepoint_Array is array (Positive range <>) of Natural;
+   type Level_Array is array (Positive range <>) of Natural;
+   type Index_Array is array (Positive range <>) of Positive;
+
+   --  The level of a character rule X9 removes (embedding and override
+   --  controls, boundary neutrals): it is not displayed.
+   Removed : constant Natural := Natural'Last;
+
+   --  Resolve the embedding level of every character of one paragraph: rules
+   --  P2 to I2 and L1 of UAX #9.
+   --
+   --  @param Text The paragraph's code points, in stored order.
+   --  @param Direction Auto takes the first strong character's (rules P2, P3).
+   --  @param Levels Each character's level, or Removed.
+   --  @param Paragraph_Level 0 for a left-to-right paragraph, 1 for right-to-left.
+   procedure Resolve_Levels
+     (Text            : Codepoint_Array;
+      Direction       : Paragraph_Direction;
+      Levels          : out Level_Array;
+      Paragraph_Level : out Natural)
+     with Pre => Levels'First = Text'First and then Levels'Length = Text'Length;
+
+   --  The display order of a line (rule L2): the indices of Levels that are
+   --  not Removed, left to right.
+   --
+   --  @param Levels The resolved levels of the line.
+   --  @return Indices into Levels in the order they are drawn.
+   function Visual_Order (Levels : Level_Array) return Index_Array;
+
+   --  Whether Content holds anything that draws in another order or shape
+   --  than stored: a right-to-left or Arabic letter, an Arabic digit, or a
+   --  right-to-left control. Text without one draws as it always has.
+   --
+   --  @param Content UTF-8 text.
+   --  @return True when Content needs Lay_Out.
+   function Needs_Layout (Content : String) return Boolean;
+
+   --  One drawn cell group: a base character with the marks on it. Byte
+   --  offsets are zero-based from Content'First.
+   type Cluster is record
+      --  Where the cluster is stored: Length bytes from First.
+      First, Length : Natural := 0;
+      --  How many display cells it takes.
+      Units : Natural := 0;
+      --  It is part of a right-to-left run.
+      Right_To_Left : Boolean := False;
+      --  Its glyphs: Glyph_Count code points from Glyph_First in Line.Glyphs.
+      Glyph_First, Glyph_Count : Natural := 0;
+      --  Its first glyph is a lam-alef ligature drawn across both letters' cells.
+      Ligature : Boolean := False;
+   end record;
+
+   package Cluster_Vectors is new Ada.Containers.Vectors (Positive, Cluster);
+   package Codepoint_Vectors is new Ada.Containers.Vectors (Positive, Natural);
+
+   --  A paragraph laid out for drawing.
+   type Line is record
+      Right_To_Left : Boolean := False;
+      --  Left to right as drawn.
+      Clusters : Cluster_Vectors.Vector;
+      --  The code points to draw, shaped and mirrored; Cluster.Glyph_First
+      --  indexes this from 1.
+      Glyphs : Codepoint_Vectors.Vector;
+   end record;
+
+   --  Lay Content out for drawing: shape Arabic letters, resolve levels,
+   --  mirror what a right-to-left run mirrors, and put the clusters in
+   --  display order.
+   --
+   --  @param Content UTF-8 text, one paragraph.
+   --  @param Has_Glyph Whether the font can draw a code point; a presentation
+   --  form it cannot draw is left as the plain letter. Null assumes it can.
+   --  @return The laid-out line.
+   function Lay_Out
+     (Content   : String;
+      Has_Glyph : access function (Codepoint : Natural) return Boolean := null)
+      return Line;
+
+   --  The display column at which to draw a caret standing Cursor bytes into
+   --  Content: before the character it precedes -- on its right side when
+   --  that character is right-to-left -- or, at the end, after the last one.
+   --  Equal to Guikit.Utf8.Display_Units_Before for text that needs no layout.
+   --
+   --  A right-to-left paragraph wider than Columns is drawn without its end,
+   --  on the left (see Guikit.Text.Build_Glyphs): the columns are counted as
+   --  drawn, from what is left.
+   --
+   --  @param Content UTF-8 text, drawn from column 0.
+   --  @param Cursor Byte offset into Content.
+   --  @param Columns How many display cells the text is drawn in.
+   --  @return Display column of the caret.
+   function Caret_Column
+     (Content : String;
+      Cursor  : Natural;
+      Columns : Natural := Natural'Last)
+      return Natural;
+
+   --  The byte offset a click at Half_Column half-cells from the start of
+   --  the drawn Content puts the caret at: before the clicked character when
+   --  the click is on the half of it that comes first in reading order, after
+   --  it otherwise. The inverse of Caret_Column.
+   --
+   --  @param Content UTF-8 text, drawn from column 0.
+   --  @param Half_Column Click position in half display cells.
+   --  @param Columns How many display cells the text is drawn in, as for
+   --  Caret_Column.
+   --  @return Zero-based byte offset into Content.
+   function Cursor_At_Half_Column
+     (Content     : String;
+      Half_Column : Natural;
+      Columns     : Natural := Natural'Last)
+      return Natural;
+
+   --  How many display cells a right-to-left Laid paragraph loses on the
+   --  left when drawn in Columns cells; 0 when it fits or is left to right.
+   --
+   --  @param Laid A laid-out line.
+   --  @param Columns How many display cells it is drawn in.
+   --  @return The cells cut off on the left.
+   function Cut_Columns (Laid : Line; Columns : Natural) return Natural;
+
+end Guikit.Bidi;

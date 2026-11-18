@@ -58,7 +58,7 @@ jobs:
             git -C "$1" fetch --depth 1 origin "$2"
             git -C "$1" checkout --detach FETCH_HEAD
           }
-          clone_at textrender 0a6721cb4239e581518c0d312bb7085e5b1ff402
+          clone_at textrender 17d0d70f3554383b47eef8efac3beacc1abc4f0b
           clone_at project_tools 5ed5f4dcfa10301345933d45e5f78ac0573d8cff
 
       - name: Install system libraries (Linux)

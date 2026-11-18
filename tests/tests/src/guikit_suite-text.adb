@@ -11,6 +11,7 @@ with AUnit.Test_Cases;
 with Guikit.Draw;
 with Guikit.Fonts;
 with Guikit.Text;
+with Guikit.Utf8;
 
 --  Glyph atlas tests for Guikit.Text.Build_Glyphs: a frame whose glyphs no
 --  longer fit an atlas grown as far as it may comes out as if built on an
@@ -28,6 +29,7 @@ package body Guikit_Suite.Text is
    procedure Test_Full_Atlas_Rebuilds_Frame (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Oversized_Frame_Drops_Stale_Glyphs (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Font_Discovery (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Right_To_Left_Glyphs (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  A monospace face each host has, as textrender's own tests look for.
    Font_Candidates : constant array (Positive range <>) of access constant String :=
@@ -254,6 +256,122 @@ package body Guikit_Suite.Text is
       end;
    end Test_Oversized_Frame_Drops_Stale_Glyphs;
 
+   --  Faces with Hebrew letters and the Arabic presentation forms.
+   Right_To_Left_Faces : constant array (Positive range <>) of access constant String :=
+     [new String'("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+      new String'("/usr/share/fonts/TTF/DejaVuSans.ttf"),
+      new String'("/System/Library/Fonts/Supplemental/Arial.ttf"),
+      new String'("C:\Windows\Fonts\arial.ttf")];
+
+   --  Monospace faces without the Arabic presentation forms.
+   Latin_Only_Faces : constant array (Positive range <>) of access constant String :=
+     [new String'("/usr/share/fonts/truetype/noto/NotoSansMono-Regular.ttf"),
+      new String'("/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf"),
+      new String'("/usr/share/fonts/truetype/liberation2/LiberationMono-Regular.ttf"),
+      new String'("/System/Library/Fonts/Monaco.ttf"),
+      new String'("C:\Windows\Fonts\consola.ttf")];
+
+   procedure Test_Right_To_Left_Glyphs (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      Face  : access constant String := null;
+      R     : Guikit.Text.Renderer;
+      Empty : Text_Command_Vectors.Vector;
+
+      type Codes is array (Positive range <>) of Natural;
+
+      function Utf8 (Values : Codes) return String is
+        (if Values'Length = 0 then ""
+         else Guikit.Utf8.Encode (Values (Values'First)) & Utf8 (Values (Values'First + 1 .. Values'Last)));
+
+      --  The glyphs Build_Glyphs places for Values in a box Columns cells wide,
+      --  left to right.
+      function Drawn (Values : Codes; Columns : Positive) return Codes is
+         Commands : Text_Command_Vectors.Vector;
+      begin
+         Commands.Append
+           (Text_Command'
+              (X => 0, Y => 0, Width => Columns * 100, Height => 200,
+               Text => Ada.Strings.Unbounded.To_Unbounded_String (Utf8 (Values)), others => <>));
+         declare
+            Frame  : constant Text_Render_Result := Guikit.Text.Build_Glyphs (R, Commands, Empty);
+            Result : Codes (1 .. Natural (Frame.Glyphs.Length));
+            Next   : Natural := 0;
+         begin
+            for Index in Frame.Glyphs.First_Index .. Frame.Glyphs.Last_Index loop
+               Next := Next + 1;
+               Result (Next) := Frame.Glyphs (Index).Codepoint;
+               if Index > Frame.Glyphs.First_Index then
+                  Assert (Frame.Glyphs (Index).X > Frame.Glyphs (Index - 1).X, "glyphs are placed left to right");
+               end if;
+            end loop;
+            return Result;
+         end;
+      end Drawn;
+
+      Alef : constant := 16#05D0#;
+      Bet  : constant := 16#05D1#;
+      Gimel : constant := 16#05D2#;
+      Beh  : constant := 16#0628#;
+   begin
+      for Candidate of Right_To_Left_Faces loop
+         if Ada.Directories.Exists (Candidate.all) then
+            Face := Candidate;
+            exit;
+         end if;
+      end loop;
+      if Face = null then
+         Ada.Text_IO.Put_Line ("SKIPPED: right-to-left glyphs: no face with Hebrew and Arabic forms found");
+         return;
+      end if;
+      Assert
+        (Guikit.Text.Initialize
+           (R, Face.all, Guikit.Text.Font_Path_Vectors.Empty_Vector,
+            Pixel_Size => 16, Cell_Width => 100, Cell_Height => 200) = Text_Render_Success,
+         "the renderer loads " & Face.all);
+
+      Assert (Drawn ([Alef, Bet, Gimel], 10) = Codes'[Gimel, Bet, Alef], "Hebrew is drawn right to left");
+      Assert
+        (Drawn ([Beh, Beh, Beh], 10) = Codes'[16#FE90#, 16#FE92#, 16#FE91#],
+         "Arabic letters are drawn joined: final, medial, initial");
+      Assert
+        (Drawn ([Alef, Bet, Gimel], 2) = Codes'[Bet, Alef],
+         "a right-to-left text too long for its box keeps its start, on the right");
+      Assert
+        (Drawn ([Character'Pos ('a'), Character'Pos ('b'), Character'Pos ('c')], 2)
+           = Codes'[Character'Pos ('a'), Character'Pos ('b')],
+         "a left-to-right text keeps its start, on the left");
+
+      --  The joined forms come from whichever font in the chain has them: a
+      --  monospace primary without Arabic still draws Arabic joined. Which
+      --  primary lacks the forms is checked, not assumed: alone, it does not
+      --  draw them (it draws '?' for letters it has no glyph for).
+      for Latin of Latin_Only_Faces loop
+         if Ada.Directories.Exists (Latin.all) then
+            Assert
+              (Guikit.Text.Initialize
+                 (R, Latin.all, Guikit.Text.Font_Path_Vectors.Empty_Vector,
+                  Pixel_Size => 16, Cell_Width => 100, Cell_Height => 200) = Text_Render_Success,
+               "the renderer loads " & Latin.all);
+            if Drawn ([Beh, Beh, Beh], 10) /= Codes'[16#FE90#, 16#FE92#, 16#FE91#] then
+               declare
+                  Chain : Guikit.Text.Font_Path_Vectors.Vector;
+               begin
+                  Chain.Append (Face.all);
+                  Assert
+                    (Guikit.Text.Initialize
+                       (R, Latin.all, Chain, Pixel_Size => 16, Cell_Width => 100, Cell_Height => 200)
+                     = Text_Render_Success,
+                     "the renderer loads " & Latin.all & " with " & Face.all & " behind it");
+                  Assert
+                    (Drawn ([Beh, Beh, Beh], 10) = Codes'[16#FE90#, 16#FE92#, 16#FE91#],
+                     "Arabic is drawn joined from a fallback face behind " & Latin.all);
+               end;
+               exit;
+            end if;
+         end if;
+      end loop;
+   end Test_Right_To_Left_Glyphs;
+
    overriding function Name (T : Text_Test_Case) return AUnit.Message_String is
       pragma Unreferenced (T);
    begin
@@ -271,6 +389,9 @@ package body Guikit_Suite.Text is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Font_Discovery'Access,
          "font discovery finds a loadable primary and a fallback chain without it or duplicates");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Right_To_Left_Glyphs'Access,
+         "Hebrew is drawn right to left and Arabic joined, and a long one keeps its start");
    end Register_Tests;
 
    procedure Test_Font_Discovery (T : in out AUnit.Test_Cases.Test_Case'Class) is

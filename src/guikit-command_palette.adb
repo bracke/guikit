@@ -1,3 +1,4 @@
+with Guikit.Bidi;
 with Guikit.Layout;
 with Guikit.Palette;
 with Guikit.Utf8;
@@ -293,7 +294,9 @@ package body Guikit.Command_Palette is
 
       Hidden       : constant String := Scrolled_Off;
       Shown_Query  : constant String := Q (Q'First + Hidden'Length .. Q'Last);
-      Shown_Column : constant Natural := Caret_Column - Guikit.Utf8.Display_Units (Hidden);
+      --  The end of the query as drawn: on the left of a right-to-left one.
+      Shown_Column : constant Natural :=
+        Guikit.Bidi.Caret_Column (Shown_Query, Shown_Query'Length, Columns => Field_W / Cell_W);
       Caret_X      : constant Natural :=
         Field_X + Natural'Min (Shown_Column * Cell_W, (if Field_W > Caret_W then Field_W - Caret_W else 0));
    begin
