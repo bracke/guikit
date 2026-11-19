@@ -248,7 +248,6 @@ package body Guikit.Command_Palette is
         (if Layout.Search_Height > LH
          then Layout.Search_Y + (Layout.Search_Height - LH) / 2
          else Layout.Search_Y);
-      Enabled : Guikit.Layout.Palette_Enabled_Vectors.Vector;
       --  Overlay close-button geometry (top-right). Without a title the close icon
       --  shares the search row, so the search field is shortened to end before it;
       --  with a title the close icon sits in the title row and the search is full
@@ -273,217 +272,244 @@ package body Guikit.Command_Palette is
         Guikit.Text_Fields.View_Of (Q, Q'Length, Field_W, LH, Caret_W);
       Shown_Query : constant String := Q (Q'First + Field.Skip_Bytes .. Q'Last);
       Caret_X     : constant Natural := Field_X + Field.Caret_X;
-   begin
-      P.Rows.Clear;
-      P.Visible_Rows := Guikit.Layout.Visible_Row_Count (Layout.Results_Height, Layout.Row_Height);
 
-      --  Keep the selection on screen for the current layout.
-      P.Offset :=
-        Guikit.Layout.Scroll_Offset_For_Selection
-          (Selected       => P.Selected,
-           Result_Count   => Count,
-           Visible_Rows   => P.Visible_Rows,
-           Current_Offset => P.Offset);
+      --  Forget the last frame's row rectangles, count the rows that fit,
+      --  and keep the selection on screen for the current layout.
+      procedure Scroll_To_Selection is
+      begin
+         P.Rows.Clear;
+         P.Visible_Rows := Guikit.Layout.Visible_Row_Count (Layout.Results_Height, Layout.Row_Height);
 
-      --  Panel chrome.
-      if P.Config.Overlay then
-         Guikit.Widgets.Draw_Drop_Shadow
+         P.Offset :=
+           Guikit.Layout.Scroll_Offset_For_Selection
+             (Selected       => P.Selected,
+              Result_Count   => Count,
+              Visible_Rows   => P.Visible_Rows,
+              Current_Offset => P.Offset);
+      end Scroll_To_Selection;
+
+      --  The panel: its shadow when it floats, background, accent band and
+      --  dialog node.
+      procedure Draw_Chrome is
+      begin
+         if P.Config.Overlay then
+            Guikit.Widgets.Draw_Drop_Shadow
+              (Rectangles, Clip_Width, Clip_Height, Layout.X, Layout.Y, Layout.Width, Layout.Height,
+               Guikit.Draw.Shadow_Color, LH);
+         end if;
+         Guikit.Widgets.Draw_Menu_Panel
            (Rectangles, Clip_Width, Clip_Height, Layout.X, Layout.Y, Layout.Width, Layout.Height,
-            Guikit.Draw.Shadow_Color, LH);
-      end if;
-      Guikit.Widgets.Draw_Menu_Panel
-        (Rectangles, Clip_Width, Clip_Height, Layout.X, Layout.Y, Layout.Width, Layout.Height,
-         Guikit.Draw.Pane_Color, Guikit.Draw.Border_Color);
-      Rectangles.Append
-        (Guikit.Draw.Rectangle_Command'
-           (X => Layout.X, Y => Layout.Y, Width => Layout.Width,
-            Height => Natural'Min (Guikit.Layout.Scaled (3, LH), Layout.Height), Color => Guikit.Draw.Selection_Color));
-      Accessibility.Append
-        (Guikit.Draw.Accessibility_Node'
-           (Role => Guikit.Draw.Role_Dialog, X => Layout.X, Y => Layout.Y,
-            Width => Layout.Width, Height => Layout.Height, others => <>));
+            Guikit.Draw.Pane_Color, Guikit.Draw.Border_Color);
+         Rectangles.Append
+           (Guikit.Draw.Rectangle_Command'
+              (X => Layout.X, Y => Layout.Y, Width => Layout.Width,
+               Height => Natural'Min (Guikit.Layout.Scaled (3, LH), Layout.Height),
+               Color => Guikit.Draw.Selection_Color));
+         Accessibility.Append
+           (Guikit.Draw.Accessibility_Node'
+              (Role => Guikit.Draw.Role_Dialog, X => Layout.X, Y => Layout.Y,
+               Width => Layout.Width, Height => Layout.Height, others => <>));
+      end Draw_Chrome;
 
       --  Panel title (heading): top-left, aligned with the close icon and matching
       --  the settings panel's title; the search box sits below it.
-      if Title_H > 0 then
-         declare
-            Title_X : constant Natural := Layout.X + Pad;
-            Title_Y : constant Natural := Layout.Y + Close_Inset;
-            Title_W : constant Natural :=
-              (if Layout.Width > Pad + Close_Reserve
-               then Layout.Width - Pad - Close_Reserve else 0);
-         begin
-            if Title_W > 0 then
-               Text.Append
-                 (Guikit.Draw.Text_Command'
-                    (X => Title_X, Y => Title_Y, Width => Title_W, Height => LH,
-                     Text => P.Config.Title, Color => Guikit.Draw.Text_Color, others => <>));
-               Accessibility.Append
-                 (Guikit.Draw.Accessibility_Node'
-                    (Role => Guikit.Draw.Role_Heading, X => Title_X, Y => Title_Y,
-                     Width => Title_W, Height => LH, Name => P.Config.Title, others => <>));
-            end if;
-         end;
-      end if;
-
-      --  Search box + query/placeholder + caret.
-      Guikit.Widgets.Draw_Input_Field
-        (Rectangles, Clip_Width, Clip_Height, Layout.Search_X, Layout.Search_Y,
-         Search_W, Layout.Search_Height, Guikit.Draw.Input_Color, Guikit.Draw.Border_Color);
-      if Q'Length > 0 then
-         --  Clipped to the field: the text command's width bounds the glyphs.
-         Text.Append
-           (Guikit.Draw.Text_Command'
-              (X => Field_X, Y => Text_Y, Width => Field_W, Height => LH,
-               Text => To_Unbounded_String (Shown_Query), Color => Guikit.Draw.Text_Color, others => <>));
-      elsif Length (P.Config.Placeholder) > 0 then
-         Text.Append
-           (Guikit.Draw.Text_Command'
-              (X => Field_X, Y => Text_Y, Width => Field_W, Height => LH,
-               Text => P.Config.Placeholder, Color => Guikit.Draw.Muted_Text_Color, others => <>));
-      end if;
-      if Focused then
-         Guikit.Widgets.Draw_Focus_Ring
-           (Rectangles, Clip_Width, Clip_Height, Layout.Search_X, Layout.Search_Y,
-            Search_W, Layout.Search_Height, Guikit.Draw.Selection_Color);
-         Guikit.Widgets.Draw_Caret
-           (Rectangles, Clip_Width, Clip_Height, Caret_X, Text_Y, Caret_W, LH, Guikit.Draw.Text_Color);
-      end if;
-      Accessibility.Append
-        (Guikit.Draw.Accessibility_Node'
-           (Role => Guikit.Draw.Role_Text_Input, X => Layout.Search_X, Y => Layout.Search_Y,
-            Width => Search_W, Height => Layout.Search_Height,
-            Name => P.Query, Focused => Focused, others => <>));
-
-      --  Result rows.
-      for C of P.Ranked loop
-         Enabled.Append (C.Enabled);
-      end loop;
-      declare
-         Row_List : constant Guikit.Layout.Palette_Result_Row_Vectors.Vector :=
-           Guikit.Layout.Calculate_Palette_Result_Rows (Layout, Enabled, P.Selected, P.Offset);
+      procedure Draw_Title is
       begin
-         for Row of Row_List loop
+         if Title_H > 0 then
             declare
-               C          : constant Command := P.Ranked.Element (Row.Result_Index);
-               Hovered    : constant Boolean :=
-                 Hover_X >= Row.X and then Hover_X < Row.X + Row.Width
-                 and then Hover_Y >= Row.Y and then Hover_Y < Row.Y + Row.Height;
-               Sc_Cells   : constant Natural :=
-                 (if P.Config.Show_Shortcuts then Guikit.Utf8.Display_Units (To_String (C.Shortcut)) else 0);
-               Sc_W       : constant Natural := (if Sc_Cells > 0 then Sc_Cells * Cell_W else 0);
-               Sc_X       : constant Natural :=
-                 (if Sc_W > 0 and then Row.Width > Sc_W + 2 * Pad then Row.X + Row.Width - Pad - Sc_W else 0);
-               Label_X    : constant Natural := Row.X + Pad + Gutter;
-               Label_Y    : constant Natural := Row.Y + Row_Pad;
-               Right_Edge : constant Natural := (if Sc_X > 0 then Sc_X else Row.X + Row.Width - Pad);
-               Label_W    : constant Natural :=
-                 (if Right_Edge > Label_X + Pad then Right_Edge - Label_X - Pad else 0);
-               Label_Trunc : Boolean;
-               --  A row with no description has nothing to truncate, and nothing
-               --  assigns this: Fit_To_Cells sets it, and it is only called when
-               --  Has_Desc. The aggregate below reads it either way, so without a
-               --  value here it read whatever the stack happened to hold -- and a
-               --  Boolean whose byte is neither 0 nor 1 raises Constraint_Error
-               --  ("invalid data"). It only ever showed up once the optimiser
-               --  stopped hiding it.
-               Desc_Trunc  : Boolean := False;
-               Label_Fit  : constant String :=
-                 Fit_To_Cells (To_String (C.Label), Label_W / Natural'Max (1, Cell_W), Label_Trunc);
-               Has_Desc   : constant Boolean := Row.Height > LH and then Length (C.Description) > 0;
-               Desc_Fit   : constant String :=
-                 (if Has_Desc
-                  then Fit_To_Cells (To_String (C.Description), Label_W / Natural'Max (1, Cell_W), Desc_Trunc)
-                  else "");
+               Title_X : constant Natural := Layout.X + Pad;
+               Title_Y : constant Natural := Layout.Y + Close_Inset;
+               Title_W : constant Natural :=
+                 (if Layout.Width > Pad + Close_Reserve
+                  then Layout.Width - Pad - Close_Reserve else 0);
             begin
-               P.Rows.Append
-                 (Row_Rect'(Result_Index => Row.Result_Index,
-                            X => Row.X, Y => Row.Y, W => Row.Width, H => Row.Height));
-
-               if P.Config.Show_Icons and then C.Icon.Width > 0 then
-                  declare
-                     Display : constant Natural :=
-                       Natural'Min
-                         (Icon_Slot, (if Row.Height > Icon_Margins then Row.Height - Icon_Margins else Row.Height));
-                  begin
-                     Icons.Append
-                       (Guikit.Draw.Icon_Command'
-                          (X                => Row.X + Pad + (Icon_Slot - Display) / 2,
-                           Y                => Row.Y + (if Row.Height > Display then (Row.Height - Display) / 2 else 0),
-                           Size             => Display,
-                           Thumbnail_Width  => C.Icon.Width,
-                           Thumbnail_Height => C.Icon.Height,
-                           Thumbnail_Pixels => C.Icon.Pixels,
-                           others           => <>));
-                  end;
+               if Title_W > 0 then
+                  Text.Append
+                    (Guikit.Draw.Text_Command'
+                       (X => Title_X, Y => Title_Y, Width => Title_W, Height => LH,
+                        Text => P.Config.Title, Color => Guikit.Draw.Text_Color, others => <>));
+                  Accessibility.Append
+                    (Guikit.Draw.Accessibility_Node'
+                       (Role => Guikit.Draw.Role_Heading, X => Title_X, Y => Title_Y,
+                        Width => Title_W, Height => LH, Name => P.Config.Title, others => <>));
                end if;
-
-               Guikit.Widgets.Draw_Palette_Row
-                 (Rectangles         => Rectangles,
-                  Text               => Text,
-                  Clip_Width         => Clip_Width,
-                  Clip_Height        => Clip_Height,
-                  Row_X              => Row.X,
-                  Row_Y              => Row.Y,
-                  Row_Width          => Row.Width,
-                  Row_Height         => Row.Height,
-                  Background_Color   =>
-                    (if Row.Selected then Guikit.Draw.Selection_Color
-                     elsif Hovered then Guikit.Draw.Hover_Color
-                     else Guikit.Draw.Pane_Color),
-                  Selected           => Row.Selected,
-                  Accent_Color       => Guikit.Draw.Border_Color,
-                  Accent_Width       => Guikit.Layout.Scaled (3, LH),
-                  Label_X            => Label_X,
-                  Label_Y            => Label_Y,
-                  Label_Width        => Label_W,
-                  Label_Height       => Natural'Min (LH, Row.Height),
-                  Label_Text         => To_Unbounded_String (Label_Fit),
-                  Label_Truncated    => Label_Trunc,
-                  Label_Color        =>
-                    (if C.Enabled then Guikit.Draw.Text_Color else Guikit.Draw.Muted_Text_Color),
-                  Shortcut_X         => Sc_X,
-                  Shortcut_Width     => Sc_W,
-                  Shortcut_Text      => (if Sc_W > 0 then C.Shortcut else Null_Unbounded_String),
-                  Shortcut_Truncated => False,
-                  Shortcut_Color     => Guikit.Draw.Muted_Text_Color,
-                  Description_Y      => Label_Y + LH,
-                  Description_Width  => (if Has_Desc then Label_W else 0),
-                  Description_Height =>
-                    (if Has_Desc then Natural'Min (LH, Row.Height - Row_Pad - LH) else 0),
-                  Description_Text   => To_Unbounded_String (Desc_Fit),
-                  Description_Truncated => Desc_Trunc,
-                  Description_Color  => Guikit.Draw.Muted_Text_Color);
-
-               Accessibility.Append
-                 (Guikit.Draw.Accessibility_Node'
-                    (Role => Guikit.Draw.Role_List_Item, X => Row.X, Y => Row.Y,
-                     Width => Row.Width, Height => Row.Height, Name => C.Label,
-                     Description => C.Description, Enabled => C.Enabled, Selected => Row.Selected,
-                     others => <>));
             end;
-         end loop;
-      end;
+         end if;
+      end Draw_Title;
 
-      --  Empty state.
-      if Count = 0 then
-         if Length (P.Config.Empty_State) > 0 then
+      --  The search box with the query or its placeholder, and the caret
+      --  and focus ring while it has focus.
+      procedure Draw_Search_Field is
+      begin
+         Guikit.Widgets.Draw_Input_Field
+           (Rectangles, Clip_Width, Clip_Height, Layout.Search_X, Layout.Search_Y,
+            Search_W, Layout.Search_Height, Guikit.Draw.Input_Color, Guikit.Draw.Border_Color);
+         if Q'Length > 0 then
+            --  Clipped to the field: the text command's width bounds the glyphs.
             Text.Append
               (Guikit.Draw.Text_Command'
-                 (X => Layout.Results_X + Pad, Y => Layout.Results_Y + Row_Pad,
-                  Width => (if Layout.Results_Width > 2 * Pad then Layout.Results_Width - 2 * Pad else 0),
-                  Height => LH, Text => P.Config.Empty_State, Color => Guikit.Draw.Muted_Text_Color,
-                  others => <>));
+                 (X => Field_X, Y => Text_Y, Width => Field_W, Height => LH,
+                  Text => To_Unbounded_String (Shown_Query), Color => Guikit.Draw.Text_Color, others => <>));
+         elsif Length (P.Config.Placeholder) > 0 then
+            Text.Append
+              (Guikit.Draw.Text_Command'
+                 (X => Field_X, Y => Text_Y, Width => Field_W, Height => LH,
+                  Text => P.Config.Placeholder, Color => Guikit.Draw.Muted_Text_Color, others => <>));
+         end if;
+         if Focused then
+            Guikit.Widgets.Draw_Focus_Ring
+              (Rectangles, Clip_Width, Clip_Height, Layout.Search_X, Layout.Search_Y,
+               Search_W, Layout.Search_Height, Guikit.Draw.Selection_Color);
+            Guikit.Widgets.Draw_Caret
+              (Rectangles, Clip_Width, Clip_Height, Caret_X, Text_Y, Caret_W, LH, Guikit.Draw.Text_Color);
          end if;
          Accessibility.Append
            (Guikit.Draw.Accessibility_Node'
-              (Role => Guikit.Draw.Role_Status, X => Layout.Results_X, Y => Layout.Results_Y,
-               Width => Layout.Results_Width, Height => Layout.Row_Height,
-               Name => P.Config.Empty_State, others => <>));
-      end if;
+              (Role => Guikit.Draw.Role_Text_Input, X => Layout.Search_X, Y => Layout.Search_Y,
+               Width => Search_W, Height => Layout.Search_Height,
+               Name => P.Query, Focused => Focused, others => <>));
+      end Draw_Search_Field;
 
-      --  Scrollbar.
-      declare
+      --  One result row: its icon, label, shortcut and description, and
+      --  the rectangle a click on it hits.
+      procedure Draw_Result_Row (Row : Guikit.Layout.Palette_Result_Row) is
+         C          : constant Command := P.Ranked.Element (Row.Result_Index);
+         Hovered    : constant Boolean :=
+           Hover_X >= Row.X and then Hover_X < Row.X + Row.Width
+           and then Hover_Y >= Row.Y and then Hover_Y < Row.Y + Row.Height;
+         Sc_Cells   : constant Natural :=
+           (if P.Config.Show_Shortcuts then Guikit.Utf8.Display_Units (To_String (C.Shortcut)) else 0);
+         Sc_W       : constant Natural := (if Sc_Cells > 0 then Sc_Cells * Cell_W else 0);
+         Sc_X       : constant Natural :=
+           (if Sc_W > 0 and then Row.Width > Sc_W + 2 * Pad then Row.X + Row.Width - Pad - Sc_W else 0);
+         Label_X    : constant Natural := Row.X + Pad + Gutter;
+         Label_Y    : constant Natural := Row.Y + Row_Pad;
+         Right_Edge : constant Natural := (if Sc_X > 0 then Sc_X else Row.X + Row.Width - Pad);
+         Label_W    : constant Natural :=
+           (if Right_Edge > Label_X + Pad then Right_Edge - Label_X - Pad else 0);
+         Label_Trunc : Boolean;
+         --  A row with no description has nothing to truncate, and nothing
+         --  assigns this: Fit_To_Cells sets it, and it is only called when
+         --  Has_Desc. The aggregate below reads it either way, so without a
+         --  value here it read whatever the stack happened to hold -- and a
+         --  Boolean whose byte is neither 0 nor 1 raises Constraint_Error
+         --  ("invalid data"). It only ever showed up once the optimiser
+         --  stopped hiding it.
+         Desc_Trunc  : Boolean := False;
+         Label_Fit  : constant String :=
+           Fit_To_Cells (To_String (C.Label), Label_W / Natural'Max (1, Cell_W), Label_Trunc);
+         Has_Desc   : constant Boolean := Row.Height > LH and then Length (C.Description) > 0;
+         Desc_Fit   : constant String :=
+           (if Has_Desc
+            then Fit_To_Cells (To_String (C.Description), Label_W / Natural'Max (1, Cell_W), Desc_Trunc)
+            else "");
+      begin
+         P.Rows.Append
+           (Row_Rect'(Result_Index => Row.Result_Index,
+                      X => Row.X, Y => Row.Y, W => Row.Width, H => Row.Height));
+
+         if P.Config.Show_Icons and then C.Icon.Width > 0 then
+            declare
+               Display : constant Natural :=
+                 Natural'Min
+                   (Icon_Slot, (if Row.Height > Icon_Margins then Row.Height - Icon_Margins else Row.Height));
+            begin
+               Icons.Append
+                 (Guikit.Draw.Icon_Command'
+                    (X                => Row.X + Pad + (Icon_Slot - Display) / 2,
+                     Y                => Row.Y + (if Row.Height > Display then (Row.Height - Display) / 2 else 0),
+                     Size             => Display,
+                     Thumbnail_Width  => C.Icon.Width,
+                     Thumbnail_Height => C.Icon.Height,
+                     Thumbnail_Pixels => C.Icon.Pixels,
+                     others           => <>));
+            end;
+         end if;
+
+         Guikit.Widgets.Draw_Palette_Row
+           (Rectangles         => Rectangles,
+            Text               => Text,
+            Clip_Width         => Clip_Width,
+            Clip_Height        => Clip_Height,
+            Row_X              => Row.X,
+            Row_Y              => Row.Y,
+            Row_Width          => Row.Width,
+            Row_Height         => Row.Height,
+            Background_Color   =>
+              (if Row.Selected then Guikit.Draw.Selection_Color
+               elsif Hovered then Guikit.Draw.Hover_Color
+               else Guikit.Draw.Pane_Color),
+            Selected           => Row.Selected,
+            Accent_Color       => Guikit.Draw.Border_Color,
+            Accent_Width       => Guikit.Layout.Scaled (3, LH),
+            Label_X            => Label_X,
+            Label_Y            => Label_Y,
+            Label_Width        => Label_W,
+            Label_Height       => Natural'Min (LH, Row.Height),
+            Label_Text         => To_Unbounded_String (Label_Fit),
+            Label_Truncated    => Label_Trunc,
+            Label_Color        =>
+              (if C.Enabled then Guikit.Draw.Text_Color else Guikit.Draw.Muted_Text_Color),
+            Shortcut_X         => Sc_X,
+            Shortcut_Width     => Sc_W,
+            Shortcut_Text      => (if Sc_W > 0 then C.Shortcut else Null_Unbounded_String),
+            Shortcut_Truncated => False,
+            Shortcut_Color     => Guikit.Draw.Muted_Text_Color,
+            Description_Y      => Label_Y + LH,
+            Description_Width  => (if Has_Desc then Label_W else 0),
+            Description_Height =>
+              (if Has_Desc then Natural'Min (LH, Row.Height - Row_Pad - LH) else 0),
+            Description_Text   => To_Unbounded_String (Desc_Fit),
+            Description_Truncated => Desc_Trunc,
+            Description_Color  => Guikit.Draw.Muted_Text_Color);
+
+         Accessibility.Append
+           (Guikit.Draw.Accessibility_Node'
+              (Role => Guikit.Draw.Role_List_Item, X => Row.X, Y => Row.Y,
+               Width => Row.Width, Height => Row.Height, Name => C.Label,
+               Description => C.Description, Enabled => C.Enabled, Selected => Row.Selected,
+               others => <>));
+      end Draw_Result_Row;
+
+      --  The visible result rows, from the scroll offset on.
+      procedure Draw_Result_Rows is
+         Enabled : Guikit.Layout.Palette_Enabled_Vectors.Vector;
+      begin
+         for C of P.Ranked loop
+            Enabled.Append (C.Enabled);
+         end loop;
+         declare
+            Row_List : constant Guikit.Layout.Palette_Result_Row_Vectors.Vector :=
+              Guikit.Layout.Calculate_Palette_Result_Rows (Layout, Enabled, P.Selected, P.Offset);
+         begin
+            for Row of Row_List loop
+               Draw_Result_Row (Row);
+            end loop;
+         end;
+      end Draw_Result_Rows;
+
+      --  What the results area says when nothing matches.
+      procedure Draw_Empty_State is
+      begin
+         if Count = 0 then
+            if Length (P.Config.Empty_State) > 0 then
+               Text.Append
+                 (Guikit.Draw.Text_Command'
+                    (X => Layout.Results_X + Pad, Y => Layout.Results_Y + Row_Pad,
+                     Width => (if Layout.Results_Width > 2 * Pad then Layout.Results_Width - 2 * Pad else 0),
+                     Height => LH, Text => P.Config.Empty_State, Color => Guikit.Draw.Muted_Text_Color,
+                     others => <>));
+            end if;
+            Accessibility.Append
+              (Guikit.Draw.Accessibility_Node'
+                 (Role => Guikit.Draw.Role_Status, X => Layout.Results_X, Y => Layout.Results_Y,
+                  Width => Layout.Results_Width, Height => Layout.Row_Height,
+                  Name => P.Config.Empty_State, others => <>));
+         end if;
+      end Draw_Empty_State;
+
+      --  The results' scrollbar, when they do not all fit.
+      procedure Draw_Scrollbar is
          Max_Scroll : constant Natural :=
            (if Count > P.Visible_Rows then Count - P.Visible_Rows else 0);
          Thumb : constant Guikit.Layout.Scrollbar_Thumb :=
@@ -510,36 +536,48 @@ package body Guikit.Command_Palette is
                Thumb_Color  => Guikit.Draw.Selection_Color,
                Grip_Color   => Guikit.Draw.Muted_Text_Color);
          end if;
-      end;
+      end Draw_Scrollbar;
 
       --  Overlay close button, at the panel's top-right: drawn exactly where,
       --  and only when, Guikit.Layout.Panel_Close_Button says a click hits it.
-      if P.Config.Overlay then
-         declare
-            Button : constant Guikit.Layout.Close_Button_Layout :=
-              Guikit.Layout.Panel_Close_Button (Layout.X, Layout.Y, Layout.Width, Layout.Height, LH);
-            Bx     : constant Natural := Button.X;
-            By     : constant Natural := Button.Y;
-            Btn    : constant Natural := Button.Width;
-         begin
-            if Button.Visible then
-               Guikit.Widgets.Draw_Close_Button
-                 (Rectangles => Rectangles, Text => Text, Clip_Width => Clip_Width, Clip_Height => Clip_Height,
-                  Button_X => Bx, Button_Y => By, Button_Width => Btn, Button_Height => Btn,
-                  Fill_Color => Guikit.Draw.Pane_Color, Border_Color => Guikit.Draw.Border_Color,
-                  Glyph_X => Bx, Glyph_Y => By, Glyph_Width => Btn, Glyph_Height => Btn,
-                  --  U+00D7 (times), which sits on the math axis so it centres in
-                  --  the button, matching the other panels' close glyph.
-                  Glyph => To_Unbounded_String (Character'Val (16#C3#) & Character'Val (16#97#)),
-                  Glyph_Color => Guikit.Draw.Muted_Text_Color,
-                  Show_Glyph => True);
-               Accessibility.Append
-                 (Guikit.Draw.Accessibility_Node'
-                    (Role => Guikit.Draw.Role_Button, X => Bx, Y => By,
-                     Width => Btn, Height => Btn, Name => P.Config.Close_Label, others => <>));
-            end if;
-         end;
-      end if;
+      procedure Draw_Close_Button is
+      begin
+         if P.Config.Overlay then
+            declare
+               Button : constant Guikit.Layout.Close_Button_Layout :=
+                 Guikit.Layout.Panel_Close_Button (Layout.X, Layout.Y, Layout.Width, Layout.Height, LH);
+               Bx     : constant Natural := Button.X;
+               By     : constant Natural := Button.Y;
+               Btn    : constant Natural := Button.Width;
+            begin
+               if Button.Visible then
+                  Guikit.Widgets.Draw_Close_Button
+                    (Rectangles => Rectangles, Text => Text, Clip_Width => Clip_Width, Clip_Height => Clip_Height,
+                     Button_X => Bx, Button_Y => By, Button_Width => Btn, Button_Height => Btn,
+                     Fill_Color => Guikit.Draw.Pane_Color, Border_Color => Guikit.Draw.Border_Color,
+                     Glyph_X => Bx, Glyph_Y => By, Glyph_Width => Btn, Glyph_Height => Btn,
+                     --  U+00D7 (times), which sits on the math axis so it centres in
+                     --  the button, matching the other panels' close glyph.
+                     Glyph => To_Unbounded_String (Character'Val (16#C3#) & Character'Val (16#97#)),
+                     Glyph_Color => Guikit.Draw.Muted_Text_Color,
+                     Show_Glyph => True);
+                  Accessibility.Append
+                    (Guikit.Draw.Accessibility_Node'
+                       (Role => Guikit.Draw.Role_Button, X => Bx, Y => By,
+                        Width => Btn, Height => Btn, Name => P.Config.Close_Label, others => <>));
+               end if;
+            end;
+         end if;
+      end Draw_Close_Button;
+   begin
+      Scroll_To_Selection;
+      Draw_Chrome;
+      Draw_Title;
+      Draw_Search_Field;
+      Draw_Result_Rows;
+      Draw_Empty_State;
+      Draw_Scrollbar;
+      Draw_Close_Button;
    end Build_Frame;
 
 end Guikit.Command_Palette;
