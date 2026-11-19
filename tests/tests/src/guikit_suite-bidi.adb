@@ -31,6 +31,7 @@ package body Guikit_Suite.Bidi is
    procedure Test_Brackets_Mirror (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Caret_And_Click (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Latin_Unchanged (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Arrows_Follow_The_Screen (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function Utf8 (Codes : Guikit.Bidi.Codepoint_Array) return String is
       Result : Unbounded_String;
@@ -88,6 +89,8 @@ package body Guikit_Suite.Bidi is
         (T, Test_Caret_And_Click'Access, "the caret and a click land where the character is drawn");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Latin_Unchanged'Access, "text with nothing right-to-left needs no layout");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Arrows_Follow_The_Screen'Access, "the arrow keys move the caret the way they point on the screen");
    end Register_Tests;
 
    --  Runs every test line of File; returns how many failed and describes
@@ -383,6 +386,57 @@ package body Guikit_Suite.Bidi is
       Assert (Guikit.Bidi.Caret_Column ("abc", 2) = 2, "caret");
       Assert (Guikit.Bidi.Cursor_At_Half_Column ("abc", 3) = 2, "click rounds to the nearer boundary");
    end Test_Latin_Unchanged;
+
+   procedure Test_Arrows_Follow_The_Screen (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Guikit.Bidi;
+      --  Drawn gimel bet alef: alef is on the right.
+      Hebrew : constant String := Utf8 ([Alef, Bet, Gimel]);
+      --  "ab", alef bet, " cd": drawn "ab" bet alef " cd", seven columns.
+      Mixed  : constant String := "ab" & Utf8 ([Alef, Bet]) & " cd";
+      Words  : constant String := Utf8 ([Alef, Bet]) & " " & Utf8 ([Gimel, Alef]);
+   begin
+      Assert (Caret_Step (Hebrew, 0, Rightward => False) = 2, "left from the right edge passes alef");
+      Assert (Caret_Step (Hebrew, 2, Rightward => False) = 4, "and then bet");
+      Assert (Caret_Step (Hebrew, 6, Rightward => False) = 6, "nothing lies left of the left edge");
+      Assert (Caret_Step (Hebrew, 4, Rightward => True) = 2, "right steps back in the text");
+      Assert (Caret_Step (Hebrew, 0, Rightward => True) = 0, "nothing lies right of the right edge");
+
+      --  Walk the mixed line left to right: every stop once, columns never fall.
+      declare
+         Cursor  : Natural := 0;
+         Seen    : array (0 .. Mixed'Length) of Boolean := [others => False];
+         Column  : Natural := 0;
+         Steps   : Natural := 0;
+      begin
+         Seen (0) := True;
+         loop
+            declare
+               Next : constant Natural := Caret_Step (Mixed, Cursor, Rightward => True);
+            begin
+               exit when Next = Cursor;
+               Assert (Caret_Column (Mixed, Next) >= Column, "columns never fall at" & Next'Image);
+               Assert (not Seen (Next), "each stop once at" & Next'Image);
+               Assert (Caret_Step (Mixed, Next, Rightward => False) = Cursor, "left undoes right at" & Next'Image);
+               Column := Caret_Column (Mixed, Next);
+               Seen (Next) := True;
+               Cursor := Next;
+               Steps := Steps + 1;
+            end;
+         end loop;
+         Assert (Steps = 7, "eight stops, seven steps:" & Steps'Image);
+         Assert (Column = 7, "the walk ends at the right edge");
+      end;
+      --  Before alef is drawn at alef's right edge, so right of 'b' the
+      --  next stop is before bet, between bet and alef.
+      Assert (Caret_Step (Mixed, 1, Rightward => True) = 4, "right from 'b' enters the run at its drawn left");
+      Assert (Caret_Step (Mixed, 4, Rightward => True) = 2, "and goes on to alef's right edge");
+
+      Assert (Caret_Step (Words, 0, Rightward => False, By_Word => True) = 4, "Ctrl+Left reads on");
+      Assert (Caret_Step (Words, 4, Rightward => True, By_Word => True) = 0, "Ctrl+Right reads back");
+      Assert (Caret_Step ("ab cd", 0, Rightward => True, By_Word => True) = 2, "Latin words unchanged");
+      Assert (Caret_Step ("abc", 1, Rightward => True) = 2, "Latin steps unchanged");
+   end Test_Arrows_Follow_The_Screen;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

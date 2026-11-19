@@ -1,5 +1,6 @@
 with Guikit.Bidi.Data;
 with Guikit.Utf8;
+with Guikit.Utf8.Editing;
 
 package body Guikit.Bidi is
 
@@ -962,6 +963,24 @@ package body Guikit.Bidi is
       return (if Total > Columns then Total - Columns else 0);
    end Cut_Columns;
 
+   --  The column, before any cut, of a caret Cursor bytes into the text
+   --  Laid was laid out from, Length bytes long.
+   function Column_In (Laid : Line; Length, Cursor : Natural) return Natural is
+      X : Natural := 0;
+   begin
+      for Item of Laid.Clusters loop
+         if Cursor >= Length then
+            if Item.First + Item.Length = Length then
+               return (if Item.Right_To_Left then X else X + Item.Units);
+            end if;
+         elsif Cursor >= Item.First and then Cursor < Item.First + Item.Length then
+            return (if Item.Right_To_Left then X + Item.Units else X);
+         end if;
+         X := X + Item.Units;
+      end loop;
+      return (if Laid.Right_To_Left then 0 else X);
+   end Column_In;
+
    function Caret_Column
      (Content : String;
       Cursor  : Natural;
@@ -974,25 +993,85 @@ package body Guikit.Bidi is
       end if;
 
       declare
-         Laid : constant Line := Lay_Out (Content);
-         Cut  : constant Natural := Cut_Columns (Laid, Columns);
-         X    : Natural := 0;
-
-         function Drawn (Column : Natural) return Natural is (if Column > Cut then Column - Cut else 0);
+         Laid   : constant Line := Lay_Out (Content);
+         Cut    : constant Natural := Cut_Columns (Laid, Columns);
+         Column : constant Natural := Column_In (Laid, Content'Length, Cursor);
       begin
-         for Item of Laid.Clusters loop
-            if Cursor >= Content'Length then
-               if Item.First + Item.Length = Content'Length then
-                  return Drawn (if Item.Right_To_Left then X else X + Item.Units);
-               end if;
-            elsif Cursor >= Item.First and then Cursor < Item.First + Item.Length then
-               return Drawn (if Item.Right_To_Left then X + Item.Units else X);
-            end if;
-            X := X + Item.Units;
-         end loop;
-         return Drawn (if Laid.Right_To_Left then 0 else X);
+         return (if Column > Cut then Column - Cut else 0);
       end;
    end Caret_Column;
+
+   function Caret_Step
+     (Content   : String;
+      Cursor    : Natural;
+      Rightward : Boolean;
+      By_Word   : Boolean := False)
+      return Natural
+   is
+      use Guikit.Utf8.Editing;
+   begin
+      if not Needs_Layout (Content) then
+         if By_Word then
+            return (if Rightward then Next_Word_Boundary (Content, Cursor)
+                    else Previous_Word_Boundary (Content, Cursor));
+         elsif Rightward then
+            return (if Cursor < Content'Length then Next_Boundary (Content, Cursor) else Cursor);
+         else
+            return (if Cursor > 0 then Previous_Boundary (Content, Cursor) else Cursor);
+         end if;
+      end if;
+
+      declare
+         Laid  : constant Line := Lay_Out (Content);
+         Here  : constant Natural := Natural'Min (Cursor, Content'Length);
+         Mine  : constant Natural := Column_In (Laid, Content'Length, Here);
+         Best  : Natural := Here;
+         Best_Column : Natural := Mine;
+         Found : Boolean := False;
+
+         --  Stop ordering: by column, then by byte offset.
+         function Before (Column_A, A, Column_B, B : Natural) return Boolean is
+           (Column_A < Column_B or else (Column_A = Column_B and then A < B));
+
+         procedure Consider (Stop : Natural) is
+            Column : constant Natural := Column_In (Laid, Content'Length, Stop);
+         begin
+            if Stop = Here then
+               return;
+            elsif Rightward then
+               if Before (Mine, Here, Column, Stop)
+                 and then (not Found or else Before (Column, Stop, Best_Column, Best))
+               then
+                  Best := Stop;
+                  Best_Column := Column;
+                  Found := True;
+               end if;
+            elsif Before (Column, Stop, Mine, Here)
+              and then (not Found or else Before (Best_Column, Best, Column, Stop))
+            then
+               Best := Stop;
+               Best_Column := Column;
+               Found := True;
+            end if;
+         end Consider;
+
+         Stop : Natural := 0;
+      begin
+         if By_Word then
+            --  Words step in reading order, which in a right-to-left
+            --  paragraph runs leftward.
+            return
+              (if Rightward = Laid.Right_To_Left then Previous_Word_Boundary (Content, Here)
+               else Next_Word_Boundary (Content, Here));
+         end if;
+         loop
+            Consider (Stop);
+            exit when Stop >= Content'Length;
+            Stop := Next_Boundary (Content, Stop);
+         end loop;
+         return Best;
+      end;
+   end Caret_Step;
 
    function Cursor_At_Half_Column
      (Content     : String;

@@ -144,6 +144,30 @@ package Guikit.Bidi is
       Columns     : Natural := Natural'Last)
       return Natural;
 
+   --  Where an arrow key moves a caret standing Cursor bytes into Content:
+   --  to the next character boundary on the screen in the arrow's
+   --  direction, not in reading order. In a right-to-left run the right
+   --  arrow therefore steps back through the text. By_Word, it moves to the
+   --  next word boundary in reading order, which runs leftward when the
+   --  paragraph is right to left.
+   --
+   --  The caret stops are ordered by drawn column (Caret_Column) and, where
+   --  two stops share a column -- at the seam between runs -- by byte offset,
+   --  so every stop is reachable and the two arrows undo each other. Text
+   --  that needs no layout steps exactly as Guikit.Utf8.Editing does.
+   --
+   --  @param Content UTF-8 text.
+   --  @param Cursor Zero-based byte offset of the caret.
+   --  @param Rightward Whether the right arrow was pressed, not the left.
+   --  @param By_Word Whether to step by word.
+   --  @return The new zero-based byte offset; Cursor when nothing lies that way.
+   function Caret_Step
+     (Content   : String;
+      Cursor    : Natural;
+      Rightward : Boolean;
+      By_Word   : Boolean := False)
+      return Natural;
+
    --  How many display cells a right-to-left Laid paragraph loses on the
    --  left when drawn in Columns cells; 0 when it fits or is left to right.
    --
