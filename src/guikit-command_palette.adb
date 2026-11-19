@@ -1,5 +1,5 @@
-with Guikit.Bidi;
 with Guikit.Layout;
+with Guikit.Text_Fields;
 with Guikit.Palette;
 with Guikit.Utf8;
 with Guikit.Utf8.Editing;
@@ -266,39 +266,13 @@ package body Guikit.Command_Palette is
       Field_X : constant Natural := Layout.Search_X + Pad;
       Caret_W : constant Natural := Natural'Max (1, Cell_W / 6);
       --  The caret sits at the end of the query. A query longer than the field
-      --  scrolls its leading columns off the left edge (as the item grid's
-      --  rename field does) so the caret, and the text being typed, stay in the
-      --  field instead of running on under the close button.
-      Caret_Column : constant Natural := Guikit.Utf8.Display_Units (Q);
-      Scroll_Columns : constant Natural :=
-        Guikit.Layout.Input_Scroll_Columns (Caret_Column, Field_W, LH);
-
-      --  The leading text that scrolls off: at least Scroll_Columns columns,
-      --  cut on a cluster boundary. A cluster straddling the cut goes too,
-      --  however wide it is -- a wide character, or an emoji family several
-      --  columns wide -- rather than leaving the tail too wide for the field:
-      --  the prefix widens a column at a time until it takes that cluster.
-      function Scrolled_Off return String is
-      begin
-         for Columns in Scroll_Columns .. Caret_Column loop
-            declare
-               Prefix : constant String := Guikit.Utf8.Prefix_By_Units (Q, Columns);
-            begin
-               if Guikit.Utf8.Display_Units (Prefix) >= Scroll_Columns then
-                  return Prefix;
-               end if;
-            end;
-         end loop;
-         return Q;
-      end Scrolled_Off;
-
-      Hidden       : constant String := Scrolled_Off;
-      Shown_Query  : constant String := Q (Q'First + Hidden'Length .. Q'Last);
-      --  The end of the query as drawn: on the left of a right-to-left one.
-      Shown_Column : constant Natural :=
-        Guikit.Bidi.Caret_Column (Shown_Query, Shown_Query'Length, Columns => Field_W / Cell_W);
-      Caret_X      : constant Natural :=
-        Field_X + Natural'Min (Shown_Column * Cell_W, (if Field_W > Caret_W then Field_W - Caret_W else 0));
+      --  scrolls its leading columns off the left edge (Guikit.Text_Fields,
+      --  as every field does) so the caret, and the text being typed, stay in
+      --  the field instead of running on under the close button.
+      Field       : constant Guikit.Text_Fields.View :=
+        Guikit.Text_Fields.View_Of (Q, Q'Length, Field_W, LH, Caret_W);
+      Shown_Query : constant String := Q (Q'First + Field.Skip_Bytes .. Q'Last);
+      Caret_X     : constant Natural := Field_X + Field.Caret_X;
    begin
       P.Rows.Clear;
       P.Visible_Rows := Guikit.Layout.Visible_Row_Count (Layout.Results_Height, Layout.Row_Height);

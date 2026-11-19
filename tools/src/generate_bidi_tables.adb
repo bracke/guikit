@@ -196,8 +196,14 @@ procedure Generate_Bidi_Tables is
                               Shapes (Base).Medial := Code;
                            end if;
                         end;
+                     --  Lam with an alef: madda, hamza above, hamza below
+                     --  or plain. The other lam ligatures (lam-jeem,
+                     --  lam-meem, lam-yeh ...) are optional ones a font
+                     --  forms itself; taking them would break ordinary
+                     --  words such as "ليس" into a non-joining pair.
                      elsif Hex (Parts (Parts'First .. Gap - 1)) = 16#0644#
                        and then Ada.Strings.Fixed.Index (Parts (Gap + 1 .. Parts'Last), " ") = 0
+                       and then Hex (Parts (Gap + 1 .. Parts'Last)) in 16#0622# | 16#0623# | 16#0625# | 16#0627#
                      then
                         declare
                            Alef : constant Natural := Hex (Parts (Gap + 1 .. Parts'Last));

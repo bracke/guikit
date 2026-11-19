@@ -782,7 +782,6 @@ package body Guikit.Bidi is
       return False;
    end Needs_Layout;
 
-   ZWJ  : constant := 16#200D#;
    Lam  : constant := 16#0644#;
 
    function Lay_Out
@@ -904,9 +903,12 @@ package body Guikit.Bidi is
             for I in 1 .. Count loop
                declare
                   Units : constant Natural := Guikit.Utf8.Codepoint_Display_Units (Points (I));
+                  --  A character after a ZWJ still takes its own cells: the
+                  --  font draws no joined sequence, so the emoji of a family
+                  --  stand side by side, as they do in text needing no
+                  --  layout, rather than on top of each other.
                   Starts_Cluster : constant Boolean :=
-                    Clusters = 0
-                    or else (Units > 0 and then not Swallow (I) and then Points (I - 1) /= ZWJ);
+                    Clusters = 0 or else (Units > 0 and then not Swallow (I));
                   Level : constant Natural := (if Levels (I) = Removed then Para else Levels (I));
                begin
                   if Starts_Cluster then

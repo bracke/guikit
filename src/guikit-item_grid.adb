@@ -1,4 +1,4 @@
-with Guikit.Bidi;
+with Guikit.Text_Fields;
 with Guikit.Utf8;
 with Guikit.Widgets;
 
@@ -394,21 +394,15 @@ package body Guikit.Item_Grid is
         (if Wide then Natural'Min (Add (Line_Height, Mul (Pad_F, 2)), Label_H) else Cell.Height);
       Editing : constant Boolean := Renaming and then Focused;
       Raw     : constant String := To_String (Text);
-      --  Display columns before the caret, and how many leading bytes
-      --  (whole codepoints, as Prefix_By_Units cuts them) scroll off the left.
-      Caret_Column : constant Natural :=
-        Guikit.Utf8.Display_Units_Before (Raw, Natural'Min (Cursor, Raw'Length));
-      Skip_Bytes   : Natural := 0;
+      --  How many leading bytes scroll off the left, and where the caret is
+      --  drawn (Guikit.Text_Fields, the rule every field shares).
+      Field   : Guikit.Text_Fields.View;
+      Skip_Bytes : Natural := 0;
    begin
       Rename_Field_Extent (Cell, View, Renaming, Field_X, Field_W, Line_Height);
       if Editing then
-         declare
-            Skipped : constant String :=
-              Guikit.Utf8.Prefix_By_Units
-                (Raw, Guikit.Layout.Input_Scroll_Columns (Caret_Column, Field_W, Line_Height));
-         begin
-            Skip_Bytes := Skipped'Length;
-         end;
+         Field := Guikit.Text_Fields.View_Of (Raw, Cursor, Field_W, Line_Height, Caret_Width => 2);
+         Skip_Bytes := Field.Skip_Bytes;
       end if;
       --  A focused rename field scrolls its leading columns off the left edge
       --  so the caret stays visible, and shows the rest clipped to the field
@@ -435,16 +429,7 @@ package body Guikit.Item_Grid is
             Base    : constant Natural := (if Field_X > Pad_F then Field_X - Pad_F else 0);
             Inset   : constant Natural := Field_X - Base;
             Total_W : constant Natural := Add (Field_W, Inset);
-            Char_W  : constant Positive := Guikit.Layout.Caret_Advance_Width (Line_Height);
-            --  Where the caret falls in what is drawn: the text after the
-            --  scrolled-off columns, in the order and cells it is drawn in.
-            Shown   : constant Natural :=
-              (if Natural'Min (Cursor, Raw'Length) < Skip_Bytes then 0
-               else Guikit.Bidi.Caret_Column
-                 (Raw (Raw'First + Skip_Bytes .. Raw'Last),
-                  Natural'Min (Cursor, Raw'Length) - Skip_Bytes,
-                  Columns => Field_W / Char_W));
-            Raw_X   : constant Natural := Add (Add (Base, Pad_F), Mul (Shown, Char_W));
+            Raw_X   : constant Natural := Add (Field_X, Field.Caret_X);
             Max_X   : constant Natural := (if Total_W > 2 then Add (Base, Total_W - 2) else Base);
             Caret_H : constant Natural :=
               Natural'Min ((if Field_H > 2 then Field_H - 2 else Field_H),

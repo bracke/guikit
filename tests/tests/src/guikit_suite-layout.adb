@@ -3,6 +3,7 @@ with AUnit.Assertions;
 with AUnit.Test_Cases;
 
 with Guikit.Layout;
+with Guikit.Text_Fields;
 
 --  Geometry tests for Guikit.Layout. Every calculator is exercised with known
 --  inputs and asserted against hand-computed geometry, plus the saturating and
@@ -31,6 +32,7 @@ package body Guikit_Suite.Layout is
    procedure Test_Scroll_Offset_For_Selection (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Scrollbar_Thumb (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Visible_Row_Count (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Text_Field_View (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    overriding function Name (T : Layout_Test_Case) return AUnit.Message_String is
       pragma Unreferenced (T);
@@ -71,6 +73,8 @@ package body Guikit_Suite.Layout is
          "Calculate_Scrollbar_Thumb sizes and positions the thumb proportionally");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Visible_Row_Count'Access, "Visible_Row_Count counts whole rows and is zero-safe");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Text_Field_View'Access, "a field scrolls a long value so its caret stays inside");
    end Register_Tests;
 
    procedure Test_Within (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -356,6 +360,18 @@ package body Guikit_Suite.Layout is
       Assert (Visible_Row_Count (0, 20) = 0, "zero height yields zero rows");
       Assert (Visible_Row_Count (100, 0) = 0, "zero row height yields zero rows");
    end Test_Visible_Row_Count;
+
+   procedure Test_Text_Field_View (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      --  Line height 20: a cell is 12 pixels, so 360 pixels hold 30 columns.
+      Long  : constant String := [1 .. 50 => 'x'];
+      At_End : constant Guikit.Text_Fields.View := Guikit.Text_Fields.View_Of (Long, 50, 360, 20, 2);
+      Short : constant Guikit.Text_Fields.View := Guikit.Text_Fields.View_Of ("abc", 1, 360, 20, 2);
+   begin
+      Assert (At_End.Skip_Bytes = 21, "the first 21 columns scroll off:" & At_End.Skip_Bytes'Image);
+      Assert (At_End.Caret_X <= 358, "the caret stays inside the field:" & At_End.Caret_X'Image);
+      Assert (Short.Skip_Bytes = 0 and then Short.Caret_X = 12, "a short value does not scroll");
+   end Test_Text_Field_View;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

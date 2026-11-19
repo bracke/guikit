@@ -319,6 +319,28 @@ package body Guikit_Suite.Bidi is
       Assert
         (Drawn (After) = Guikit.Bidi.Codepoint_Array'[16#FEFC#, 16#FE91#],
          "beh lam alef drawn as" & Image (Drawn (After)));
+      --  Only an alef makes the ligature: "ليس" (lam yeh seen) is three
+      --  joined letters, not the optional lam-yeh ligature FC44.
+      declare
+         Laysa : constant Guikit.Bidi.Line := Guikit.Bidi.Lay_Out (Utf8 ([Lam, 16#064A#, 16#0633#]));
+      begin
+         Assert
+           (Drawn (Laysa) = Guikit.Bidi.Codepoint_Array'[16#FEB2#, 16#FEF4#, 16#FEDF#],
+            "lam yeh seen drawn as" & Image (Drawn (Laysa)));
+      end;
+      --  Emoji joined by a ZWJ beside Hebrew keep their own cells, as they
+      --  do in text that needs no layout.
+      declare
+         Family : constant Guikit.Bidi.Line := Guikit.Bidi.Lay_Out (Utf8 ([16#1F468#, 16#200D#, 16#1F469#, Alef]));
+         Wide   : Natural := 0;
+      begin
+         for Item of Family.Clusters loop
+            if Item.Units = 2 then
+               Wide := Wide + 1;
+            end if;
+         end loop;
+         Assert (Wide = 2, "each emoji of a ZWJ sequence takes its own two cells:" & Wide'Image);
+      end;
    end Test_Lam_Alef;
 
    function Only_Basic_Arabic (Codepoint : Natural) return Boolean is (Codepoint < 16#FB50#);

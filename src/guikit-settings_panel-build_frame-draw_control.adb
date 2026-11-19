@@ -1,4 +1,4 @@
-with Guikit.Bidi;
+with Guikit.Text_Fields;
 
 separate (Guikit.Settings_Panel.Build_Frame)
 --  The value control of one field row -- toggle, segmented choice, number
@@ -102,23 +102,29 @@ begin
 
       when Settings_Panel.Text =>
          declare
-            TH : constant Natural := Ctrl_H;
-            TY : constant Natural := Row_Y + (Row_H - TH) / 2;
-            VY : constant Natural := Row_Y + (Row_H - LH) / 2;
+            TH      : constant Natural := Ctrl_H;
+            TY      : constant Natural := Row_Y + (Row_H - TH) / 2;
+            VY      : constant Natural := Row_Y + (Row_H - LH) / 2;
+            Text_W  : constant Natural := (if Ctrl_W > 2 * Field_Inset then Ctrl_W - 2 * Field_Inset else 0);
+            Caret_W : constant Natural := Natural'Max (1, Cell_W / 6);
+            Editing : constant Boolean := Focused and then I = P.Focused;
+            Value   : constant String := To_String (F.Value);
+            --  The caret is at the end of the value; a long value scrolls so
+            --  it stays in the field (Guikit.Text_Fields).
+            Field   : constant Guikit.Text_Fields.View :=
+              (if Editing then Guikit.Text_Fields.View_Of (Value, Value'Length, Text_W, LH, Caret_W)
+               else (others => 0));
          begin
             Guikit.Widgets.Draw_Input_Field
               (Rectangles, Clip_Width, Clip_Height, Ctrl_X, TY, Ctrl_W, TH,
                Guikit.Draw.Input_Color, Guikit.Draw.Border_Color);
-            Add_Text (Ctrl_X + Field_Inset, VY,
-                      (if Ctrl_W > 2 * Field_Inset then Ctrl_W - 2 * Field_Inset else 0), F.Value,
+            Add_Text (Ctrl_X + Field_Inset, VY, Text_W,
+                      To_Unbounded_String (Value (Value'First + Field.Skip_Bytes .. Value'Last)),
                       Guikit.Draw.Text_Color);
-            if Focused and then I = P.Focused then
+            if Editing then
                Guikit.Widgets.Draw_Caret
-                 (Rectangles, Clip_Width, Clip_Height,
-                  Ctrl_X + Field_Inset
-                  + Guikit.Bidi.Caret_Column (To_String (F.Value), Length (F.Value)) * Cell_W,
-                  VY,
-                  Natural'Max (1, Cell_W / 6), LH, Guikit.Draw.Text_Color);
+                 (Rectangles, Clip_Width, Clip_Height, Ctrl_X + Field_Inset + Field.Caret_X, VY,
+                  Caret_W, LH, Guikit.Draw.Text_Color);
             end if;
          end;
 
