@@ -97,6 +97,7 @@ package body Guikit.List_Panel is
                Color        => Text_Color,
                Truncated    => Title_Truncated,
                Scale_To_Box => False,
+               Align_End    => False,
                Italic       => False));
          Accessibility.Append
            (Accessibility_Node'
@@ -129,6 +130,7 @@ package body Guikit.List_Panel is
                      Color        => Muted_Text_Color,
                      Truncated    => Empty_Truncated,
                      Scale_To_Box => False,
+                     Align_End    => False,
                      Italic       => False));
                Accessibility.Append
                  (Accessibility_Node'

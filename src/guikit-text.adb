@@ -467,9 +467,29 @@ package body Guikit.Text is
                end if;
             end loop;
          end Append_Laid_Out;
-      begin
-         for Text of Cmds loop
+         --  Text aligned to its box's right edge (Align_End) is drawn in a
+         --  box just as wide as what of it fits, standing against that edge.
+         function Aligned (Given : Text_Command) return Text_Command is
+         begin
+            if not Given.Align_End or else Given.Scale_To_Box then
+               return Given;
+            end if;
             declare
+               Content : constant String := To_String (Given.Text);
+               Fit     : constant Natural :=
+                 Natural'Min (Guikit.Utf8.Display_Units (Content), Given.Width / R.Cell_Width);
+               Used    : constant Natural := Sat_Mul (Fit, R.Cell_Width);
+               Result  : Text_Command := Given;
+            begin
+               Result.X := Sat_Add (Given.X, Given.Width - Used);
+               Result.Width := Used;
+               return Result;
+            end;
+         end Aligned;
+      begin
+         for Given of Cmds loop
+            declare
+               Text    : constant Text_Command := Aligned (Given);
                Content : constant String := To_String (Text.Text);
                Cell_X  : Float := Float (Text.X);
                Cell_Y  : constant Float := Float (Text.Y);

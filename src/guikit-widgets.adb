@@ -275,7 +275,9 @@ package body Guikit.Widgets is
                Truncated    => False,
                --  Center the glyph's box within the button: a lone symbol (the
                --  close "x") is otherwise baseline-placed and sits off-centre.
-               Scale_To_Box => True,               Italic       => False));
+               Scale_To_Box => True,
+               Align_End    => False,
+               Italic       => False));
       end if;
    end Draw_Close_Button;
 
@@ -405,6 +407,7 @@ package body Guikit.Widgets is
                Color        => Label_Color,
                Truncated    => Label_Truncated,
                Scale_To_Box => False,
+               Align_End    => False,
                Italic       => False));
       end if;
    end Draw_Menu_Row;
@@ -467,6 +470,7 @@ package body Guikit.Widgets is
                   Color        => Color,
                   Truncated    => Truncated,
                   Scale_To_Box => False,
+                  Align_End    => False,
                   Italic       => False));
          end if;
       end Emit_Text;
@@ -569,6 +573,7 @@ package body Guikit.Widgets is
                   Color        => Text_Color,
                   Truncated    => False,
                   Scale_To_Box => False,
+                  Align_End    => False,
                   Italic       => False));
          end if;
       end Box;
@@ -631,6 +636,7 @@ package body Guikit.Widgets is
                Color        => Label_Color,
                Truncated    => Label_Truncated,
                Scale_To_Box => False,
+               Align_End    => False,
                Italic       => False));
       end if;
    end Draw_Button;
@@ -698,6 +704,7 @@ package body Guikit.Widgets is
                Color        => Label_Color,
                Truncated    => Label_Truncated,
                Scale_To_Box => False,
+               Align_End    => False,
                Italic       => False));
       end if;
    end Draw_Tooltip;

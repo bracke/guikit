@@ -192,6 +192,10 @@ package Guikit.Draw is
       Truncated : Boolean := False;
       Scale_To_Box : Boolean := False;
       Italic : Boolean := False;
+      --  Draw the text against the box's right edge rather than its left:
+      --  what a label's box mirrored for a right-to-left layout (Mirror)
+      --  asks, so the text still starts where the box does.
+      Align_End : Boolean := False;
    end record;
 
    package Text_Command_Vectors is new Ada.Containers.Vectors

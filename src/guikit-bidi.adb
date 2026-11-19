@@ -981,6 +981,25 @@ package body Guikit.Bidi is
       return (if Laid.Right_To_Left then 0 else X);
    end Column_In;
 
+   Mirrored : Boolean := False
+     with Atomic;
+
+   procedure Set_Mirrored_Layout (On : Boolean) is
+   begin
+      Mirrored := On;
+   end Set_Mirrored_Layout;
+
+   function Mirrored_Layout return Boolean is (Mirrored);
+
+   --  How many display cells Content takes when drawn in Columns cells.
+   function Shown_Units (Content : String; Columns : Natural) return Natural is
+     (Natural'Min (Guikit.Utf8.Display_Units (Content), Columns));
+
+   --  A column counted from the other end of the drawn text when mirrored.
+   function Reflected (Column : Natural; Content : String; Columns : Natural) return Natural is
+     (if not Mirrored then Column
+      else Shown_Units (Content, Columns) - Natural'Min (Column, Shown_Units (Content, Columns)));
+
    function Caret_Column
      (Content : String;
       Cursor  : Natural;
@@ -989,7 +1008,7 @@ package body Guikit.Bidi is
    is
    begin
       if not Needs_Layout (Content) then
-         return Guikit.Utf8.Display_Units_Before (Content, Cursor);
+         return Reflected (Guikit.Utf8.Display_Units_Before (Content, Cursor), Content, Columns);
       end if;
 
       declare
@@ -997,7 +1016,7 @@ package body Guikit.Bidi is
          Cut    : constant Natural := Cut_Columns (Laid, Columns);
          Column : constant Natural := Column_In (Laid, Content'Length, Cursor);
       begin
-         return (if Column > Cut then Column - Cut else 0);
+         return Reflected ((if Column > Cut then Column - Cut else 0), Content, Columns);
       end;
    end Caret_Column;
 
@@ -1079,14 +1098,21 @@ package body Guikit.Bidi is
       Columns     : Natural := Natural'Last)
       return Natural
    is
+      --  In a mirrored layout the click is counted from the drawn text's
+      --  other end: half-cell H from there is half-cell 2 * Shown - H - 1.
+      Twice_Shown : constant Natural := 2 * Shown_Units (Content, Columns);
+      Unmirrored  : constant Natural :=
+        (if not Mirrored then Half_Column
+         elsif Half_Column >= Twice_Shown then 0
+         else Twice_Shown - Half_Column - 1);
    begin
       if not Needs_Layout (Content) then
-         return Guikit.Utf8.Byte_Offset_For_Display_Column (Content, (Half_Column + 1) / 2);
+         return Guikit.Utf8.Byte_Offset_For_Display_Column (Content, (Unmirrored + 1) / 2);
       end if;
 
       declare
          Laid : constant Line := Lay_Out (Content);
-         Half : constant Natural := Half_Column + 2 * Cut_Columns (Laid, Columns);
+         Half : constant Natural := Unmirrored + 2 * Cut_Columns (Laid, Columns);
          X    : Natural := 0;
          Last_Drawn : Natural := 0;
       begin

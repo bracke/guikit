@@ -30,6 +30,7 @@ package body Guikit_Suite.Text is
    procedure Test_Oversized_Frame_Drops_Stale_Glyphs (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Font_Discovery (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Right_To_Left_Glyphs (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Align_End (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  A monospace face each host has, as textrender's own tests look for.
    Font_Candidates : constant array (Positive range <>) of access constant String :=
@@ -271,6 +272,35 @@ package body Guikit_Suite.Text is
       new String'("/System/Library/Fonts/Monaco.ttf"),
       new String'("C:\Windows\Fonts\consola.ttf")];
 
+   procedure Test_Align_End (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      R     : Guikit.Text.Renderer;
+      Empty : Text_Command_Vectors.Vector;
+
+      --  Where the first glyph of "ab" in a box ten cells wide lands.
+      function First_X (Align_End : Boolean) return Float is
+         Commands : Text_Command_Vectors.Vector;
+      begin
+         Commands.Append
+           (Text_Command'
+              (X => 0, Y => 0, Width => 1_000, Height => 200,
+               Text => Ada.Strings.Unbounded.To_Unbounded_String ("ab"), Align_End => Align_End, others => <>));
+         declare
+            Frame : constant Text_Render_Result := Guikit.Text.Build_Glyphs (R, Commands, Empty);
+         begin
+            Assert (Natural (Frame.Glyphs.Length) = 2, "both letters are drawn");
+            return Frame.Glyphs.First_Element.X;
+         end;
+      end First_X;
+   begin
+      if not Font_Available ("align end") then
+         return;
+      end if;
+      Assert (Start (R), "the renderer loads the font");
+      Assert (First_X (Align_End => False) < 100.0, "by default the text starts at the box's left");
+      Assert (First_X (Align_End => True) in 800.0 .. 900.0, "aligned to the end, it fills the last two cells");
+   end Test_Align_End;
+
    procedure Test_Right_To_Left_Glyphs (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);
       Face  : access constant String := null;
@@ -392,6 +422,8 @@ package body Guikit_Suite.Text is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Right_To_Left_Glyphs'Access,
          "Hebrew is drawn right to left and Arabic joined, and a long one keeps its start");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Align_End'Access, "text aligned to its box's end stands against the right edge");
    end Register_Tests;
 
    procedure Test_Font_Discovery (T : in out AUnit.Test_Cases.Test_Case'Class) is

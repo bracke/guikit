@@ -8,6 +8,8 @@ with Ada.Strings.Unbounded;
 with Ada.Text_IO;
 
 with Guikit.Bidi;
+with Guikit.Draw;
+with Guikit.Mirroring;
 with Guikit.Utf8;
 
 --  Right-to-left text: the bidi algorithm against Unicode's own conformance
@@ -32,6 +34,7 @@ package body Guikit_Suite.Bidi is
    procedure Test_Caret_And_Click (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Latin_Unchanged (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Arrows_Follow_The_Screen (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Mirrored_Layout (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function Utf8 (Codes : Guikit.Bidi.Codepoint_Array) return String is
       Result : Unbounded_String;
@@ -91,6 +94,8 @@ package body Guikit_Suite.Bidi is
         (T, Test_Latin_Unchanged'Access, "text with nothing right-to-left needs no layout");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Arrows_Follow_The_Screen'Access, "the arrow keys move the caret the way they point on the screen");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Mirrored_Layout'Access, "a mirrored frame reflects every box, and the caret follows the text");
    end Register_Tests;
 
    --  Runs every test line of File; returns how many failed and describes
@@ -437,6 +442,61 @@ package body Guikit_Suite.Bidi is
       Assert (Caret_Step ("ab cd", 0, Rightward => True, By_Word => True) = 2, "Latin words unchanged");
       Assert (Caret_Step ("abc", 1, Rightward => True) = 2, "Latin steps unchanged");
    end Test_Arrows_Follow_The_Screen;
+
+   procedure Test_Mirrored_Layout (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Guikit.Bidi;
+      use Guikit.Draw;
+      use Guikit.Mirroring;
+      Rectangles : Rectangle_Command_Vectors.Vector;
+      Triangles  : Triangle_Command_Vectors.Vector;
+      Text       : Text_Command_Vectors.Vector;
+      Icons      : Icon_Command_Vectors.Vector;
+   begin
+      Rectangles.Append (Rectangle_Command'(X => 10, Y => 0, Width => 30, Height => 5, others => <>));
+      Triangles.Append (Triangle_Command'(X1 => 0.0, X2 => 10.0, X3 => 10.0, others => <>));
+      Text.Append (Text_Command'(X => 0, Y => 0, Width => 40, Height => 10, others => <>));
+      Text.Append (Text_Command'(X => 0, Y => 0, Width => 40, Height => 10, Scale_To_Box => True, others => <>));
+      Text.Append (Text_Command'(X => 0, Y => 0, Width => 10, Height => 10,
+                                 Text => Ada.Strings.Unbounded.To_Unbounded_String (">"), others => <>));
+      Text.Append (Text_Command'(X => 0, Y => 0, Width => 10, Height => 10,
+                                 Text => Ada.Strings.Unbounded.To_Unbounded_String ("a>"), others => <>));
+      Icons.Append (Icon_Command'(X => 0, Y => 0, Size => 16, others => <>));
+      Mirror (Rectangles, 100);
+      Mirror (Triangles, 100);
+      Mirror (Text, 100);
+      Mirror (Icons, 100);
+      Assert (Rectangles (1).X = 60, "a box 10 from the left ends 10 from the right");
+      Assert (Triangles (1).X1 = 100.0 and then Triangles (1).X2 = 90.0, "a triangle's points are reflected");
+      Assert (Text (1).X = 60 and then Text (1).Align_End, "text keeps to the edge its box starts at");
+      Assert (not Text (2).Align_End, "text fitted to its box stays centred");
+      Assert (Ada.Strings.Unbounded.To_String (Text (3).Text) = "<", "a lone '>' points the other way");
+      Assert (Ada.Strings.Unbounded.To_String (Text (4).Text) = "a>", "running text is left to Guikit.Bidi");
+      Assert (Icons (1).X = 84, "an icon moves with its box");
+      Assert (Mirror_X (0, 100) = 99 and then Mirror_X (99, 100) = 0, "the pointer is reflected too");
+
+      --  "abc" in a box ten cells wide: drawn against the box's (mirrored)
+      --  right edge, so the caret before 'a' is three cells back from the
+      --  edge the unmirrored frame calls its start.
+      Set_Mirrored_Layout (True);
+      declare
+         Before_A : constant Natural := Caret_Column ("abc", 0, Columns => 10);
+         At_End   : constant Natural := Caret_Column ("abc", 3, Columns => 10);
+         Click_A  : constant Natural := Cursor_At_Half_Column ("abc", 5, Columns => 10);
+         Click_Far : constant Natural := Cursor_At_Half_Column ("abc", 18, Columns => 10);
+      begin
+         Set_Mirrored_Layout (False);
+         Assert (Before_A = 3, "before 'a' is three cells from the start:" & Before_A'Image);
+         Assert (At_End = 0, "the end is at the start");
+         Assert (Click_A = 0, "a click on the far half of 'a' is before it:" & Click_A'Image);
+         Assert (Click_Far = 0, "a click past the drawn text is at its visual left, before 'a'");
+      end;
+      Assert (Caret_Column ("abc", 0, Columns => 10) = 0, "unmirrored again");
+   exception
+      when others =>
+         Set_Mirrored_Layout (False);
+         raise;
+   end Test_Mirrored_Layout;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;
