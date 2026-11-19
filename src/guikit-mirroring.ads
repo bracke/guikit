@@ -13,10 +13,51 @@ with Guikit.Draw;
 --  presenting, then reflects the pointer's X the same way (Mirror_X) before
 --  hit testing, so layouts, drawing and hit tests never meet a mirrored
 --  coordinate. A caret drawn over text is the one thing whose place depends
---  on the text inside a box: see Guikit.Bidi.Set_Mirrored_Layout.
+--  on the text inside a box: Reflect_Column places it, and
+--  Guikit.Text_Fields applies that for every field.
+--
+--  A box that sticks out past the frame is reflected by its visible part:
+--  the part past the frame's edge, which nothing shows, is dropped.
 package Guikit.Mirroring is
 
    use Guikit.Draw;
+
+   --  Record whether the application mirrors its frames for a right-to-left
+   --  layout. An application-wide registration, like
+   --  Guikit.Draw.Set_Icon_Asset_Source: False until set. It is atomic, so
+   --  any task may read it while another sets it; an application sets it
+   --  before its first frame and again only when its layout direction
+   --  changes, and each frame drawn after a change follows the new one.
+   --
+   --  @param On Whether frames are mirrored.
+   procedure Set_Mirrored_Layout (On : Boolean);
+
+   --  @return Whether frames are mirrored (Set_Mirrored_Layout).
+   function Mirrored_Layout return Boolean;
+
+   --  The column, counted from a mirrored box's unmirrored start, at which
+   --  text Column cells into the drawn text stands. Text in a mirrored box
+   --  keeps its reading order and stands against the box's other edge, so
+   --  its cells are counted back from the end of the Shown cells drawn.
+   --
+   --  @param Column Display column into the drawn text.
+   --  @param Shown How many display cells the text is drawn in.
+   --  @return The column as the unmirrored frame counts it.
+   function Reflect_Column (Column, Shown : Natural) return Natural is
+     (Shown - Natural'Min (Column, Shown));
+
+   --  The inverse of Reflect_Column for a click: the half cell into the
+   --  drawn text of a click Half_Column half cells from a mirrored box's
+   --  unmirrored start. A click past the drawn text is before its first
+   --  half cell.
+   --
+   --  @param Half_Column Click position in half cells, as the unmirrored
+   --  frame counts it.
+   --  @param Shown How many display cells the text is drawn in.
+   --  @return The click position in half cells into the drawn text.
+   function Reflect_Half_Column (Half_Column, Shown : Natural) return Natural is
+     (if Half_Column >= 2 * Shown then 0 else 2 * Shown - Half_Column - 1)
+     with Pre => Shown <= Natural'Last / 2;
 
    --  @param Items Rectangles to reflect.
    --  @param Width Frame width in pixels.
@@ -35,7 +76,8 @@ package Guikit.Mirroring is
    --  @param Width Frame width in pixels.
    procedure Mirror (Items : in out Tooltip_Command_Vectors.Vector; Width : Natural);
 
-   --  @param Items Icons to move; their pictures are not flipped.
+   --  @param Items Icons to move; their pictures are not flipped, nor cut:
+   --  an icon sticking out past the frame's right edge starts at its left.
    --  @param Width Frame width in pixels.
    procedure Mirror (Items : in out Icon_Command_Vectors.Vector; Width : Natural);
 

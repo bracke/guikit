@@ -272,12 +272,10 @@ package body Guikit.Widgets is
                Height       => Draw_H,
                Text         => Glyph,
                Color        => Glyph_Color,
-               Truncated    => False,
                --  Center the glyph's box within the button: a lone symbol (the
                --  close "x") is otherwise baseline-placed and sits off-centre.
                Scale_To_Box => True,
-               Align_End    => False,
-               Italic       => False));
+               others       => <>));
       end if;
    end Draw_Close_Button;
 
@@ -406,9 +404,7 @@ package body Guikit.Widgets is
                Text         => Label_Text,
                Color        => Label_Color,
                Truncated    => Label_Truncated,
-               Scale_To_Box => False,
-               Align_End    => False,
-               Italic       => False));
+               others       => <>));
       end if;
    end Draw_Menu_Row;
 
@@ -469,9 +465,7 @@ package body Guikit.Widgets is
                   Text         => Content,
                   Color        => Color,
                   Truncated    => Truncated,
-                  Scale_To_Box => False,
-                  Align_End    => False,
-                  Italic       => False));
+                  others       => <>));
          end if;
       end Emit_Text;
    begin
@@ -571,10 +565,7 @@ package body Guikit.Widgets is
                   Height       => Draw_H,
                   Text         => Label,
                   Color        => Text_Color,
-                  Truncated    => False,
-                  Scale_To_Box => False,
-                  Align_End    => False,
-                  Italic       => False));
+                  others       => <>));
          end if;
       end Box;
    begin
@@ -635,9 +626,7 @@ package body Guikit.Widgets is
                Text         => Label_Text,
                Color        => Label_Color,
                Truncated    => Label_Truncated,
-               Scale_To_Box => False,
-               Align_End    => False,
-               Italic       => False));
+               others       => <>));
       end if;
    end Draw_Button;
 
@@ -703,9 +692,7 @@ package body Guikit.Widgets is
                Text         => Label_Text,
                Color        => Label_Color,
                Truncated    => Label_Truncated,
-               Scale_To_Box => False,
-               Align_End    => False,
-               Italic       => False));
+               others       => <>));
       end if;
    end Draw_Tooltip;
 

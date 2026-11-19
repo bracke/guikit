@@ -10,6 +10,7 @@ with Ada.Text_IO;
 with Guikit.Bidi;
 with Guikit.Draw;
 with Guikit.Mirroring;
+with Guikit.Text_Fields;
 with Guikit.Utf8;
 
 --  Right-to-left text: the bidi algorithm against Unicode's own conformance
@@ -35,6 +36,8 @@ package body Guikit_Suite.Bidi is
    procedure Test_Latin_Unchanged (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Arrows_Follow_The_Screen (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Mirrored_Layout (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Mirrored_Field (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Ligature_Is_One_Stop (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function Utf8 (Codes : Guikit.Bidi.Codepoint_Array) return String is
       Result : Unbounded_String;
@@ -96,6 +99,10 @@ package body Guikit_Suite.Bidi is
         (T, Test_Arrows_Follow_The_Screen'Access, "the arrow keys move the caret the way they point on the screen");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Mirrored_Layout'Access, "a mirrored frame reflects every box, and the caret follows the text");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Mirrored_Field'Access, "in a mirrored field the caret starts where its boundary is drawn");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Ligature_Is_One_Stop'Access, "the arrow keys step over a lam-alef ligature whole");
    end Register_Tests;
 
    --  Runs every test line of File; returns how many failed and describes
@@ -465,9 +472,23 @@ package body Guikit_Suite.Bidi is
       Assert (Caret_Step ("abc", 1, Rightward => True) = 2, "Latin steps unchanged");
    end Test_Arrows_Follow_The_Screen;
 
-   procedure Test_Mirrored_Layout (T : in out AUnit.Test_Cases.Test_Case'Class) is
+   procedure Test_Ligature_Is_One_Stop (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);
       use Guikit.Bidi;
+      --  Lam alef, one ligature cluster of four bytes; then beh before it,
+      --  drawn left of it.
+      Ligature : constant String := Utf8 ([Lam, Arabic_Alef]);
+      Word     : constant String := Utf8 ([Beh, Lam, Arabic_Alef]);
+   begin
+      Assert (Caret_Step (Ligature, 0, Rightward => False) = 4, "left from the right edge passes the ligature");
+      Assert (Caret_Step (Ligature, 0, Rightward => True) = 0, "nothing lies right of it, not its alef");
+      Assert (Caret_Step (Ligature, 4, Rightward => True) = 0, "right from the left edge passes it back");
+      Assert (Caret_Step (Word, 2, Rightward => True) = 0, "right from before lam goes on to before beh");
+      Assert (Caret_Step (Word, 2, Rightward => False) = 6, "left from before lam passes the whole ligature");
+   end Test_Ligature_Is_One_Stop;
+
+   procedure Test_Mirrored_Layout (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
       use Guikit.Draw;
       use Guikit.Mirroring;
       Rectangles : Rectangle_Command_Vectors.Vector;
@@ -497,28 +518,53 @@ package body Guikit_Suite.Bidi is
       Assert (Icons (1).X = 84, "an icon moves with its box");
       Assert (Mirror_X (0, 100) = 99 and then Mirror_X (99, 100) = 0, "the pointer is reflected too");
 
-      --  "abc" in a box ten cells wide: drawn against the box's (mirrored)
-      --  right edge, so the caret before 'a' is three cells back from the
-      --  edge the unmirrored frame calls its start.
-      Set_Mirrored_Layout (True);
+      --  A box sticking out past the frame is reflected by what shows of it.
       declare
-         Before_A : constant Natural := Caret_Column ("abc", 0, Columns => 10);
-         At_End   : constant Natural := Caret_Column ("abc", 3, Columns => 10);
-         Click_A  : constant Natural := Cursor_At_Half_Column ("abc", 5, Columns => 10);
-         Click_Far : constant Natural := Cursor_At_Half_Column ("abc", 18, Columns => 10);
+         Wide : Rectangle_Command_Vectors.Vector;
       begin
-         Set_Mirrored_Layout (False);
-         Assert (Before_A = 3, "before 'a' is three cells from the start:" & Before_A'Image);
-         Assert (At_End = 0, "the end is at the start");
-         Assert (Click_A = 0, "a click on the far half of 'a' is before it:" & Click_A'Image);
-         Assert (Click_Far = 0, "a click past the drawn text is at its visual left, before 'a'");
+         Wide.Append (Rectangle_Command'(X => 700, Y => 0, Width => 200, Height => 5, others => <>));
+         Wide.Append (Rectangle_Command'(X => 900, Y => 0, Width => 50, Height => 5, others => <>));
+         Mirror (Wide, 800);
+         Assert
+           (Wide (1).X = 0 and then Wide (1).Width = 100,
+            "the visible hundred pixels go to the left edge:" & Wide (1).X'Image & Wide (1).Width'Image);
+         Assert (Wide (2).Width = 0, "a box wholly past the frame stays unseen");
       end;
-      Assert (Caret_Column ("abc", 0, Columns => 10) = 0, "unmirrored again");
-   exception
-      when others =>
-         Set_Mirrored_Layout (False);
-         raise;
+
+      Assert (Reflect_Column (0, 3) = 3 and then Reflect_Column (3, 3) = 0, "columns count from the other end");
+      Assert (Reflect_Column (5, 3) = 0, "a column past the drawn text is its far end");
+      Assert (Reflect_Half_Column (5, 3) = 0 and then Reflect_Half_Column (0, 3) = 5, "half cells too");
+      Assert (Reflect_Half_Column (40, 3) = 0, "a click past the drawn text is before its first half cell");
    end Test_Mirrored_Layout;
+
+   procedure Test_Mirrored_Field (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Guikit.Text_Fields;
+      --  Line height 20: a cell is 12 pixels, so "abc" in a 120-pixel field
+      --  is drawn in the last three of its ten cells once mirrored.
+      Before_A : constant View := View_Of ("abc", 0, 120, 20, 2, Mirrored => True);
+      At_End   : constant View := View_Of ("abc", 3, 120, 20, 2, Mirrored => True);
+   begin
+      --  Unmirrored, the frame's X 34 to 36 is, mirrored, a rectangle from
+      --  36 pixels before the field's (mirrored) end: where 'a' starts.
+      Assert (Before_A.Caret_X = 34, "the caret before 'a' starts where 'a' does:" & Before_A'Image);
+      Assert (At_End.Caret_X = 0, "the caret at the end stays inside the field");
+      Assert (View_Of ("abc", 0, 120, 20, 2, Mirrored => False).Caret_X = 0, "unmirrored, it is at the start");
+      Assert
+        (Caret_X ("abc", 1, 120, 20, 2, Mirrored => True) = 22,
+         "an unscrolled field's caret is reflected the same way");
+
+      Assert (Cursor_At ("abc", 0, 30, 120, 20, Mirrored => True) = 0, "a click on the far half of 'a' is before it");
+      Assert (Cursor_At ("abc", 0, 108, 120, 20, Mirrored => True) = 0, "a click past the drawn text is before 'a'");
+      Assert (Cursor_At ("abc", 0, 30, 120, 20, Mirrored => False) = 3, "unmirrored, the same click is after 'c'");
+      for Cursor in 0 .. 3 loop
+         Assert
+           (Cursor_At ("abc", 0, Caret_X ("abc", Cursor, 120, 20, 2, Mirrored => True), 120, 20, Mirrored => True)
+            = Cursor,
+            "a click where the caret is drawn puts it back at" & Cursor'Image);
+      end loop;
+      Assert (Cursor_At ("xabc", 1, 0, 120, 20, Mirrored => False) = 1, "a scrolled field counts from what shows");
+   end Test_Mirrored_Field;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

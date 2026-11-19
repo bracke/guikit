@@ -60,9 +60,7 @@ package body Guikit.Menu_Tree is
                   Text         => Fitted,
                   Color        => Color,
                   Truncated    => Fit and then Fitted /= Content,
-                  Scale_To_Box => False,
-                  Align_End    => False,
-                  Italic       => False));
+                  others       => <>));
          end if;
       end Add_Text;
 

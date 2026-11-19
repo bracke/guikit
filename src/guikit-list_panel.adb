@@ -96,9 +96,7 @@ package body Guikit.List_Panel is
                Text         => Title_Text,
                Color        => Text_Color,
                Truncated    => Title_Truncated,
-               Scale_To_Box => False,
-               Align_End    => False,
-               Italic       => False));
+               others       => <>));
          Accessibility.Append
            (Accessibility_Node'
               (Role        => Role_Heading,
@@ -129,9 +127,7 @@ package body Guikit.List_Panel is
                      Text         => Empty_Text,
                      Color        => Muted_Text_Color,
                      Truncated    => Empty_Truncated,
-                     Scale_To_Box => False,
-                     Align_End    => False,
-                     Italic       => False));
+                     others       => <>));
                Accessibility.Append
                  (Accessibility_Node'
                     (Role        => Role_Status,

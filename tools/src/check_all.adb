@@ -1002,6 +1002,43 @@ procedure Check_All is
       Require_Layer ("guikit-utf8", No_Deps);
       Require_Layer ("guikit-utf8-editing", No_Deps);
       Require_Layer ("guikit-layout", [1 => To_Unbounded_String ("Guikit.Utf8")]);
+      --  Right-to-left text is pure text processing: the bidi algorithm and
+      --  its children name only their own tables and the UTF-8 helpers,
+      --  never anything that draws or lays out.
+      Require_Layer
+        ("guikit-bidi",
+         [To_Unbounded_String ("Guikit.Bidi.Carets"),
+          To_Unbounded_String ("Guikit.Bidi.Data"),
+          To_Unbounded_String ("Guikit.Bidi.Levels"),
+          To_Unbounded_String ("Guikit.Bidi.Shaping"),
+          To_Unbounded_String ("Guikit.Utf8")]);
+      Require_Layer ("guikit-bidi-data", No_Deps);
+      Require_Layer
+        ("guikit-bidi-carets",
+         [To_Unbounded_String ("Guikit.Utf8"),
+          To_Unbounded_String ("Guikit.Utf8.Editing")]);
+      Require_Layer ("guikit-bidi-levels", [1 => To_Unbounded_String ("Guikit.Bidi.Data")]);
+      Require_Layer ("guikit-bidi-shaping", [1 => To_Unbounded_String ("Guikit.Bidi.Data")]);
+      --  Mirroring reflects draw commands and holds the application's
+      --  layout direction; text fields place carets and clicks with it.
+      Require_Layer
+        ("guikit-mirroring",
+         [To_Unbounded_String ("Guikit.Bidi"),
+          To_Unbounded_String ("Guikit.Draw"),
+          To_Unbounded_String ("Guikit.Utf8")]);
+      Require_Layer
+        ("guikit-text",
+         [To_Unbounded_String ("Guikit.Bidi"),
+          To_Unbounded_String ("Guikit.Draw"),
+          To_Unbounded_String ("Guikit.Layout"),
+          To_Unbounded_String ("Guikit.Shared_Bytes"),
+          To_Unbounded_String ("Guikit.Utf8")]);
+      Require_Layer
+        ("guikit-text_fields",
+         [To_Unbounded_String ("Guikit.Bidi"),
+          To_Unbounded_String ("Guikit.Layout"),
+          To_Unbounded_String ("Guikit.Mirroring"),
+          To_Unbounded_String ("Guikit.Utf8")]);
       Require_Layer
         ("guikit-widgets",
          [To_Unbounded_String ("Guikit.Draw"),

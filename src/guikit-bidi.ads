@@ -109,26 +109,13 @@ package Guikit.Bidi is
       Has_Glyph : access function (Codepoint : Natural) return Boolean := null)
       return Line;
 
-   --  Whether the application mirrors its frames for a right-to-left
-   --  layout (Guikit.Mirroring.Mirror): Caret_Column and Cursor_At_Half_Column
-   --  then count from the box's other edge, as the text inside a mirrored
-   --  box keeps its reading order while the caret's rectangle is reflected.
-   --  False until set; set once, before the first frame.
-   --
-   --  @param On Whether frames are mirrored.
-   procedure Set_Mirrored_Layout (On : Boolean);
-
-   --  @return Whether frames are mirrored (Set_Mirrored_Layout).
-   function Mirrored_Layout return Boolean;
-
    --  The display column at which to draw a caret standing Cursor bytes into
    --  Content: before the character it precedes -- on its right side when
    --  that character is right-to-left -- or, at the end, after the last one.
    --  Equal to Guikit.Utf8.Display_Units_Before for text that needs no layout.
-   --
-   --  In a mirrored layout (Set_Mirrored_Layout) the column is counted back
-   --  from the end of the drawn text, so a caret rectangle placed at it in
-   --  the unmirrored frame lands, once mirrored, at that place in the text.
+   --  The column counts from the start of the drawn text; a frame mirrored
+   --  for a right-to-left layout counts it from the other end
+   --  (Guikit.Mirroring.Reflect_Column, applied by Guikit.Text_Fields).
    --
    --  A right-to-left paragraph wider than Columns is drawn without its end,
    --  on the left (see Guikit.Text.Build_Glyphs): the columns are counted as
@@ -147,7 +134,7 @@ package Guikit.Bidi is
    --  The byte offset a click at Half_Column half-cells from the start of
    --  the drawn Content puts the caret at: before the clicked character when
    --  the click is on the half of it that comes first in reading order, after
-   --  it otherwise. The inverse of Caret_Column, mirrored layout included.
+   --  it otherwise. The inverse of Caret_Column.
    --
    --  @param Content UTF-8 text, drawn from column 0.
    --  @param Half_Column Click position in half display cells.
@@ -169,8 +156,10 @@ package Guikit.Bidi is
    --
    --  The caret stops are ordered by drawn column (Caret_Column) and, where
    --  two stops share a column -- at the seam between runs -- by byte offset,
-   --  so every stop is reachable and the two arrows undo each other. Text
-   --  that needs no layout steps exactly as Guikit.Utf8.Editing does.
+   --  so every stop is reachable and the two arrows undo each other. The
+   --  stops are where the laid-out clusters start, so a lam-alef ligature is
+   --  stepped over whole. Text that needs no layout steps exactly as
+   --  Guikit.Utf8.Editing does.
    --
    --  @param Content UTF-8 text.
    --  @param Cursor Zero-based byte offset of the caret.
@@ -191,5 +180,13 @@ package Guikit.Bidi is
    --  @param Columns How many display cells it is drawn in.
    --  @return The cells cut off on the left.
    function Cut_Columns (Laid : Line; Columns : Natural) return Natural;
+
+private
+
+   --  Whether a level is right to left.
+   --
+   --  @param Level An embedding level.
+   --  @return True for an odd level.
+   function Is_Odd (Level : Natural) return Boolean is (Level mod 2 = 1);
 
 end Guikit.Bidi;

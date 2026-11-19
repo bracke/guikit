@@ -7,18 +7,38 @@ package body Guikit.Mirroring is
 
    use Ada.Strings.Unbounded;
 
-   --  Where a box W wide at X starts once reflected in a frame Width wide.
+   Mirrored : Boolean := False
+     with Atomic;
+
+   procedure Set_Mirrored_Layout (On : Boolean) is
+   begin
+      Mirrored := On;
+   end Set_Mirrored_Layout;
+
+   function Mirrored_Layout return Boolean is (Mirrored);
+
+   --  Where a box W wide at X starts once reflected in a frame Width wide;
+   --  a box sticking out past the frame's right edge stops at its left edge.
    function Reflected (X, W, Width : Natural) return Natural is
      (if X >= Width then 0
       elsif W >= Width - X then 0
       else Width - X - W);
+
+   --  Reflect the visible part of a box W wide at X in a frame Width wide:
+   --  W shrinks to what lies inside the frame (0 for a box wholly past it).
+   procedure Reflect (X, W : in out Natural; Width : Natural) is
+      Visible : constant Natural := (if X >= Width then 0 else Natural'Min (W, Width - X));
+   begin
+      X := Reflected (X, Visible, Width);
+      W := Visible;
+   end Reflect;
 
    function Reflected (X : Float; Width : Natural) return Float is (Float (Width) - X);
 
    procedure Mirror (Items : in out Rectangle_Command_Vectors.Vector; Width : Natural) is
    begin
       for Item of Items loop
-         Item.X := Reflected (Item.X, Item.Width, Width);
+         Reflect (Item.X, Item.Width, Width);
       end loop;
    end Mirror;
 
@@ -53,7 +73,7 @@ package body Guikit.Mirroring is
    procedure Mirror (Items : in out Text_Command_Vectors.Vector; Width : Natural) is
    begin
       for Item of Items loop
-         Item.X := Reflected (Item.X, Item.Width, Width);
+         Reflect (Item.X, Item.Width, Width);
          Item.Text := Mirrored_Glyph (Item.Text);
          if not Item.Scale_To_Box then
             Item.Align_End := not Item.Align_End;
@@ -64,7 +84,7 @@ package body Guikit.Mirroring is
    procedure Mirror (Items : in out Tooltip_Command_Vectors.Vector; Width : Natural) is
    begin
       for Item of Items loop
-         Item.X := Reflected (Item.X, Item.Width, Width);
+         Reflect (Item.X, Item.Width, Width);
       end loop;
    end Mirror;
 
@@ -78,7 +98,7 @@ package body Guikit.Mirroring is
    procedure Mirror (Items : in out Accessibility_Node_Vectors.Vector; Width : Natural) is
    begin
       for Item of Items loop
-         Item.X := Reflected (Item.X, Item.Width, Width);
+         Reflect (Item.X, Item.Width, Width);
       end loop;
    end Mirror;
 
