@@ -461,7 +461,11 @@ package body Guikit.Vulkan is
    package Atlas_Uploads is
 
       --  Destroy the atlas's image, memory, view and sampler: it has no
-      --  texture until the next upload makes one.
+      --  texture until the next upload makes one. A binding that named the
+      --  destroyed view is marked stale, except that the icon binding is
+      --  pointed at the text atlas's live view (Binding_Fallback) when the
+      --  text binding is current, so the set stays bindable; releasing the
+      --  text atlas also marks an icon binding that fell back to it stale.
       procedure Release_Texture (Renderer : in out Vulkan_Renderer; Kind : Atlas_Kind);
 
       --  Destroy the atlas's staging buffer and its memory: the next upload
@@ -473,9 +477,12 @@ package body Guikit.Vulkan is
       --  again when it is not Width by Height in Format, the staging buffer
       --  when it is smaller than Bytes. Fill writes the pixels into the
       --  mapped staging memory. The command buffers copy them into the
-      --  image (Upload_Pending). False when a step fails: the texture is
-      --  then left released, never half made, and a binding that named it
-      --  is marked stale so the descriptor set is not bound with it.
+      --  image (Upload_Pending). Binding the text atlas also points the
+      --  icon binding at the text atlas's view whenever the icon atlas has
+      --  no current binding of its own (Binding_Fallback), so the fragment
+      --  shader's icon sampler never names an unwritten or destroyed view.
+      --  False when a step fails: the texture is then left released, never
+      --  half made, and its binding handled as Release_Texture says.
       function Upload
         (Renderer : in out Vulkan_Renderer;
          Kind     : Atlas_Kind;
@@ -966,7 +973,6 @@ package body Guikit.Vulkan is
                p_Allocator     => System.Null_Address);
             Renderer.Descriptor_Pool := System.Null_Address;
             Renderer.Descriptor_Set := System.Null_Address;
-            Renderer.Texture_Binding_Count := 0;
          end if;
          Destroy_Descriptor_Set_Layout (Renderer.Device, Renderer.Descriptor_Set_Layout);
       end Destroy_Pipeline_And_Descriptors;
@@ -1002,17 +1008,14 @@ package body Guikit.Vulkan is
          Renderer.Image_Views := [others => System.Null_Address];
          Renderer.Framebuffers := [others => System.Null_Address];
          Renderer.Command_Pool := System.Null_Address;
-         Renderer.Command_Buffers := [others => System.Null_Address];
          Renderer.Pipeline_Layout := System.Null_Address;
          Renderer.Graphics_Pipeline := System.Null_Address;
          Renderer.Descriptor_Set_Layout := System.Null_Address;
          Renderer.Descriptor_Pool := System.Null_Address;
          Renderer.Descriptor_Set := System.Null_Address;
-         Renderer.Texture_Binding_Count := 0;
          Renderer.Vertex_Buffer := System.Null_Address;
          Renderer.Vertex_Memory := System.Null_Address;
          Renderer.Uploaded_Vertices_Valid := False;
-         Renderer.Atlases := [others => <>];
          Renderer.Readback_Buffer := System.Null_Address;
          Renderer.Readback_Memory := System.Null_Address;
          Renderer.Sync_Live := False;
@@ -1032,17 +1035,9 @@ package body Guikit.Vulkan is
          Renderer.Texture_Binding_Count := 0;
          Renderer.Pipeline_Live := False;
          Renderer.Vertex_Buffer_Live := False;
-         for Texture of Renderer.Atlases loop
-            Texture.Texture_Live := False;
-            Texture.Staging_Live := False;
-            Texture.Initialized := False;
-            Texture.Upload_Pending := False;
-            Texture.Width := 0;
-            Texture.Height := 0;
-            Texture.Format := Atlas_Texture_None;
-            Texture.Staging_Capacity := 0;
-            Texture.Binding := Binding_Unwritten;
-         end loop;
+         --  Each atlas's handles are destroyed or forgotten; its size,
+         --  format and binding go with the descriptor set.
+         Renderer.Atlases := [others => <>];
          Renderer.Commands_Live := False;
          Renderer.Swapchain_Images := [others => System.Null_Address];
          Renderer.Command_Buffers := [others => System.Null_Address];

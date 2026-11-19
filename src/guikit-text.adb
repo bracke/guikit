@@ -55,13 +55,6 @@ package body Guikit.Text is
       Guikit.Bidi.Set_Drawable_Forms (Coverage);
    end Record_Forms;
 
-   --  A renderer whose load failed draws no text: no fonts' answer is
-   --  current, so every form is taken as drawn, as before any load.
-   procedure Forget_Forms is
-   begin
-      Guikit.Bidi.Set_Drawable_Forms ([others => True]);
-   end Forget_Forms;
-
    function Atlas_Version (R : Renderer) return Natural is (R.Atlas_Version);
 
    --  How tall the glyph atlas may grow: four times its usual height, which
@@ -71,14 +64,15 @@ package body Guikit.Text is
    Atlas_Max_Height : constant := 4_096;
 
    function Initialize
-     (R              : in out Renderer;
-      Font_Path      : String;
-      Fallback_Paths : Font_Path_Vectors.Vector;
-      Pixel_Size     : Positive := 16;
-      Cell_Width     : Positive := 10;
-      Cell_Height    : Positive := 20;
-      Atlas_Width    : Positive := 1024;
-      Atlas_Height   : Positive := 1024)
+     (R               : in out Renderer;
+      Font_Path       : String;
+      Fallback_Paths  : Font_Path_Vectors.Vector;
+      Pixel_Size      : Positive := 16;
+      Cell_Width      : Positive := 10;
+      Cell_Height     : Positive := 20;
+      Atlas_Width     : Positive := 1024;
+      Atlas_Height    : Positive := 1024;
+      Record_Coverage : Boolean := True)
       return Guikit.Draw.Text_Render_Status
    is
       Status : Textrender.Status_Code;
@@ -87,7 +81,6 @@ package body Guikit.Text is
 
       if Font_Path = "" then
          Textrender.Reset (R.Backend);
-         Forget_Forms;
          return Guikit.Draw.Text_Render_Font_Load_Failed;
       end if;
 
@@ -101,7 +94,6 @@ package body Guikit.Text is
            Atlas_Width  => Atlas_Width,
            Atlas_Height => Atlas_Height);
       if Status /= Textrender.Success then
-         Forget_Forms;
          return Guikit.Draw.Text_Render_Font_Load_Failed;
       end if;
 
@@ -126,7 +118,9 @@ package body Guikit.Text is
       --  full sheet can simply be emptied rather than leave emoji out.
       Textrender.Set_Colour_Sheet_Eviction (R.Backend, Enabled => True);
 
-      Record_Forms (R);
+      if Record_Coverage then
+         Record_Forms (R);
+      end if;
       R.Is_Loaded    := True;
       R.Atlas_Version := New_Atlas_Version;
       R.Cell_Width   := Cell_Width;

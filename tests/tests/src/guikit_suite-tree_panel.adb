@@ -21,6 +21,8 @@ package body Guikit_Suite.Tree_Panel is
 
    procedure Test_Draw_Indent_Guides
      (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Short_List_Has_No_Empty_State
+     (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function Count_Guides
      (Rects : Guikit.Draw.Rectangle_Command_Vectors.Vector) return Natural
@@ -58,6 +60,9 @@ package body Guikit_Suite.Tree_Panel is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Draw_Indent_Guides'Access,
          "Draw_Frame emits indentation guides for nested tree rows");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Short_List_Has_No_Empty_State'Access,
+         "a list panel too short for one of its rows draws no row and no empty state");
    end Register_Tests;
 
    procedure Test_Draw_Indent_Guides
@@ -112,6 +117,71 @@ package body Guikit_Suite.Tree_Panel is
       Assert (Count_Texts (Texts) > 0,
               "tree panel must still emit row text");
    end Test_Draw_Indent_Guides;
+
+   --  A list with rows is not empty however little of it fits: a region
+   --  shorter than one row shows neither a row nor the empty-state message.
+   procedure Test_Short_List_Has_No_Empty_State
+     (T : in out AUnit.Test_Cases.Test_Case'Class)
+   is
+      pragma Unreferenced (T);
+      Rects : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Texts : Guikit.Draw.Text_Command_Vectors.Vector;
+      Rows  : Guikit.List_Panel.List_Panel_Row_Vectors.Vector;
+      Accessibility : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+      Config : constant Guikit.List_Panel.List_Panel_Configuration :=
+        (Title               => U.Null_Unbounded_String,
+         Empty_State         => To_Unbounded_String ("Nothing here"),
+         Line_Height         => 20,
+         Text_Padding        => 12,
+         Show_Alternate_Rows => False);
+
+      function Mentions (Value : String) return Boolean is
+      begin
+         for Command of Texts loop
+            if To_String (Command.Text) = Value then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Mentions;
+   begin
+      Rows.Append
+        (Guikit.List_Panel.List_Panel_Row'
+           (Label  => To_Unbounded_String ("Home"),
+            Detail => U.Null_Unbounded_String,
+            others => <>));
+      Guikit.List_Panel.Draw_Frame
+        (Rectangles    => Rects,
+         Text          => Texts,
+         Accessibility => Accessibility,
+         Clip_Width    => 400,
+         Clip_Height   => 80,
+         Region_X      => 0,
+         Region_Y      => 0,
+         Region_Width  => 200,
+         Region_Height => 10,
+         Config        => Config,
+         Rows          => Rows,
+         Draw_Chrome   => False);
+      Assert (not Mentions ("Nothing here"), "a list with rows shows no empty state, even with none fitting");
+      Assert (not Mentions ("Home"), "a row taller than the region is not drawn");
+
+      Texts.Clear;
+      Guikit.List_Panel.Draw_Frame
+        (Rectangles    => Rects,
+         Text          => Texts,
+         Accessibility => Accessibility,
+         Clip_Width    => 400,
+         Clip_Height   => 80,
+         Region_X      => 0,
+         Region_Y      => 0,
+         Region_Width  => 200,
+         Region_Height => 10,
+         Config        => Config,
+         Rows          => Guikit.List_Panel.List_Panel_Row_Vectors.Empty_Vector,
+         Draw_Chrome   => False);
+      Assert (Mentions ("Nothing here"), "an empty list shows its empty state");
+   end Test_Short_List_Has_No_Empty_State;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite :=

@@ -38,10 +38,14 @@ package Guikit.Text is
    --  Load the monospace primary font and append the fallback chain into the
    --  same shared atlas. A missing or unloadable fallback is non-fatal (the
    --  primary already renders and the remaining fallbacks still apply).
-   --  Records which Arabic presentation forms the fonts draw for
-   --  Can_Draw_Form -- or, when the load fails, that every form is drawn.
-   --  May be called from any task, though one renderer only from one at a
-   --  time.
+   --  When Record_Coverage, a successful load records which Arabic
+   --  presentation forms the fonts draw for Can_Draw_Form; a failed load
+   --  records nothing, so the last good answer stands. Only the renderer
+   --  that draws the application's laid-out text (the one its carets and
+   --  clicks must agree with) should record: a renderer kept for anything
+   --  else -- labels, previews -- passes False, so its fonts never change
+   --  how other text is laid out. May be called from any task, though one
+   --  renderer only from one at a time.
    --
    --  @param R Renderer to (re)initialize.
    --  @param Font_Path Monospace primary font path; "" fails.
@@ -51,25 +55,28 @@ package Guikit.Text is
    --  @param Cell_Height Monospace cell height (the text line height).
    --  @param Atlas_Width Glyph atlas width in pixels.
    --  @param Atlas_Height Glyph atlas height in pixels.
+   --  @param Record_Coverage Whether R is the primary renderer whose fonts'
+   --  presentation forms Can_Draw_Form answers for.
    --  @return The load status.
    function Initialize
-     (R              : in out Renderer;
-      Font_Path      : String;
-      Fallback_Paths : Font_Path_Vectors.Vector;
-      Pixel_Size     : Positive := 16;
-      Cell_Width     : Positive := 10;
-      Cell_Height    : Positive := 20;
-      Atlas_Width    : Positive := 1024;
-      Atlas_Height   : Positive := 1024)
+     (R               : in out Renderer;
+      Font_Path       : String;
+      Fallback_Paths  : Font_Path_Vectors.Vector;
+      Pixel_Size      : Positive := 16;
+      Cell_Width      : Positive := 10;
+      Cell_Height     : Positive := 20;
+      Atlas_Width     : Positive := 1024;
+      Atlas_Height    : Positive := 1024;
+      Record_Coverage : Boolean := True)
       return Guikit.Draw.Text_Render_Status;
 
-   --  Whether the fonts last loaded by Initialize, in any renderer, can draw
+   --  Whether the fonts last loaded successfully by an Initialize given
+   --  Record_Coverage -- the application's primary renderer -- can draw
    --  Codepoint, as far as Guikit.Bidi's Arabic shaping asks: for a
    --  presentation form (U+FB50 .. U+FDFF, U+FE70 .. U+FEFF) it answers what
    --  Build_Glyphs' own query answers for that renderer; for any other code
-   --  point, before any font loaded and after the last Initialize failed,
-   --  True. With several renderers it answers for the one whose Initialize
-   --  ran last.
+   --  point, and before any such load, True. A failed load, and a load by a
+   --  renderer not recording coverage, leave the answer as it was.
    --
    --  Build_Glyphs lays text out with its renderer's fonts, so a lam-alef
    --  pair the fonts have no ligature for is drawn as two letters.

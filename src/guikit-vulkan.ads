@@ -449,9 +449,13 @@ private
    --  region checks can index it after the mapped Vulkan memory is unmapped.
 
    --  What the atlas's descriptor binding names: nothing yet (Unwritten),
-   --  the texture's live view (Current), or a view since destroyed (Stale),
-   --  which the descriptor set must not be bound with.
-   type Atlas_Binding_State is (Binding_Unwritten, Binding_Current, Binding_Stale);
+   --  the texture's own live view (Current), the text atlas's live view
+   --  standing in for the icon atlas while the icon atlas has none
+   --  (Fallback; the icon binding only), or a view since destroyed (Stale),
+   --  which the descriptor set must not be bound with. Whenever the text
+   --  binding is Current the icon binding is Current or Fallback, so both
+   --  bindings name a live view and the set may be bound.
+   type Atlas_Binding_State is (Binding_Unwritten, Binding_Current, Binding_Fallback, Binding_Stale);
 
    --  A texture the shaders sample -- the text atlas or the icon atlas --
    --  and the host-visible staging buffer its pixels are copied through.

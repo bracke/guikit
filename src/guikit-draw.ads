@@ -182,6 +182,10 @@ package Guikit.Draw is
      (Index_Type   => Positive,
       Element_Type => Triangle_Command);
 
+   --  A run of text to draw in the box at X, Y, Width by Height, clipped to
+   --  it. A command with Width 0 draws nothing (Guikit.Text.Build_Glyphs
+   --  skips it): an application that draws some text itself still gives
+   --  the box its real width when Build_Glyphs is to draw it.
    type Text_Command is record
       X      : Natural := 0;
       Y      : Natural := 0;

@@ -16,5 +16,5 @@ begin
      (Guikit.Draw.Accessibility_Node'
         (Role => Guikit.Draw.Role_Dialog, X => Region_X, Y => Region_Y,
          Width => Region_Width, Height => Region_Height, Name => P.Config.Title, others => <>));
-   Add_Text (Content_X, Title_Y, Title_W, P.Config.Title, Guikit.Draw.Text_Color);
+   Add_Text (Content_X, G.Title_Y, G.Title_W, P.Config.Title, Guikit.Draw.Text_Color);
 end Draw_Chrome;

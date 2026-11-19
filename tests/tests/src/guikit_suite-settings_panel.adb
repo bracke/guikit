@@ -39,6 +39,7 @@ package body Guikit_Suite.Settings_Panel is
    procedure Test_Button_Layouts_Scale (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Wheel_Scroll_Sticks (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Disabled_Buttons (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Short_Panel_Draws_No_Rows (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function U (S : String) return Unbounded_String renames To_Unbounded_String;
 
@@ -122,6 +123,9 @@ package body Guikit_Suite.Settings_Panel is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Disabled_Buttons'Access,
          "a disabled button row draws muted and its buttons do not press");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Short_Panel_Draws_No_Rows'Access,
+         "a panel too short for a row draws none, and no row ever reaches past the panel's bottom");
    end Register_Tests;
 
    --  Two sections, one field each side, to exercise the section switcher.
@@ -1100,6 +1104,49 @@ package body Guikit_Suite.Settings_Panel is
          end;
       end loop;
    end Test_Close_Button_Drawn_Where_Hit;
+
+   --  Rows are drawn only where they fit: a panel with no room for one row
+   --  drew every row, spilling below its bottom edge.
+   procedure Test_Short_Panel_Draws_No_Rows (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      LH : constant := 20;
+
+      function Is_Field_Label (Name : Unbounded_String) return Boolean is
+      begin
+         for F of Sample loop
+            if F.Kind /= SP.Section and then F.Label = Name then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Is_Field_Label;
+   begin
+      for Height in 0 .. 8 * LH loop
+         declare
+            P      : SP.Panel;
+            Config : SP.Configuration;
+            Rects  : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+            Text   : Guikit.Draw.Text_Command_Vectors.Vector;
+            Nodes  : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+            Rows   : Natural := 0;
+         begin
+            Config.Line_Height := LH;
+            SP.Set_Configuration (P, Config);
+            SP.Set_Fields (P, Sample);
+            SP.Build_Frame (P, 0, 0, 500, Height, 500, 400, True, -1, -1, Rects, Text, Nodes);
+            for Node of Nodes loop
+               if Is_Field_Label (Node.Name) then
+                  Rows := Rows + 1;
+                  Assert (Node.Y + Node.Height <= Height,
+                          "a row is drawn inside a panel" & Height'Image & " pixels tall");
+               end if;
+            end loop;
+            if Height <= 2 * LH then
+               Assert (Rows = 0, "a panel" & Height'Image & " pixels tall, too short for a row, draws none");
+            end if;
+         end;
+      end loop;
+   end Test_Short_Panel_Draws_No_Rows;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

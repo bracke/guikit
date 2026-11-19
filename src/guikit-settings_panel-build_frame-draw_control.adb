@@ -9,9 +9,9 @@ begin
    case F.Kind is
       when Toggle =>
          declare
-            TW : constant Natural := Natural'Min (Ctrl_W, 2 * LH);
+            TW : constant Natural := Natural'Min (G.Ctrl_W, 2 * LH);
             TH : constant Natural := Ctrl_H;
-            TX : constant Natural := Ctrl_X + Ctrl_W - TW;
+            TX : constant Natural := G.Ctrl_X + G.Ctrl_W - TW;
             TY : constant Natural := Row_Y + (Row_H - TH) / 2;
          begin
             Guikit.Widgets.Draw_Toggle
@@ -27,7 +27,7 @@ begin
          declare
             Count : constant Natural := Natural (F.Option_Labels.Length);
          begin
-            if Count > 0 and then Ctrl_W > 0 then
+            if Count > 0 and then G.Ctrl_W > 0 then
                declare
                   --  Fill the field row (leaving a small margin) so
                   --  the choice buttons are comfortably tall.
@@ -50,8 +50,8 @@ begin
                   Room       : constant Natural :=
                     (if Content_W > Label_Need then Content_W - Label_Need else 0);
                   Row_W      : constant Natural :=
-                    (if Need > Ctrl_W then Natural'Min (Need, Natural'Max (Ctrl_W, Room))
-                     else Ctrl_W);
+                    (if Need > G.Ctrl_W then Natural'Min (Need, Natural'Max (G.Ctrl_W, Room))
+                     else G.Ctrl_W);
                   Row_X      : constant Natural := Content_X + Content_W - Row_W;
                begin
                   for J in 1 .. Count loop
@@ -87,16 +87,16 @@ begin
             Btn : constant Natural := LH;
             BH  : constant Natural := Ctrl_H;
             BY  : constant Natural := Row_Y + (Row_H - BH) / 2;
-            Val_X : constant Natural := Ctrl_X + Btn;
-            Val_W : constant Natural := (if Ctrl_W > 2 * Btn then Ctrl_W - 2 * Btn else 0);
-            Up_X  : constant Natural := Ctrl_X + Ctrl_W - Btn;
+            Val_X : constant Natural := G.Ctrl_X + Btn;
+            Val_W : constant Natural := (if G.Ctrl_W > 2 * Btn then G.Ctrl_W - 2 * Btn else 0);
+            Up_X  : constant Natural := G.Ctrl_X + G.Ctrl_W - Btn;
          begin
             Guikit.Widgets.Draw_Number_Stepper
               (Rectangles, Text, Clip_Width, Clip_Height, BY, BH, BY + (BH - LH) / 2, LH, Field_Inset,
-               Val_X, Val_W, F.Value, Ctrl_X, Up_X, Btn,
+               Val_X, Val_W, F.Value, G.Ctrl_X, Up_X, Btn,
                To_Unbounded_String ("-"), To_Unbounded_String ("+"),
                Guikit.Draw.Input_Color, Guikit.Draw.Border_Color, Guikit.Draw.Text_Color);
-            Add_Hit (Hit_Step_Down, I, 0, Ctrl_X, BY, Btn, BH);
+            Add_Hit (Hit_Step_Down, I, 0, G.Ctrl_X, BY, Btn, BH);
             Add_Hit (Hit_Step_Up, I, 0, Up_X, BY, Btn, BH);
          end;
 
@@ -105,7 +105,7 @@ begin
             TH      : constant Natural := Ctrl_H;
             TY      : constant Natural := Row_Y + (Row_H - TH) / 2;
             VY      : constant Natural := Row_Y + (Row_H - LH) / 2;
-            Text_W  : constant Natural := (if Ctrl_W > 2 * Field_Inset then Ctrl_W - 2 * Field_Inset else 0);
+            Text_W  : constant Natural := (if G.Ctrl_W > 2 * Field_Inset then G.Ctrl_W - 2 * Field_Inset else 0);
             Caret_W : constant Natural := Natural'Max (1, Cell_W / 6);
             Editing : constant Boolean := Focused and then I = P.Focused;
             Value   : constant String := To_String (F.Value);
@@ -117,14 +117,14 @@ begin
                else (others => 0));
          begin
             Guikit.Widgets.Draw_Input_Field
-              (Rectangles, Clip_Width, Clip_Height, Ctrl_X, TY, Ctrl_W, TH,
+              (Rectangles, Clip_Width, Clip_Height, G.Ctrl_X, TY, G.Ctrl_W, TH,
                Guikit.Draw.Input_Color, Guikit.Draw.Border_Color);
-            Add_Text (Ctrl_X + Field_Inset, VY, Text_W,
+            Add_Text (G.Ctrl_X + Field_Inset, VY, Text_W,
                       To_Unbounded_String (Value (Value'First + Field.Skip_Bytes .. Value'Last)),
                       Guikit.Draw.Text_Color);
             if Editing then
                Guikit.Widgets.Draw_Caret
-                 (Rectangles, Clip_Width, Clip_Height, Ctrl_X + Field_Inset + Field.Caret_X, VY,
+                 (Rectangles, Clip_Width, Clip_Height, G.Ctrl_X + Field_Inset + Field.Caret_X, VY,
                   Caret_W, LH, Guikit.Draw.Text_Color);
             end if;
          end;
@@ -141,14 +141,14 @@ begin
             TY      : constant Natural := Row_Y + (Row_H - TH) / 2;
             VY      : constant Natural := Row_Y + (Row_H - LH) / 2;
             Shown   : constant UString := (if Length (F.Display) > 0 then F.Display else F.Value);
-            Text_W  : constant Natural := (if Ctrl_W > 2 * Field_Inset then Ctrl_W - 2 * Field_Inset else 0);
+            Text_W  : constant Natural := (if G.Ctrl_W > 2 * Field_Inset then G.Ctrl_W - 2 * Field_Inset else 0);
             Caret_W : constant Natural := Natural'Max (1, Cell_W / 6);
          begin
             Guikit.Widgets.Draw_Input_Field
-              (Rectangles, Clip_Width, Clip_Height, Ctrl_X, TY, Ctrl_W, TH,
+              (Rectangles, Clip_Width, Clip_Height, G.Ctrl_X, TY, G.Ctrl_W, TH,
                Guikit.Draw.Input_Color,
                (if Armed then Guikit.Draw.Selection_Color else Guikit.Draw.Border_Color));
-            Add_Text (Ctrl_X + Field_Inset, VY, Text_W, Shown,
+            Add_Text (G.Ctrl_X + Field_Inset, VY, Text_W, Shown,
                       (if F.Enabled then Guikit.Draw.Text_Color
                        else Guikit.Draw.Disabled_Text_Color));
             if Armed then
@@ -157,7 +157,7 @@ begin
                --  inside the field.
                Guikit.Widgets.Draw_Caret
                  (Rectangles, Clip_Width, Clip_Height,
-                  Ctrl_X + Field_Inset
+                  G.Ctrl_X + Field_Inset
                   + Guikit.Text_Fields.Caret_X
                       (To_String (Shown), Length (Shown), Text_W, LH, Caret_W, Has_Glyph => Has_Glyph),
                   VY, Caret_W, LH, Guikit.Draw.Selection_Color);
@@ -168,11 +168,11 @@ begin
          declare
             Count : constant Natural := Natural (F.Option_Labels.Length);
          begin
-            if Count > 0 and then Ctrl_W > 0 then
+            if Count > 0 and then G.Ctrl_W > 0 then
                declare
                   --  A column too narrow even for the gaps leaves no width.
                   Even_W : constant Natural :=
-                    (if Ctrl_W > (Count - 1) * Button_Gap then (Ctrl_W - (Count - 1) * Button_Gap) / Count else 0);
+                    (if G.Ctrl_W > (Count - 1) * Button_Gap then (G.Ctrl_W - (Count - 1) * Button_Gap) / Count else 0);
                   BH : constant Natural := Ctrl_H;
                   BY : constant Natural := Row_Y + (Row_H - BH) / 2;
 
@@ -197,7 +197,7 @@ begin
                   Compact : constant Boolean :=
                     Length (F.Label) = 0 and then Total_W <= Content_W;
                   Next_X  : Natural :=
-                    (if Compact then Content_X + Content_W - Total_W else Ctrl_X);
+                    (if Compact then Content_X + Content_W - Total_W else G.Ctrl_X);
                begin
                   for J in 1 .. Count loop
                      declare

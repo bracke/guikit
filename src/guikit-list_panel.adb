@@ -271,7 +271,7 @@ package body Guikit.List_Panel is
       end if;
 
       Draw_Panel_And_Title (Rectangles, Text, Accessibility, G, Config, Draw_Chrome);
-      if Rows_To_Render = 0 then
+      if Rows.Is_Empty then
          Draw_Empty_State (Text, Accessibility, G, Config);
       end if;
       for I in 1 .. Rows_To_Render loop

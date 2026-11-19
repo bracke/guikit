@@ -105,37 +105,35 @@ is
          p_Image_Memory_Barriers     => To_Shader'Address);
    end Record_Texture_Upload;
 
-   --  Record the draw of the vertex buffer's first Vertex_Count vertices,
-   --  with the atlas descriptor set bound when its glyph binding names the
-   --  live text atlas and no binding names a destroyed texture (a failed
-   --  upload releases it).
+   --  Record the draw of the vertex buffer's first Vertex_Count vertices
+   --  with the atlas descriptor set bound. The set is bindable when its
+   --  glyph binding names the live text atlas: the icon binding then names
+   --  the live icon atlas or falls back to the text atlas (Atlas_Uploads).
+   --  Otherwise nothing is drawn, as the shaders cannot run without a set.
    procedure Record_Draw (Buffer : Vk.Command_Buffer_T) is
       Vertex_Buffers : aliased Buffer_Array_C (1 .. 1) := [1 => Renderer.Vertex_Buffer];
       Vertex_Offsets : aliased Buffer_Offset_Array_C (1 .. 1) := [1 => 0];
+      Sets           : aliased Descriptor_Set_Array_C (1 .. 1) := [1 => Renderer.Descriptor_Set];
    begin
+      if not Renderer.Descriptor_Live
+        or else not Renderer.Atlases (Text_Atlas).Texture_Live
+        or else Renderer.Atlases (Text_Atlas).Binding /= Binding_Current
+      then
+         return;
+      end if;
       Vk.Cmd_Bind_Pipeline
         (command_Buffer      => Buffer,
          pipeline_Bind_Point => Vk.PIPELINE_BIND_POINT_GRAPHICS,
          pipeline            => Renderer.Graphics_Pipeline);
-      if Renderer.Descriptor_Live
-        and then Renderer.Atlases (Text_Atlas).Texture_Live
-        and then Renderer.Atlases (Text_Atlas).Binding = Binding_Current
-        and then Renderer.Atlases (Icon_Atlas).Binding /= Binding_Stale
-      then
-         declare
-            Sets : aliased Descriptor_Set_Array_C (1 .. 1) := [1 => Renderer.Descriptor_Set];
-         begin
-            Vk.Cmd_Bind_Descriptor_Sets
-              (command_Buffer        => Buffer,
-               pipeline_Bind_Point   => Vk.PIPELINE_BIND_POINT_GRAPHICS,
-               layout                => Renderer.Pipeline_Layout,
-               first_Set             => 0,
-               descriptor_Set_Count  => 1,
-               p_Descriptor_Sets     => Sets'Address,
-               dynamic_Offset_Count  => 0,
-               p_Dynamic_Offsets     => System.Null_Address);
-         end;
-      end if;
+      Vk.Cmd_Bind_Descriptor_Sets
+        (command_Buffer        => Buffer,
+         pipeline_Bind_Point   => Vk.PIPELINE_BIND_POINT_GRAPHICS,
+         layout                => Renderer.Pipeline_Layout,
+         first_Set             => 0,
+         descriptor_Set_Count  => 1,
+         p_Descriptor_Sets     => Sets'Address,
+         dynamic_Offset_Count  => 0,
+         p_Dynamic_Offsets     => System.Null_Address);
       Vk.Cmd_Bind_Vertex_Buffers
         (command_Buffer => Buffer,
          first_Binding  => 0,

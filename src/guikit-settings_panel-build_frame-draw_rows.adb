@@ -8,14 +8,14 @@ begin
          F   : constant Field := P.Fields.Element (I);
          R   : constant Natural := VR - 1;
          Vis : constant Boolean :=
-           R >= P.Offset and then (P.Visible_Rows = 0 or else R < P.Offset + P.Visible_Rows);
+           R >= P.Offset and then R < P.Offset + P.Visible_Rows;
          --  Section rows sit below an extra gap that separates them from the
          --  preamble (the action buttons) above.
          Extra : constant Natural :=
            (if Preamble_Rows > 0 and then Preamble_Rows < Vis_N and then VR > Preamble_Rows
-            then Group_Gap else 0);
+            then G.Group_Gap else 0);
          --  Rows scrolled above the view are not drawn; their Y is never read.
-         Row_Y : constant Natural := (if R >= P.Offset then Rows_Top + (R - P.Offset) * Row_H + Extra else 0);
+         Row_Y : constant Natural := (if R >= P.Offset then G.Rows_Top + (R - P.Offset) * Row_H + Extra else 0);
          Mid_Y : constant Natural := Row_Y + (Row_H - LH) / 2;
          --  A toggle occupies only the far-right end of the shared value
          --  column. Let its label use the otherwise blank space up to that
@@ -24,17 +24,17 @@ begin
          Field_Label_W : constant Natural :=
            (if F.Kind = Toggle and then Content_W > 2 * LH + Pad
             then Content_W - 2 * LH - Pad
-            else Label_W);
+            else G.Label_W);
       begin
          exit when not Vis and then R >= P.Offset + P.Visible_Rows;
          if Vis then
             if I = P.Focused then
-               Add_Rect (Hl_X, Row_Y, Hl_W, Row_H, Guikit.Draw.Hover_Color);
-               Add_Rect (Accent_X, Row_Y, Accent_W, Row_H, Guikit.Draw.Selection_Color);
+               Add_Rect (G.Hl_X, Row_Y, G.Hl_W, Row_H, Guikit.Draw.Hover_Color);
+               Add_Rect (G.Accent_X, Row_Y, G.Accent_W, Row_H, Guikit.Draw.Selection_Color);
                if Focused then
                   Guikit.Widgets.Draw_Focus_Ring
-                    (Rectangles, Clip_Width, Clip_Height, Hl_X, Row_Y,
-                     Hl_W, Row_H, Guikit.Draw.Selection_Color);
+                    (Rectangles, Clip_Width, Clip_Height, G.Hl_X, Row_Y,
+                     G.Hl_W, Row_H, Guikit.Draw.Selection_Color);
                end if;
             end if;
 

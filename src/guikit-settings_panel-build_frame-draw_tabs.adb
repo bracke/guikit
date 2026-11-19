@@ -8,10 +8,10 @@ begin
          First_Ord : Positive := 1;
          Last_Ord  : Positive;
       begin
-         for Tab_Row in 0 .. Tab_Rows - 1 loop
-            Last_Ord := First_Ord + Row_Size (Tab_Row, Tab_Rows) - 1;
+         for Tab_Row in 0 .. G.Tab_Rows - 1 loop
+            Last_Ord := First_Ord + Row_Size (Tab_Row, G.Tab_Rows) - 1;
             declare
-               Row_Y     : constant Natural := Switch_Y + Tab_Row * Row_H;
+               Row_Y     : constant Natural := G.Switch_Y + Tab_Row * Row_H;
                Segs      : Guikit.Segmented.Segment_Vectors.Vector;
                S_Rects   : Guikit.Draw.Rectangle_Command_Vectors.Vector;
                S_Text    : Guikit.Draw.Text_Command_Vectors.Vector;

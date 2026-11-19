@@ -103,10 +103,10 @@ is
       elsif Batch.Icon_Atlas_Dirty
         and then not Upload_Icon_Atlas (Renderer, Batch)
       then
-         --  Populate the icon descriptor (binding 1) whenever icons are
-         --  present, not only when text shares the frame: icon quads
-         --  always sample binding 1, so an icon-only frame would
-         --  otherwise read an unwritten descriptor (garbage icons).
+         --  Upload the icon atlas (binding 1) whenever the batch's icons
+         --  changed, not only when text shares the frame. Until then, and
+         --  after a failed upload, binding 1 falls back to the text atlas
+         --  (Atlas_Uploads), so the set never names a destroyed view.
          Renderer.Last_Status := Vulkan_Atlas_Texture_Create_Failed;
       elsif Renderer.Readback_Enabled
         and then not Ensure_Readback_Buffer

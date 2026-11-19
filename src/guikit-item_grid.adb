@@ -8,14 +8,17 @@ package body Guikit.Item_Grid is
 
    Details_Row_Gap : constant Natural := 0;
 
+   --  Saturating pixel arithmetic: coordinates never wrap or go negative.
+   function Add (L, R : Natural) return Natural renames Guikit.Layout.Saturating_Add;
+   function Mul (V, F : Natural) return Natural renames Guikit.Layout.Saturating_Multiply;
+   function Sub (Left, Right : Natural) return Natural is (if Left > Right then Left - Right else 0);
+
    function Cell_Metrics_For
      (View        : View_Kind;
       Main_Width  : Natural;
       Line_Height : Positive)
       return Cell_Metrics
    is
-      function Mul (Value, Factor : Natural) return Natural renames Guikit.Layout.Saturating_Multiply;
-      function Add (Left, Right : Natural) return Natural renames Guikit.Layout.Saturating_Add;
    begin
       case View is
          when Icons_Small =>
@@ -38,10 +41,6 @@ package body Guikit.Item_Grid is
                Large     => False);
       end case;
    end Cell_Metrics_For;
-
-   function Add (L, R : Natural) return Natural renames Guikit.Layout.Saturating_Add;
-   function Mul (V, F : Natural) return Natural renames Guikit.Layout.Saturating_Multiply;
-   function Sub (Left, Right : Natural) return Natural is (if Left > Right then Left - Right else 0);
 
    --  The area items are laid out in, and how far it is scrolled.
    type Viewport is record
@@ -390,8 +389,6 @@ package body Guikit.Item_Grid is
       Field_W     : out Natural;
       Line_Height : Positive := Guikit.Layout.Reference_Line_Height)
    is
-      function Add (L, R : Natural) return Natural renames Guikit.Layout.Saturating_Add;
-      function Mul (V, F : Natural) return Natural renames Guikit.Layout.Saturating_Multiply;
       Wide : constant Boolean := Renaming and then View = Icons_Large;
       Pad  : constant Natural := Natural'Min (Content_Padding (Line_Height), Cell.Width / 2);
    begin
@@ -422,8 +419,6 @@ package body Guikit.Item_Grid is
       Caret_Color      : Guikit.Draw.Render_Color;
       Has_Glyph        : access function (Codepoint : Natural) return Boolean := null)
    is
-      function Add (L, R : Natural) return Natural renames Guikit.Layout.Saturating_Add;
-      function Mul (V, F : Natural) return Natural renames Guikit.Layout.Saturating_Multiply;
       Pad_F   : constant Natural := Guikit.Layout.Scaled (Guikit.Layout.Input_Field_Padding, Line_Height);
       Field_X : Natural;
       Field_W : Natural;
@@ -665,7 +660,6 @@ package body Guikit.Item_Grid is
       Has_Label     : Boolean;
       Label_Color   : Guikit.Draw.Render_Color)
    is
-      function Add (L, R : Natural) return Natural renames Guikit.Layout.Saturating_Add;
    begin
       if Favorite and then Cell.Icon_Size > 0 then
          declare

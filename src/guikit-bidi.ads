@@ -114,9 +114,9 @@ package Guikit.Bidi is
 
    --  Record which presentation forms the text is drawn with, for
    --  Can_Draw_Form and so for every layout given no Has_Glyph.
-   --  Guikit.Text.Initialize records its renderer's fonts here when they
-   --  load, and every form as drawable when a load fails. It may be called
-   --  from any task.
+   --  Guikit.Text.Initialize records the primary renderer's fonts here when
+   --  they load (its Record_Coverage); a failed load records nothing. It may
+   --  be called from any task.
    --
    --  @param Coverage Whether each presentation form is drawn; entries for
    --  code points that are not forms are ignored.
@@ -125,8 +125,8 @@ package Guikit.Bidi is
    --  Whether the fonts last recorded (Set_Drawable_Forms) draw Codepoint:
    --  for a presentation form, what those fonts answer; for any other code
    --  point, and before anything was recorded, True. With several text
-   --  renderers it answers for the one whose Initialize ran last. It may be
-   --  called from any task.
+   --  renderers it answers for the primary one (Guikit.Text.Initialize's
+   --  Record_Coverage). It may be called from any task.
    --
    --  @param Codepoint A Unicode code point.
    --  @return Whether the recorded fonts draw it, for a presentation form.

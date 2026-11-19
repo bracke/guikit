@@ -4,6 +4,61 @@ package body Atlas_Uploads is
    --  The descriptor binding each atlas is sampled through.
    Binding : constant array (Atlas_Kind) of Interfaces.Unsigned_32 := [Text_Atlas => 0, Icon_Atlas => 1];
 
+   --  Point descriptor binding Target at the view and sampler of atlas
+   --  Source's texture.
+   procedure Write_Binding (Renderer : Vulkan_Renderer; Target : Atlas_Kind; Source : Atlas_Kind) is
+      Image_Info : aliased Vk.Descriptor_Image_Info_T :=
+        (sampler      => Renderer.Atlases (Source).Sampler,
+         image_View   => Renderer.Atlases (Source).View,
+         image_Layout => Vk.IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+      Write : aliased Vk.Write_Descriptor_Set_T :=
+        (s_Type                => Vk.STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+         p_Next                => System.Null_Address,
+         dst_Set               => Renderer.Descriptor_Set,
+         dst_Binding           => Binding (Target),
+         dst_Array_Element     => 0,
+         descriptor_Count      => 1,
+         descriptor_Type       => Vk.DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+         p_Image_Info          => Image_Info'Address,
+         p_Buffer_Info         => System.Null_Address,
+         p_Texel_Buffer_View   => System.Null_Address);
+   begin
+      Vk.Update_Descriptor_Sets
+        (device                 => Renderer.Device,
+         descriptor_Write_Count => 1,
+         p_Descriptor_Writes    => Write'Address,
+         descriptor_Copy_Count  => 0,
+         p_Descriptor_Copies    => System.Null_Address);
+   end Write_Binding;
+
+   --  Point the icon binding at the text atlas's live view while the icon
+   --  atlas has no current binding of its own, so both bindings name a live
+   --  view; nothing when the text binding is not current.
+   procedure Fall_Back_Icon_Binding (Renderer : in out Vulkan_Renderer) is
+      Text : Atlas_Texture renames Renderer.Atlases (Text_Atlas);
+      Icon : Atlas_Texture renames Renderer.Atlases (Icon_Atlas);
+   begin
+      if Renderer.Descriptor_Live
+        and then Text.Texture_Live
+        and then Text.Binding = Binding_Current
+        and then Icon.Binding /= Binding_Current
+      then
+         Write_Binding (Renderer, Target => Icon_Atlas, Source => Text_Atlas);
+         Icon.Binding := Binding_Fallback;
+      end if;
+   end Fall_Back_Icon_Binding;
+
+   --  Point the atlas's descriptor binding at its texture; binding the text
+   --  atlas also refreshes an icon binding that falls back to it.
+   procedure Bind_Descriptor (Renderer : in out Vulkan_Renderer; Kind : Atlas_Kind) is
+   begin
+      Write_Binding (Renderer, Target => Kind, Source => Kind);
+      Renderer.Atlases (Kind).Binding := Binding_Current;
+      if Kind = Text_Atlas then
+         Fall_Back_Icon_Binding (Renderer);
+      end if;
+   end Bind_Descriptor;
+
    procedure Release_Texture (Renderer : in out Vulkan_Renderer; Kind : Atlas_Kind) is
       Texture : Atlas_Texture renames Renderer.Atlases (Kind);
    begin
@@ -17,6 +72,14 @@ package body Atlas_Uploads is
       if Texture.Binding = Binding_Current then
          Texture.Binding := Binding_Stale;
       end if;
+      case Kind is
+         when Text_Atlas =>
+            if Renderer.Atlases (Icon_Atlas).Binding = Binding_Fallback then
+               Renderer.Atlases (Icon_Atlas).Binding := Binding_Stale;
+            end if;
+         when Icon_Atlas =>
+            Fall_Back_Icon_Binding (Renderer);
+      end case;
    end Release_Texture;
 
    procedure Release_Staging (Renderer : in out Vulkan_Renderer; Kind : Atlas_Kind) is
@@ -340,33 +403,6 @@ package body Atlas_Uploads is
       Vk.Unmap_Memory (Renderer.Device, Memory);
       return True;
    end Copy_To_Staging;
-
-   --  Point the atlas's descriptor binding at its texture.
-   procedure Bind_Descriptor (Renderer : in out Vulkan_Renderer; Kind : Atlas_Kind) is
-      Image_Info : aliased Vk.Descriptor_Image_Info_T :=
-        (sampler      => Renderer.Atlases (Kind).Sampler,
-         image_View   => Renderer.Atlases (Kind).View,
-         image_Layout => Vk.IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-      Write : aliased Vk.Write_Descriptor_Set_T :=
-        (s_Type                => Vk.STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-         p_Next                => System.Null_Address,
-         dst_Set               => Renderer.Descriptor_Set,
-         dst_Binding           => Binding (Kind),
-         dst_Array_Element     => 0,
-         descriptor_Count      => 1,
-         descriptor_Type       => Vk.DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-         p_Image_Info          => Image_Info'Address,
-         p_Buffer_Info         => System.Null_Address,
-         p_Texel_Buffer_View   => System.Null_Address);
-   begin
-      Vk.Update_Descriptor_Sets
-        (device                 => Renderer.Device,
-         descriptor_Write_Count => 1,
-         p_Descriptor_Writes    => Write'Address,
-         descriptor_Copy_Count  => 0,
-         p_Descriptor_Copies    => System.Null_Address);
-      Renderer.Atlases (Kind).Binding := Binding_Current;
-   end Bind_Descriptor;
 
    function Upload
      (Renderer : in out Vulkan_Renderer;

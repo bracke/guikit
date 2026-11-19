@@ -6,7 +6,7 @@ procedure Draw_Switch_Tooltip is
 begin
    if Tab_Count > 1 and then Length (P.Config.Switch_Tooltip) > 0
      and then Hover_X >= Content_X and then Hover_X < Content_X + Content_W
-     and then Hover_Y >= Switch_Y and then Hover_Y < Switch_Y + Switch_H
+     and then Hover_Y >= G.Switch_Y and then Hover_Y < G.Switch_Y + G.Switch_H
    then
       declare
          Tip_Pad : constant Natural := Guikit.Layout.Scaled (6, LH);
@@ -19,13 +19,13 @@ begin
            (if Clip_Width > Tip_W then Natural'Min (Natural'Max (Hover_X, 0), Clip_Width - Tip_W) else 0);
          Below_Switch : constant Natural :=
            Guikit.Layout.Saturating_Add
-             (Guikit.Layout.Saturating_Add (Switch_Y, Switch_H), Tip_Gap);
+             (Guikit.Layout.Saturating_Add (G.Switch_Y, G.Switch_H), Tip_Gap);
          Tip_Y   : constant Natural :=
            (if Below_Switch <= Clip_Height
               and then Tip_H <= Clip_Height - Below_Switch
             then Below_Switch
-            elsif Switch_Y >= Tip_H + Tip_Gap
-            then Switch_Y - Tip_H - Tip_Gap
+            elsif G.Switch_Y >= Tip_H + Tip_Gap
+            then G.Switch_Y - Tip_H - Tip_Gap
             else 0);
       begin
          Guikit.Widgets.Draw_Tooltip

@@ -156,6 +156,9 @@ package body Guikit.Bidi is
 
       function Draws (Codepoint : Form_Codepoint) return Boolean;
 
+      --  The whole coverage recorded now, read at once.
+      function Current return Form_Coverage;
+
    private
       Known : Form_Coverage := [others => True];
    end Drawable_Forms;
@@ -168,6 +171,8 @@ package body Guikit.Bidi is
       end Set;
 
       function Draws (Codepoint : Form_Codepoint) return Boolean is (Known (Codepoint));
+
+      function Current return Form_Coverage is (Known);
 
    end Drawable_Forms;
 
@@ -206,9 +211,14 @@ package body Guikit.Bidi is
          Levels  : Level_Array (1 .. Count);
          Para    : Natural;
          Result  : Line;
+         --  The recorded coverage, read once so a font reload partway
+         --  through cannot lay one line out with two fonts' answers.
+         Forms   : constant Form_Coverage :=
+           (if Has_Glyph = null then Drawable_Forms.Current else [others => True]);
 
          function Drawable (Codepoint : Natural) return Boolean is
-           (if Has_Glyph = null then Can_Draw_Form (Codepoint) else Has_Glyph (Codepoint));
+           (if Has_Glyph /= null then Has_Glyph (Codepoint)
+            else not Is_Presentation_Form (Codepoint) or else Forms (Codepoint));
       begin
          declare
             Index : Integer := Content'First;
