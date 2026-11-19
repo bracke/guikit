@@ -76,7 +76,10 @@ package body Guikit.Mirroring is
    begin
       for Item of Items loop
          Reflect (Item.X, Item.Width, Width);
-         if Item.Mirror_Glyph then
+         if Item.Width = 0 then
+            --  Wholly past the frame: nothing of it shows, mirrored or not.
+            Item.Text := Null_Unbounded_String;
+         elsif Item.Mirror_Glyph then
             Item.Text := Mirrored_Glyph (Item.Text);
          end if;
          if not Item.Scale_To_Box then

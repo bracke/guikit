@@ -106,7 +106,9 @@ is
    end Record_Texture_Upload;
 
    --  Record the draw of the vertex buffer's first Vertex_Count vertices,
-   --  with the atlas descriptor set bound when there is one.
+   --  with the atlas descriptor set bound when its glyph binding names the
+   --  live text atlas and no binding names a destroyed texture (a failed
+   --  upload releases it).
    procedure Record_Draw (Buffer : Vk.Command_Buffer_T) is
       Vertex_Buffers : aliased Buffer_Array_C (1 .. 1) := [1 => Renderer.Vertex_Buffer];
       Vertex_Offsets : aliased Buffer_Offset_Array_C (1 .. 1) := [1 => 0];
@@ -115,7 +117,11 @@ is
         (command_Buffer      => Buffer,
          pipeline_Bind_Point => Vk.PIPELINE_BIND_POINT_GRAPHICS,
          pipeline            => Renderer.Graphics_Pipeline);
-      if Renderer.Descriptor_Live and then Renderer.Atlases (Text_Atlas).Texture_Live then
+      if Renderer.Descriptor_Live
+        and then Renderer.Atlases (Text_Atlas).Texture_Live
+        and then Renderer.Atlases (Text_Atlas).Binding = Binding_Current
+        and then Renderer.Atlases (Icon_Atlas).Binding /= Binding_Stale
+      then
          declare
             Sets : aliased Descriptor_Set_Array_C (1 .. 1) := [1 => Renderer.Descriptor_Set];
          begin

@@ -189,8 +189,9 @@ package Guikit.Command_Palette is
    --  @param Icons Out: icon commands.
    --  @param Accessibility Out: accessibility nodes for the palette elements.
    --  @param Has_Glyph Whether the fonts the text is drawn with draw a code
-   --  point (Guikit.Text.Can_Draw_Form), so a field's caret stands where the
-   --  drawn text has it (Guikit.Text_Fields); null assumes they do.
+   --  point, so a field's caret stands where the drawn text has it
+   --  (Guikit.Text_Fields); null asks Guikit.Bidi.Can_Draw_Form, which
+   --  answers for the fonts Guikit.Text draws with.
    procedure Build_Frame
      (P             : in out Palette;
       Region_X      : Natural;

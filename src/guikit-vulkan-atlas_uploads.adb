@@ -13,6 +13,10 @@ package body Atlas_Uploads is
       Free_Memory (Renderer.Device, Texture.Memory);
       Texture.Texture_Live := False;
       Texture.Initialized := False;
+      Texture.Upload_Pending := False;
+      if Texture.Binding = Binding_Current then
+         Texture.Binding := Binding_Stale;
+      end if;
    end Release_Texture;
 
    procedure Release_Staging (Renderer : in out Vulkan_Renderer; Kind : Atlas_Kind) is
@@ -24,26 +28,28 @@ package body Atlas_Uploads is
       Texture.Staging_Capacity := 0;
    end Release_Staging;
 
-   --  Make the atlas's image, its memory, view and sampler Width by Height
-   --  in Format. The glyph atlas's one byte per pixel is read in every
-   --  channel; the icon atlas's channels are read as they are. False, with
-   --  nothing left behind, when any of them cannot be made.
-   function Create_Texture
-     (Renderer : in out Vulkan_Renderer;
-      Kind     : Atlas_Kind;
+   --  The Vulkan format an atlas texture is made in: the icon atlas's
+   --  RGBA pixels in sRGB, a coverage byte per pixel otherwise.
+   function Vulkan_Format_Of (Format : Atlas_Texture_Format) return Vk.Format_T is
+     (if Format = Atlas_Texture_RGBA8 then Format_R8G8B8A8_Srgb else Vk.FORMAT_R8_UNORM);
+
+   --  Make a Width by Height image in Format, and device memory bound to
+   --  it. False, with neither left behind, when either cannot be made.
+   function Create_Image
+     (Renderer : Vulkan_Renderer;
       Width    : Positive;
       Height   : Positive;
-      Format   : Atlas_Texture_Format)
+      Format   : Vk.Format_T;
+      Image    : out Vk.Image_T;
+      Memory   : out Vk.Device_Memory_T)
       return Boolean
    is
-      Vulkan_Format : constant Vk.Format_T :=
-        (if Format = Atlas_Texture_RGBA8 then Format_R8G8B8A8_Srgb else Vk.FORMAT_R8_UNORM);
       Image_Info : aliased Vk.Image_Create_Info_T :=
         (s_Type                   => Vk.STRUCTURE_TYPE_IMAGE_CREATE_INFO,
          p_Next                   => System.Null_Address,
          flags                    => 0,
          image_Type               => Vk.IMAGE_TYPE_2D,
-         format                   => Vulkan_Format,
+         format                   => Format,
          extent                   =>
            (width  => Interfaces.Unsigned_32 (Width),
             height => Interfaces.Unsigned_32 (Height),
@@ -62,9 +68,95 @@ package body Atlas_Uploads is
       Memory_Type   : Interfaces.Unsigned_32 := 0;
       Allocate_Info : aliased Vk.Memory_Allocate_Info_T;
       Memory_Handle : aliased Vk.Device_Memory_T := System.Null_Address;
-      View_Info     : aliased Vk.Image_View_Create_Info_T;
-      View_Handle   : aliased Vk.Image_View_T := System.Null_Address;
-      Sampler_Info  : aliased Vk.Sampler_Create_Info_T :=
+      Result        : Vk.Result_T;
+   begin
+      Image := System.Null_Address;
+      Memory := System.Null_Address;
+      Result :=
+        Vk.Create_Image
+          (device        => Renderer.Device,
+           p_Create_Info => Image_Info'Address,
+           p_Allocator   => System.Null_Address,
+           p_Image       => Image_Handle'Address);
+      if Result /= Vk.SUCCESS or else Image_Handle = System.Null_Address then
+         return False;
+      end if;
+
+      Vk.Get_Image_Memory_Requirements (Renderer.Device, Image_Handle, Requirements'Address);
+      if not Any_Memory_Type (Renderer, Requirements.memory_Type_Bits, Memory_Type) then
+         Destroy_Image (Renderer.Device, Image_Handle);
+         return False;
+      end if;
+
+      Allocate_Info :=
+        (s_Type            => Vk.STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+         p_Next            => System.Null_Address,
+         allocation_Size   => Requirements.size,
+         memory_Type_Index => Memory_Type);
+      Result :=
+        Vk.Allocate_Memory
+          (device          => Renderer.Device,
+           p_Allocate_Info => Allocate_Info'Address,
+           p_Allocator     => System.Null_Address,
+           p_Memory        => Memory_Handle'Address);
+      if Result /= Vk.SUCCESS or else Memory_Handle = System.Null_Address
+        or else Vk.Bind_Image_Memory (Renderer.Device, Image_Handle, Memory_Handle, 0) /= Vk.SUCCESS
+      then
+         Free_Memory (Renderer.Device, Memory_Handle);
+         Destroy_Image (Renderer.Device, Image_Handle);
+         return False;
+      end if;
+
+      Image := Image_Handle;
+      Memory := Memory_Handle;
+      return True;
+   end Create_Image;
+
+   --  Make a view of Image in Format. The glyph atlas's one byte per pixel
+   --  is read in every channel; the icon atlas's channels are read as they
+   --  are. Null when it cannot be made.
+   function Create_View
+     (Renderer : Vulkan_Renderer;
+      Kind     : Atlas_Kind;
+      Image    : Vk.Image_T;
+      Format   : Vk.Format_T)
+      return Vk.Image_View_T
+   is
+      Channel     : constant array (1 .. 4) of Vk.Component_Swizzle_T :=
+        (if Kind = Text_Atlas
+         then [others => Vk.COMPONENT_SWIZZLE_R]
+         else [Vk.COMPONENT_SWIZZLE_R, Vk.COMPONENT_SWIZZLE_G, Vk.COMPONENT_SWIZZLE_B, Vk.COMPONENT_SWIZZLE_A]);
+      View_Info   : aliased Vk.Image_View_Create_Info_T :=
+        (s_Type            => Vk.STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+         p_Next            => System.Null_Address,
+         flags             => 0,
+         image             => Image,
+         view_Type         => Vk.IMAGE_VIEW_TYPE_2D,
+         format            => Format,
+         components        => (r => Channel (1), g => Channel (2), b => Channel (3), a => Channel (4)),
+         subresource_Range =>
+           (aspect_Mask      => Vk.IMAGE_ASPECT_COLOR_BIT,
+            base_Mip_Level   => 0,
+            level_Count      => 1,
+            base_Array_Layer => 0,
+            layer_Count      => 1));
+      View_Handle : aliased Vk.Image_View_T := System.Null_Address;
+   begin
+      if Vk.Create_Image_View
+           (device        => Renderer.Device,
+            p_Create_Info => View_Info'Address,
+            p_Allocator   => System.Null_Address,
+            p_View        => View_Handle'Address) /= Vk.SUCCESS
+      then
+         return System.Null_Address;
+      end if;
+      return View_Handle;
+   end Create_View;
+
+   --  Make the nearest-neighbour, edge-clamped sampler the atlases are read
+   --  through. Null when it cannot be made.
+   function Create_Sampler (Renderer : Vulkan_Renderer) return Vk.Sampler_T is
+      Sampler_Info   : aliased Vk.Sampler_Create_Info_T :=
         (s_Type                   => Vk.STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
          p_Next                   => System.Null_Address,
          flags                    => 0,
@@ -84,87 +176,47 @@ package body Atlas_Uploads is
          border_Color             => Vk.BORDER_COLOR_FLOAT_TRANSPARENT_BLACK,
          unnormalized_Coordinates => 0);
       Sampler_Handle : aliased Vk.Sampler_T := System.Null_Address;
-      Channel        : constant array (1 .. 4) of Vk.Component_Swizzle_T :=
-        (if Kind = Text_Atlas
-         then [others => Vk.COMPONENT_SWIZZLE_R]
-         else [Vk.COMPONENT_SWIZZLE_R, Vk.COMPONENT_SWIZZLE_G, Vk.COMPONENT_SWIZZLE_B, Vk.COMPONENT_SWIZZLE_A]);
-      Result         : Vk.Result_T;
+   begin
+      if Vk.Create_Sampler
+           (device        => Renderer.Device,
+            p_Create_Info => Sampler_Info'Address,
+            p_Allocator   => System.Null_Address,
+            p_Sampler     => Sampler_Handle'Address) /= Vk.SUCCESS
+      then
+         return System.Null_Address;
+      end if;
+      return Sampler_Handle;
+   end Create_Sampler;
 
-      --  Undo what was made so far.
-      procedure Discard is
-      begin
+   --  Make the atlas's image, its memory, view and sampler Width by Height
+   --  in Format. False, with nothing left behind, when any of them cannot be
+   --  made.
+   function Create_Texture
+     (Renderer : in out Vulkan_Renderer;
+      Kind     : Atlas_Kind;
+      Width    : Positive;
+      Height   : Positive;
+      Format   : Atlas_Texture_Format)
+      return Boolean
+   is
+      Vulkan_Format  : constant Vk.Format_T := Vulkan_Format_Of (Format);
+      Image_Handle   : Vk.Image_T;
+      Memory_Handle  : Vk.Device_Memory_T;
+      View_Handle    : Vk.Image_View_T := System.Null_Address;
+      Sampler_Handle : Vk.Sampler_T := System.Null_Address;
+   begin
+      if not Create_Image (Renderer, Width, Height, Vulkan_Format, Image_Handle, Memory_Handle) then
+         return False;
+      end if;
+      View_Handle := Create_View (Renderer, Kind, Image_Handle, Vulkan_Format);
+      if View_Handle /= System.Null_Address then
+         Sampler_Handle := Create_Sampler (Renderer);
+      end if;
+      if Sampler_Handle = System.Null_Address then
+         --  Undo what was made.
          Destroy_Image_View (Renderer.Device, View_Handle);
          Free_Memory (Renderer.Device, Memory_Handle);
          Destroy_Image (Renderer.Device, Image_Handle);
-      end Discard;
-   begin
-      Result :=
-        Vk.Create_Image
-          (device        => Renderer.Device,
-           p_Create_Info => Image_Info'Address,
-           p_Allocator   => System.Null_Address,
-           p_Image       => Image_Handle'Address);
-      if Result /= Vk.SUCCESS or else Image_Handle = System.Null_Address then
-         return False;
-      end if;
-
-      Vk.Get_Image_Memory_Requirements (Renderer.Device, Image_Handle, Requirements'Address);
-      if not Any_Memory_Type (Renderer, Requirements.memory_Type_Bits, Memory_Type) then
-         Discard;
-         return False;
-      end if;
-
-      Allocate_Info :=
-        (s_Type            => Vk.STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-         p_Next            => System.Null_Address,
-         allocation_Size   => Requirements.size,
-         memory_Type_Index => Memory_Type);
-      Result :=
-        Vk.Allocate_Memory
-          (device          => Renderer.Device,
-           p_Allocate_Info => Allocate_Info'Address,
-           p_Allocator     => System.Null_Address,
-           p_Memory        => Memory_Handle'Address);
-      if Result /= Vk.SUCCESS or else Memory_Handle = System.Null_Address
-        or else Vk.Bind_Image_Memory (Renderer.Device, Image_Handle, Memory_Handle, 0) /= Vk.SUCCESS
-      then
-         Discard;
-         return False;
-      end if;
-
-      View_Info :=
-        (s_Type            => Vk.STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-         p_Next            => System.Null_Address,
-         flags             => 0,
-         image             => Image_Handle,
-         view_Type         => Vk.IMAGE_VIEW_TYPE_2D,
-         format            => Vulkan_Format,
-         components        => (r => Channel (1), g => Channel (2), b => Channel (3), a => Channel (4)),
-         subresource_Range =>
-           (aspect_Mask      => Vk.IMAGE_ASPECT_COLOR_BIT,
-            base_Mip_Level   => 0,
-            level_Count      => 1,
-            base_Array_Layer => 0,
-            layer_Count      => 1));
-      Result :=
-        Vk.Create_Image_View
-          (device        => Renderer.Device,
-           p_Create_Info => View_Info'Address,
-           p_Allocator   => System.Null_Address,
-           p_View        => View_Handle'Address);
-      if Result /= Vk.SUCCESS or else View_Handle = System.Null_Address then
-         Discard;
-         return False;
-      end if;
-
-      Result :=
-        Vk.Create_Sampler
-          (device        => Renderer.Device,
-           p_Create_Info => Sampler_Info'Address,
-           p_Allocator   => System.Null_Address,
-           p_Sampler     => Sampler_Handle'Address);
-      if Result /= Vk.SUCCESS or else Sampler_Handle = System.Null_Address then
-         Discard;
          return False;
       end if;
 
@@ -290,7 +342,7 @@ package body Atlas_Uploads is
    end Copy_To_Staging;
 
    --  Point the atlas's descriptor binding at its texture.
-   procedure Bind_Descriptor (Renderer : Vulkan_Renderer; Kind : Atlas_Kind) is
+   procedure Bind_Descriptor (Renderer : in out Vulkan_Renderer; Kind : Atlas_Kind) is
       Image_Info : aliased Vk.Descriptor_Image_Info_T :=
         (sampler      => Renderer.Atlases (Kind).Sampler,
          image_View   => Renderer.Atlases (Kind).View,
@@ -313,6 +365,7 @@ package body Atlas_Uploads is
          p_Descriptor_Writes    => Write'Address,
          descriptor_Copy_Count  => 0,
          p_Descriptor_Copies    => System.Null_Address);
+      Renderer.Atlases (Kind).Binding := Binding_Current;
    end Bind_Descriptor;
 
    function Upload
@@ -341,11 +394,13 @@ package body Atlas_Uploads is
       if not Texture.Staging_Live or else Texture.Staging_Capacity < Bytes then
          Release_Staging (Renderer, Kind);
          if not Create_Staging (Renderer, Kind, Bytes) then
+            Release_Texture (Renderer, Kind);
             return False;
          end if;
       end if;
 
       if not Copy_To_Staging (Renderer, Kind, Bytes, Fill) then
+         Release_Texture (Renderer, Kind);
          return False;
       end if;
       Bind_Descriptor (Renderer, Kind);

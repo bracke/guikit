@@ -149,6 +149,36 @@ package body Guikit.Bidi is
       return False;
    end Needs_Layout;
 
+   --  Which presentation forms the text is drawn with (Can_Draw_Form).
+   protected Drawable_Forms is
+
+      procedure Set (Coverage : Form_Coverage);
+
+      function Draws (Codepoint : Form_Codepoint) return Boolean;
+
+   private
+      Known : Form_Coverage := [others => True];
+   end Drawable_Forms;
+
+   protected body Drawable_Forms is
+
+      procedure Set (Coverage : Form_Coverage) is
+      begin
+         Known := Coverage;
+      end Set;
+
+      function Draws (Codepoint : Form_Codepoint) return Boolean is (Known (Codepoint));
+
+   end Drawable_Forms;
+
+   procedure Set_Drawable_Forms (Coverage : Form_Coverage) is
+   begin
+      Drawable_Forms.Set (Coverage);
+   end Set_Drawable_Forms;
+
+   function Can_Draw_Form (Codepoint : Natural) return Boolean is
+     (not Is_Presentation_Form (Codepoint) or else Drawable_Forms.Draws (Codepoint));
+
    function Lay_Out
      (Content   : String;
       Has_Glyph : access function (Codepoint : Natural) return Boolean := null)
@@ -178,7 +208,7 @@ package body Guikit.Bidi is
          Result  : Line;
 
          function Drawable (Codepoint : Natural) return Boolean is
-           (Has_Glyph = null or else Has_Glyph (Codepoint));
+           (if Has_Glyph = null then Can_Draw_Form (Codepoint) else Has_Glyph (Codepoint));
       begin
          declare
             Index : Integer := Content'First;

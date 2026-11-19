@@ -39,9 +39,9 @@ package Guikit.Text_Fields is
    --  @param Caret_Width Pixel width of the caret mark.
    --  @param Mirrored Whether the frame is mirrored.
    --  @param Has_Glyph Whether the font can draw a code point
-   --  (Guikit.Bidi.Caret_Column): pass the query the text is drawn with, such
-   --  as Guikit.Text.Can_Draw_Form, so the caret and the drawn text lay
-   --  Arabic out alike. Null assumes it can.
+   --  (Guikit.Bidi.Caret_Column), so the caret and the drawn text lay Arabic
+   --  out alike. Null asks Guikit.Bidi.Can_Draw_Form, which answers for the
+   --  fonts Guikit.Text draws with.
    --  @return The caret's left edge, in pixels from the field's left edge.
    function Caret_X
      (Text        : String;

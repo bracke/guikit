@@ -39,6 +39,237 @@ package body Guikit.Item_Grid is
       end case;
    end Cell_Metrics_For;
 
+   function Add (L, R : Natural) return Natural renames Guikit.Layout.Saturating_Add;
+   function Mul (V, F : Natural) return Natural renames Guikit.Layout.Saturating_Multiply;
+   function Sub (Left, Right : Natural) return Natural is (if Left > Right then Left - Right else 0);
+
+   --  The area items are laid out in, and how far it is scrolled.
+   type Viewport is record
+      X, Y, Width, Height : Natural := 0;
+      Scroll_Pixels       : Natural := 0;
+      Line_Height         : Positive := 20;
+   end record;
+
+   --  How many cells Cell_Width wide, with the grid gap between them, fit
+   --  side by side in Main_Width; at least one.
+   function Grid_Columns (Main_Width : Natural; Cell_Width : Positive; Line_Height : Positive) return Positive is
+      Stride : constant Positive := Positive (Add (Cell_Width, Grid_Gap (Line_Height)));
+   begin
+      if Main_Width < Cell_Width then
+         return 1;
+      else
+         return Positive'Max (1, Positive (Add (Main_Width, Grid_Gap (Line_Height)) / Stride));
+      end if;
+   end Grid_Columns;
+
+   --  The height of the Details column header: one padded line, at most
+   --  the whole area.
+   function Details_Header_Height (Port : Viewport) return Natural is
+     (Natural'Min (Add (Port.Line_Height, Mul (Row_Padding (Port.Line_Height), 2)), Port.Height));
+
+   --  The cell at Index of an icon view: icon above (Large) or beside its
+   --  name, in a cell of Metrics. Label is the item's name, measured only
+   --  when the cell is on screen.
+   function Grid_Cell
+     (Index         : Positive;
+      Visible_Index : Natural;
+      Label         : not null access function (Position : Positive) return String;
+      Metrics       : Cell_Metrics;
+      Port          : Viewport)
+      return Item_Layout
+   is
+      Line_Height : constant Positive := Port.Line_Height;
+      Cell_W      : constant Positive := Positive (Metrics.Width);
+      Cell_H      : constant Positive := Positive (Metrics.Height);
+      Large       : constant Boolean := Metrics.Large;
+      Grid_Cols   : constant Positive := Grid_Columns (Port.Width, Cell_W, Line_Height);
+      Offset      : constant Natural := Natural (Index - 1);
+      Column      : constant Natural := Offset mod Grid_Cols;
+      Row         : constant Natural := Offset / Grid_Cols;
+      Cell_Stride : constant Natural := Add (Cell_W, Grid_Gap (Line_Height));
+      Row_Stride  : constant Natural := Add (Cell_H, Grid_Gap (Line_Height));
+      Cell_Offset : constant Natural := Mul (Column, Cell_Stride);
+      Row_Offset  : constant Natural := Mul (Row, Row_Stride);
+      Hidden_Px   : constant Natural :=
+        (if Row_Offset < Port.Scroll_Pixels then Natural'Min (Cell_H, Port.Scroll_Pixels - Row_Offset) else 0);
+      Visible_Row : constant Natural := Sub (Row_Offset, Port.Scroll_Pixels);
+      Cell_X      : constant Natural := Add (Port.X, Cell_Offset);
+      Cell_Y      : constant Natural := Add (Port.Y, Visible_Row);
+      Cell_Width  : constant Natural :=
+        (if Port.Width > Cell_Offset then Natural'Min (Cell_W, Port.Width - Cell_Offset) else 0);
+      Cell_Height : constant Natural :=
+        (if Hidden_Px = 0 and then Port.Height >= Add (Visible_Row, Cell_H) then Cell_H else 0);
+      Draw_Icon   : constant Natural := Natural'Min (Metrics.Icon_Size, Natural'Min (Cell_Width, Cell_Height));
+      Content_Pad : constant Natural :=
+        Natural'Min (Content_Padding (Line_Height), Natural'Min (Cell_Width, Cell_Height));
+      Inner_X     : constant Natural := Add (Cell_X, Content_Pad);
+      Inner_Y     : constant Natural := Add (Cell_Y, Content_Pad);
+      Inner_W     : constant Natural :=
+        (if Cell_Width > Mul (Content_Pad, 2) then Cell_Width - Mul (Content_Pad, 2) else Cell_Width);
+      Inner_H     : constant Natural :=
+        (if Cell_Height > Mul (Content_Pad, 2) then Cell_Height - Mul (Content_Pad, 2) else Cell_Height);
+      Padded_Icon : constant Natural := Natural'Min (Draw_Icon, Natural'Min (Inner_W, Inner_H));
+      Used_X      : constant Natural :=
+        (if Large then 0 else Natural'Min (Inner_W, Add (Padded_Icon, Icon_Text_Gap (Line_Height))));
+      Icon_X      : constant Natural :=
+        (if Large then Add (Inner_X, (if Inner_W > Padded_Icon then (Inner_W - Padded_Icon) / 2 else 0))
+         else Inner_X);
+      --  Off screen there is no area to fit the name into; measuring every
+      --  hidden label made each layout O(all items) in UTF-8 decoding.
+      Name_Units   : constant Natural :=
+        (if Cell_Height = 0 then 0
+         else Guikit.Utf8.Display_Units (Label (Index)));
+      Name_Pixels  : constant Natural := Mul (Name_Units, Guikit.Layout.Caret_Advance_Width (Line_Height));
+      Large_Text_W : constant Natural := Natural'Min (Inner_W, Name_Pixels);
+      Text_X       : constant Natural :=
+        (if Large then Add (Inner_X, (if Inner_W > Large_Text_W then (Inner_W - Large_Text_W) / 2 else 0))
+         else Add (Inner_X, Used_X));
+      Text_Y       : constant Natural :=
+        (if Large then Add (Add (Inner_Y, Padded_Icon), Content_Padding (Line_Height)) else Inner_Y);
+      Text_W       : constant Natural := (if Large then Large_Text_W else Sub (Inner_W, Used_X));
+   begin
+      return
+        (Visible_Index => Visible_Index,
+         X             => Cell_X,
+         Y             => Cell_Y,
+         Width         => Cell_Width,
+         Height        => Cell_Height,
+         Icon_X        => Icon_X,
+         Icon_Y        => Inner_Y,
+         Icon_Size     => Padded_Icon,
+         Text_X        => Text_X,
+         Text_Y        => Text_Y,
+         Text_Width    => Text_W,
+         Name_X        => Text_X,
+         Name_Width    => Text_W,
+         others        => 0);
+   end Grid_Cell;
+
+   --  The Details row at Index: a group header's caption (Header), or an
+   --  item's icon, name and the other columns.
+   function Details_Row
+     (Index         : Positive;
+      Visible_Index : Natural;
+      Header        : Boolean;
+      Metrics       : Cell_Metrics;
+      Columns       : Detail_Column_Bounds;
+      Port          : Viewport)
+      return Item_Layout
+   is
+      Line_Height : constant Positive := Port.Line_Height;
+      Row_Step    : constant Natural := Metrics.Height;
+      Header_H    : constant Natural := Details_Header_Height (Port);
+      Rows_Y      : constant Natural := Add (Port.Y, Header_H);
+      Rows_H      : constant Natural := Sub (Port.Height, Header_H);
+      Row_Offset  : constant Natural := Mul (Natural (Index - 1), Row_Step);
+      Hidden_Px   : constant Natural :=
+        (if Row_Offset < Port.Scroll_Pixels then Natural'Min (Row_Step, Port.Scroll_Pixels - Row_Offset) else 0);
+      Visible_Row : constant Natural := Sub (Row_Offset, Port.Scroll_Pixels);
+      Row_Y       : constant Natural := Add (Rows_Y, Visible_Row);
+      Row_H       : constant Natural :=
+        (if Hidden_Px = 0 and then Rows_H >= Add (Visible_Row, Row_Step) then Row_Step else 0);
+      Row_Draw_H  : constant Natural :=
+        (if Row_H > Details_Row_Gap then Row_H - Details_Row_Gap else Row_H);
+      Row_Pad     : constant Natural := Natural'Min (Row_Padding (Line_Height), Row_Draw_H);
+      Inner_H     : constant Natural :=
+        (if Row_Draw_H > Mul (Row_Pad, 2) then Row_Draw_H - Mul (Row_Pad, 2) else Row_Draw_H);
+      Row_Inner_X : constant Natural := Add (Port.X, Row_Pad);
+      Text_Pad    : constant Natural := Natural'Min (Column_Padding (Line_Height), Row_Draw_H);
+      --  Text and icon sit this far above the row padding (the glyphs'
+      --  optical lift), scaled with the text.
+      Lift        : constant Natural := Guikit.Layout.Scaled (2, Line_Height);
+      Name_X      : constant Natural := Columns (Name_Column).X;
+      Name_W      : constant Natural := Columns (Name_Column).Width;
+      Header_Name_W : constant Natural :=
+        (if Add (Port.X, Port.Width) > Name_X then Add (Port.X, Port.Width) - Name_X else 0);
+   begin
+      if Header then
+         return
+           (Visible_Index => 0,
+            X             => Port.X,
+            Y             => Row_Y,
+            Width         => Port.Width,
+            Height        => Row_Draw_H,
+            Text_X        => Add (Name_X, Text_Pad),
+            Text_Y        => Add (Row_Y, Sub (Row_Pad, Lift)),
+            Text_Width    => Sub (Header_Name_W, Text_Pad),
+            Name_X        => Name_X,
+            Name_Width    => Header_Name_W,
+            others        => 0);
+      end if;
+      return
+        (Visible_Index     => Visible_Index,
+         X                 => Port.X,
+         Y                 => Row_Y,
+         Width             => Port.Width,
+         Height            => Row_Draw_H,
+         Icon_X            => Row_Inner_X,
+         Icon_Y            => Add (Row_Y, Sub (Row_Pad, Lift)),
+         Icon_Size         => Natural'Min (Line_Height, Inner_H),
+         Text_X            => Add (Name_X, Text_Pad),
+         Text_Y            => Add (Row_Y, Sub (Row_Pad, Lift)),
+         Text_Width        => Sub (Name_W, Text_Pad),
+         Name_X            => Add (Name_X, Text_Pad),
+         Name_Width        => Sub (Name_W, Text_Pad),
+         Modified_X        => Columns (Modified_Column).X,
+         Modified_Width    => Columns (Modified_Column).Width,
+         Size_X            => Columns (Size_Column).X,
+         Size_Width        => Columns (Size_Column).Width,
+         Filetype_X        => Columns (Filetype_Column).X,
+         Filetype_Width    => Columns (Filetype_Column).Width,
+         Created_X         => Columns (Created_Column).X,
+         Created_Width     => Columns (Created_Column).Width,
+         Permissions_X     => Columns (Permissions_Column).X,
+         Permissions_Width => Columns (Permissions_Column).Width);
+   end Details_Row;
+
+   --  How many cells a row of View holds, and how far apart rows are.
+   function Cells_Per_Row (View : View_Kind; Metrics : Cell_Metrics; Port : Viewport) return Positive is
+     (case View is
+         when Details => 1,
+         when Icons_Small | Icons_Large => Grid_Columns (Port.Width, Positive (Metrics.Width), Port.Line_Height));
+
+   function Row_Stride (View : View_Kind; Metrics : Cell_Metrics; Port : Viewport) return Positive is
+     (Positive (case View is
+                   when Details => Metrics.Height,
+                   when Icons_Small | Icons_Large => Add (Metrics.Height, Grid_Gap (Port.Line_Height))));
+
+   --  Whether a position's cell lies wholly inside the viewport. Only those
+   --  are laid out: the others (all but a screenful in a large folder) keep
+   --  the default all-zero cell, as they always had no area.
+   function On_Screen
+     (Index   : Positive;
+      View    : View_Kind;
+      Metrics : Cell_Metrics;
+      Port    : Viewport)
+      return Boolean
+   is
+      Row_Offset : constant Natural :=
+        Mul ((Index - 1) / Cells_Per_Row (View, Metrics, Port), Row_Stride (View, Metrics, Port));
+      Rows_H     : constant Natural :=
+        (case View is
+            when Details => Sub (Port.Height, Details_Header_Height (Port)),
+            when Icons_Small | Icons_Large => Port.Height);
+   begin
+      return Row_Offset >= Port.Scroll_Pixels
+        and then Rows_H >= Add (Row_Offset - Port.Scroll_Pixels, Metrics.Height);
+   end On_Screen;
+
+   --  The first position not scrolled above the viewport. A cell's offset
+   --  grows with its position, so the cells on screen are one run from it.
+   function First_On_Screen
+     (View    : View_Kind;
+      Metrics : Cell_Metrics;
+      Port    : Viewport)
+      return Long_Long_Integer
+   is
+      Stride    : constant Positive := Row_Stride (View, Metrics, Port);
+      First_Row : constant Natural :=
+        Port.Scroll_Pixels / Stride + (if Port.Scroll_Pixels mod Stride = 0 then 0 else 1);
+   begin
+      return Long_Long_Integer (First_Row) * Long_Long_Integer (Cells_Per_Row (View, Metrics, Port)) + 1;
+   end First_On_Screen;
+
    function Calculate_Layout
      (Count            : Natural;
       Visible_Index_At : not null access function (Position : Positive) return Natural;
@@ -56,226 +287,31 @@ package body Guikit.Item_Grid is
    is
       Result  : Item_Layout_Vectors.Vector;
       Metrics : constant Cell_Metrics := Cell_Metrics_For (View, Content_W, Line_Height);
-
-      function Add (L, R : Natural) return Natural renames Guikit.Layout.Saturating_Add;
-      function Mul (V, F : Natural) return Natural renames Guikit.Layout.Saturating_Multiply;
-      function Sub (Left, Right : Natural) return Natural is (if Left > Right then Left - Right else 0);
-
-      function Columns_For (Main_Width : Natural; Cell_Width : Positive) return Positive is
-         Stride : constant Positive := Positive (Add (Cell_Width, Grid_Gap (Line_Height)));
-      begin
-         if Main_Width < Cell_Width then
-            return 1;
-         else
-            return Positive'Max (1, Positive (Add (Main_Width, Grid_Gap (Line_Height)) / Stride));
-         end if;
-      end Columns_For;
-
-      procedure Place_Grid_Item
-        (Index     : Positive;
-         Cell_W    : Positive;
-         Cell_H    : Positive;
-         Icon_Size : Positive;
-         Large     : Boolean)
-      is
-         Grid_Cols   : constant Positive := Columns_For (Content_W, Cell_W);
-         Offset      : constant Natural := Natural (Index - 1);
-         Column      : constant Natural := Offset mod Grid_Cols;
-         Row         : constant Natural := Offset / Grid_Cols;
-         Cell_Stride : constant Natural := Add (Cell_W, Grid_Gap (Line_Height));
-         Row_Stride  : constant Natural := Add (Cell_H, Grid_Gap (Line_Height));
-         Cell_Offset : constant Natural := Mul (Column, Cell_Stride);
-         Row_Offset  : constant Natural := Mul (Row, Row_Stride);
-         Hidden_Px   : constant Natural :=
-           (if Row_Offset < Scroll_Pixels then Natural'Min (Cell_H, Scroll_Pixels - Row_Offset) else 0);
-         Visible_Row : constant Natural := Sub (Row_Offset, Scroll_Pixels);
-         Cell_X      : constant Natural := Add (Content_X, Cell_Offset);
-         Cell_Y      : constant Natural := Add (Content_Y, Visible_Row);
-         Cell_Width  : constant Natural :=
-           (if Content_W > Cell_Offset then Natural'Min (Cell_W, Content_W - Cell_Offset) else 0);
-         Cell_Height : constant Natural :=
-           (if Hidden_Px = 0 and then Content_H >= Add (Visible_Row, Cell_H) then Cell_H else 0);
-         Draw_Icon   : constant Natural := Natural'Min (Icon_Size, Natural'Min (Cell_Width, Cell_Height));
-         Content_Pad : constant Natural :=
-           Natural'Min (Content_Padding (Line_Height), Natural'Min (Cell_Width, Cell_Height));
-         Inner_X     : constant Natural := Add (Cell_X, Content_Pad);
-         Inner_Y     : constant Natural := Add (Cell_Y, Content_Pad);
-         Inner_W     : constant Natural :=
-           (if Cell_Width > Mul (Content_Pad, 2) then Cell_Width - Mul (Content_Pad, 2) else Cell_Width);
-         Inner_H     : constant Natural :=
-           (if Cell_Height > Mul (Content_Pad, 2) then Cell_Height - Mul (Content_Pad, 2) else Cell_Height);
-         Padded_Icon : constant Natural := Natural'Min (Draw_Icon, Natural'Min (Inner_W, Inner_H));
-         Used_X      : constant Natural :=
-           (if Large then 0 else Natural'Min (Inner_W, Add (Padded_Icon, Icon_Text_Gap (Line_Height))));
-         Icon_X      : constant Natural :=
-           (if Large then Add (Inner_X, (if Inner_W > Padded_Icon then (Inner_W - Padded_Icon) / 2 else 0))
-            else Inner_X);
-         Icon_Y       : constant Natural := Inner_Y;
-         --  Off screen there is no area to fit the name into; measuring every
-         --  hidden label made each layout O(all items) in UTF-8 decoding.
-         Name_Units   : constant Natural :=
-           (if Cell_Height = 0 then 0
-            else Guikit.Utf8.Display_Units (Label_At (Index)));
-         Name_Pixels  : constant Natural := Mul (Name_Units, Guikit.Layout.Caret_Advance_Width (Line_Height));
-         Large_Text_W : constant Natural := Natural'Min (Inner_W, Name_Pixels);
-         Text_X       : constant Natural :=
-           (if Large then Add (Inner_X, (if Inner_W > Large_Text_W then (Inner_W - Large_Text_W) / 2 else 0))
-            else Add (Inner_X, Used_X));
-         Text_Y       : constant Natural :=
-           (if Large then Add (Add (Inner_Y, Padded_Icon), Content_Padding (Line_Height)) else Inner_Y);
-         Text_W       : constant Natural := (if Large then Large_Text_W else Sub (Inner_W, Used_X));
-      begin
-         Result.Replace_Element
-           (Index,
-            Item_Layout'
-              (Visible_Index => Visible_Index_At (Index),
-               X             => Cell_X,
-               Y             => Cell_Y,
-               Width         => Cell_Width,
-               Height        => Cell_Height,
-               Icon_X        => Icon_X,
-               Icon_Y        => Icon_Y,
-               Icon_Size     => Padded_Icon,
-               Text_X        => Text_X,
-               Text_Y        => Text_Y,
-               Text_Width    => Text_W,
-               Name_X        => Text_X,
-               Name_Width    => Text_W,
-               others        => 0));
-      end Place_Grid_Item;
-
-      --  A Details row: a group header's caption, or an item's icon, name
-      --  and the other columns.
-      procedure Place_Details_Row (Index : Positive) is
-         Row_Step    : constant Natural := Metrics.Height;
-         Header_H    : constant Natural :=
-           Natural'Min (Add (Line_Height, Mul (Row_Padding (Line_Height), 2)), Content_H);
-         Rows_Y      : constant Natural := Add (Content_Y, Header_H);
-         Rows_H      : constant Natural := Sub (Content_H, Header_H);
-         Row_Offset  : constant Natural := Mul (Natural (Index - 1), Row_Step);
-         Hidden_Px   : constant Natural :=
-           (if Row_Offset < Scroll_Pixels then Natural'Min (Row_Step, Scroll_Pixels - Row_Offset) else 0);
-         Visible_Row : constant Natural := Sub (Row_Offset, Scroll_Pixels);
-         Row_Y       : constant Natural := Add (Rows_Y, Visible_Row);
-         Row_H       : constant Natural :=
-           (if Hidden_Px = 0 and then Rows_H >= Add (Visible_Row, Row_Step) then Row_Step else 0);
-         Row_Draw_H  : constant Natural :=
-           (if Row_H > Details_Row_Gap then Row_H - Details_Row_Gap else Row_H);
-         Row_Pad     : constant Natural := Natural'Min (Row_Padding (Line_Height), Row_Draw_H);
-         Inner_H     : constant Natural :=
-           (if Row_Draw_H > Mul (Row_Pad, 2) then Row_Draw_H - Mul (Row_Pad, 2) else Row_Draw_H);
-         Row_Inner_X : constant Natural := Add (Content_X, Row_Pad);
-         Text_Pad    : constant Natural := Natural'Min (Column_Padding (Line_Height), Row_Draw_H);
-         --  Text and icon sit this far above the row padding (the
-         --  glyphs' optical lift), scaled with the text.
-         Lift        : constant Natural := Guikit.Layout.Scaled (2, Line_Height);
-         Name_X      : constant Natural := Columns (Name_Column).X;
-         Name_W      : constant Natural := Columns (Name_Column).Width;
-         Header_Name_W : constant Natural :=
-           (if Add (Content_X, Content_W) > Name_X then Add (Content_X, Content_W) - Name_X else 0);
-      begin
-         if Is_Header_At (Index) then
-            Result.Replace_Element
-              (Index,
-               Item_Layout'
-                 (Visible_Index => 0,
-                  X             => Content_X,
-                  Y             => Row_Y,
-                  Width         => Content_W,
-                  Height        => Row_Draw_H,
-                  Text_X        => Add (Name_X, Text_Pad),
-                  Text_Y        => Add (Row_Y, Sub (Row_Pad, Lift)),
-                  Text_Width    => Sub (Header_Name_W, Text_Pad),
-                  Name_X        => Name_X,
-                  Name_Width    => Header_Name_W,
-                  others        => 0));
-         else
-            Result.Replace_Element
-              (Index,
-               Item_Layout'
-                 (Visible_Index     => Visible_Index_At (Index),
-                  X                 => Content_X,
-                  Y                 => Row_Y,
-                  Width             => Content_W,
-                  Height            => Row_Draw_H,
-                  Icon_X            => Row_Inner_X,
-                  Icon_Y            => Add (Row_Y, Sub (Row_Pad, Lift)),
-                  Icon_Size         => Natural'Min (Line_Height, Inner_H),
-                  Text_X            => Add (Name_X, Text_Pad),
-                  Text_Y            => Add (Row_Y, Sub (Row_Pad, Lift)),
-                  Text_Width        => Sub (Name_W, Text_Pad),
-                  Name_X            => Add (Name_X, Text_Pad),
-                  Name_Width        => Sub (Name_W, Text_Pad),
-                  Modified_X        => Columns (Modified_Column).X,
-                  Modified_Width    => Columns (Modified_Column).Width,
-                  Size_X            => Columns (Size_Column).X,
-                  Size_Width        => Columns (Size_Column).Width,
-                  Filetype_X        => Columns (Filetype_Column).X,
-                  Filetype_Width    => Columns (Filetype_Column).Width,
-                  Created_X         => Columns (Created_Column).X,
-                  Created_Width     => Columns (Created_Column).Width,
-                  Permissions_X     => Columns (Permissions_Column).X,
-                  Permissions_Width => Columns (Permissions_Column).Width));
-         end if;
-      end Place_Details_Row;
-
-      --  Whether a position's cell lies wholly inside the viewport. Only those
-      --  are laid out: the others (all but a screenful in a large folder) keep
-      --  the default all-zero cell, as they always had no area.
-      function On_Screen (Index : Positive) return Boolean is
-      begin
-         case View is
-            when Icons_Small | Icons_Large =>
-               declare
-                  Row_Offset : constant Natural :=
-                    Mul ((Index - 1) / Columns_For (Content_W, Positive (Metrics.Width)),
-                         Add (Metrics.Height, Grid_Gap (Line_Height)));
-               begin
-                  return Row_Offset >= Scroll_Pixels
-                    and then Content_H >= Add (Row_Offset - Scroll_Pixels, Metrics.Height);
-               end;
-            when Details =>
-               declare
-                  Header_H   : constant Natural :=
-                    Natural'Min (Add (Line_Height, Mul (Row_Padding (Line_Height), 2)), Content_H);
-                  Row_Offset : constant Natural := Mul (Index - 1, Metrics.Height);
-               begin
-                  return Row_Offset >= Scroll_Pixels
-                    and then Sub (Content_H, Header_H) >= Add (Row_Offset - Scroll_Pixels, Metrics.Height);
-               end;
-         end case;
-      end On_Screen;
-
-      --  A cell's offset grows with its position, so the cells on screen are
-      --  one run, starting in the first row not scrolled above the viewport.
-      Per_Row : constant Positive :=
-        (case View is
-            when Details => 1,
-            when Icons_Small | Icons_Large => Columns_For (Content_W, Positive (Metrics.Width)));
-      Stride  : constant Positive :=
-        Positive (case View is
-                     when Details => Metrics.Height,
-                     when Icons_Small | Icons_Large => Add (Metrics.Height, Grid_Gap (Line_Height)));
-      First_Row : constant Natural :=
-        Scroll_Pixels / Stride + (if Scroll_Pixels mod Stride = 0 then 0 else 1);
-      First     : constant Long_Long_Integer :=
-        Long_Long_Integer (First_Row) * Long_Long_Integer (Per_Row) + 1;
-      Index     : Positive := 1;
+      Port    : constant Viewport :=
+        (X             => Content_X,
+         Y             => Content_Y,
+         Width         => Content_W,
+         Height        => Content_H,
+         Scroll_Pixels => Scroll_Pixels,
+         Line_Height   => Line_Height);
+      First   : constant Long_Long_Integer := First_On_Screen (View, Metrics, Port);
+      Index   : Positive := 1;
    begin
       Result.Set_Length (Ada.Containers.Count_Type (Count));
       if First > Long_Long_Integer (Count) then
          return Result;
       end if;
       Index := Positive (First);
-      while On_Screen (Index) loop
-         case View is
-            when Icons_Small | Icons_Large =>
-               Place_Grid_Item
-                 (Index, Positive (Metrics.Width), Positive (Metrics.Height),
-                  Positive (Metrics.Icon_Size), Metrics.Large);
-            when Details =>
-               Place_Details_Row (Index);
-         end case;
+      while On_Screen (Index, View, Metrics, Port) loop
+         Result.Replace_Element
+           (Index,
+            (case View is
+                when Icons_Small | Icons_Large =>
+                  Grid_Cell (Index, Visible_Index_At (Index), Label_At, Metrics, Port),
+                when Details =>
+                  (if Is_Header_At (Index)
+                   then Details_Row (Index, 0, True, Metrics, Columns, Port)
+                   else Details_Row (Index, Visible_Index_At (Index), False, Metrics, Columns, Port))));
          exit when Index = Count;
          Index := Index + 1;
       end loop;

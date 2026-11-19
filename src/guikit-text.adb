@@ -15,63 +15,52 @@ package body Guikit.Text is
    use type Textrender.Status_Code;
 
    --  The last atlas version handed out, across every renderer, so a version
-   --  names one atlas content however renderers are reloaded.
-   Last_Atlas_Version : Natural := 0;
+   --  names one atlas content however renderers are reloaded. Renderers may
+   --  be loaded and drawn with from several tasks, so it is protected.
+   protected Atlas_Versions is
+      procedure Next (Version : out Natural);
+   private
+      Last : Natural := 0;
+   end Atlas_Versions;
+
+   protected body Atlas_Versions is
+      procedure Next (Version : out Natural) is
+      begin
+         Last := (if Last = Natural'Last then 1 else Last + 1);
+         Version := Last;
+      end Next;
+   end Atlas_Versions;
 
    function New_Atlas_Version return Natural is
+      Version : Natural;
    begin
-      Last_Atlas_Version := (if Last_Atlas_Version = Natural'Last then 1 else Last_Atlas_Version + 1);
-      return Last_Atlas_Version;
+      Atlas_Versions.Next (Version);
+      return Version;
    end New_Atlas_Version;
 
    function Loaded (R : Renderer) return Boolean is (R.Is_Loaded);
 
-   --  The Arabic presentation forms, and the forms between them (variation
-   --  selectors and the like), which are answered for alike.
-   subtype Form_Codepoint is Natural range 16#FB50# .. 16#FEFF#;
+   function Can_Draw_Form (Codepoint : Natural) return Boolean renames Guikit.Bidi.Can_Draw_Form;
 
-   function Is_Form (Codepoint : Natural) return Boolean is
-     (Codepoint in 16#FB50# .. 16#FDFF# | 16#FE70# .. 16#FEFF#);
-
-   type Form_Coverage is array (Form_Codepoint) of Boolean
-     with Pack;
-
-   --  Which presentation forms the fonts last loaded draw (Can_Draw_Form).
-   protected Loaded_Forms is
-
-      procedure Set (Coverage : Form_Coverage);
-
-      function Draws (Codepoint : Form_Codepoint) return Boolean;
-
-   private
-      Known : Form_Coverage := [others => True];
-   end Loaded_Forms;
-
-   protected body Loaded_Forms is
-
-      procedure Set (Coverage : Form_Coverage) is
-      begin
-         Known := Coverage;
-      end Set;
-
-      function Draws (Codepoint : Form_Codepoint) return Boolean is (Known (Codepoint));
-
-   end Loaded_Forms;
-
-   function Can_Draw_Form (Codepoint : Natural) return Boolean is
-     (not Is_Form (Codepoint) or else Loaded_Forms.Draws (Codepoint));
-
-   --  Record which presentation forms R's fonts draw, for Can_Draw_Form.
+   --  Record which presentation forms R's fonts draw, for
+   --  Guikit.Bidi.Can_Draw_Form.
    procedure Record_Forms (R : Renderer) is
-      Coverage : Form_Coverage := [others => True];
+      Coverage : Guikit.Bidi.Form_Coverage := [others => True];
    begin
-      for Codepoint in Form_Codepoint loop
-         if Is_Form (Codepoint) then
+      for Codepoint in Guikit.Bidi.Form_Codepoint loop
+         if Guikit.Bidi.Is_Presentation_Form (Codepoint) then
             Coverage (Codepoint) := Textrender.Can_Draw (R.Backend, Codepoint);
          end if;
       end loop;
-      Loaded_Forms.Set (Coverage);
+      Guikit.Bidi.Set_Drawable_Forms (Coverage);
    end Record_Forms;
+
+   --  A renderer whose load failed draws no text: no fonts' answer is
+   --  current, so every form is taken as drawn, as before any load.
+   procedure Forget_Forms is
+   begin
+      Guikit.Bidi.Set_Drawable_Forms ([others => True]);
+   end Forget_Forms;
 
    function Atlas_Version (R : Renderer) return Natural is (R.Atlas_Version);
 
@@ -98,6 +87,7 @@ package body Guikit.Text is
 
       if Font_Path = "" then
          Textrender.Reset (R.Backend);
+         Forget_Forms;
          return Guikit.Draw.Text_Render_Font_Load_Failed;
       end if;
 
@@ -111,6 +101,7 @@ package body Guikit.Text is
            Atlas_Width  => Atlas_Width,
            Atlas_Height => Atlas_Height);
       if Status /= Textrender.Success then
+         Forget_Forms;
          return Guikit.Draw.Text_Render_Font_Load_Failed;
       end if;
 

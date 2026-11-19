@@ -843,16 +843,6 @@ procedure Check_All is
       end if;
    end Check_Ada_Only_Tooling;
 
-   --  Internal layering gate. Each Guikit.* package may only `with` the
-   --  Guikit.* units listed in its allowlist; the shared helper raises when a
-   --  package imports a disallowed sibling. Allowlists are derived from the
-   --  current internal withs, so the gate passes as-is and locks the layering:
-   --    * Guikit.Shared_Bytes / Frame_Analysis / Input / Utf8 are leaves (no deps).
-   --    * Guikit.Draw    -> Guikit.Shared_Bytes (the pixels its icons carry)
-   --    * Guikit.Layout  -> Guikit.Utf8
-   --    * Guikit.Widgets -> Guikit.Draw, Guikit.Layout (label text metrics)
-   --    * Guikit.Vulkan  -> Guikit.Draw, Guikit.Frame_Analysis, Guikit.Shared_Bytes
-   --      (an icon atlas is uploaded again only when its pixels' serial moves)
    --  An exception handler that carries on must say why: re-raise as its
    --  last statement, hand its occurrence on (Guikit.Errors.Note, a
    --  receiver's Failed), or explain in a comment why nothing is lost. A
@@ -968,6 +958,28 @@ procedure Check_All is
       Ada.Directories.End_Search (Search);
    end Check_Swallowing_Handlers;
 
+   --  Internal layering gate. Each unit in src may only `with` the Guikit.*
+   --  units listed in its allowlist -- and each glfw-* unit, besides, only
+   --  the Glfw.* units in its own -- checked in its spec, body, platform
+   --  bodies (src/platform/*/) and subunits (in src or a platform folder);
+   --  the shared helper raises when a unit imports a disallowed one. Every
+   --  library unit must have a layer and every subunit an owner that has
+   --  one. Allowlists are derived from the current withs, so the gate
+   --  locks the layering:
+   --    * Guikit, Shared_Bytes, Errors, Frame_Analysis, Input,
+   --      Input.Mouse_Buttons, Utf8, Utf8.Editing and Bidi.Data are leaves.
+   --    * Guikit.Draw       -> Errors, Shared_Bytes (the pixels its icons carry)
+   --    * Guikit.Layout     -> Utf8
+   --    * Guikit.Bidi       -> its children (Carets, Data, Levels, Shaping), Utf8
+   --    * Guikit.Mirroring  -> Bidi, Draw, Utf8
+   --    * Guikit.Text       -> Bidi, Draw, Layout, Shared_Bytes, Utf8
+   --    * Guikit.Text_Fields -> Bidi, Layout, Mirroring, Utf8
+   --    * Guikit.Widgets    -> Draw, Layout (label text metrics)
+   --    * Guikit.Vulkan     -> Draw, Errors, Frame_Analysis, Shared_Bytes
+   --      (an icon atlas is uploaded again only when its pixels' serial moves)
+   --    * Guikit.Fonts      -> Errors, Text
+   --    * the components    -> Draw, Layout, Widgets and the helpers below them
+   --    * Glfw.*            -> at most Guikit.Input and Glfw.Input.Keys
    procedure Check_Layering is
       No_Deps : constant Project_Tools.Ada_Source.String_List (1 .. 0) :=
         [others => <>];
@@ -1031,22 +1043,76 @@ procedure Check_All is
          return "";
       end Owner_Of;
 
+      --  Call Process with each platform folder (src/platform/*/).
+      procedure For_Each_Platform_Folder (Process : not null access procedure (Folder : String)) is
+         Search : Ada.Directories.Search_Type;
+         Item   : Ada.Directories.Directory_Entry_Type;
+      begin
+         if not Project_Tools.Files.Directory_Exists (Root & "/src/platform") then
+            return;
+         end if;
+         Ada.Directories.Start_Search
+           (Search, Root & "/src/platform", "*", [Ada.Directories.Directory => True, others => False]);
+         while Ada.Directories.More_Entries (Search) loop
+            Ada.Directories.Get_Next_Entry (Search, Item);
+            if Ada.Directories.Simple_Name (Item) not in "." | ".." then
+               Process (Ada.Directories.Full_Name (Item));
+            end if;
+         end loop;
+         Ada.Directories.End_Search (Search);
+      end For_Each_Platform_Folder;
+
       --  Require Stem's spec, body, platform bodies (src/platform/*/) and
-      --  subunits (Stem-*.adb starting with `separate`, belonging to Stem
-      --  rather than to a child) to name only Allowed of guikit's units.
+      --  subunits (Stem-*.adb in src or a platform folder, starting with
+      --  `separate`, belonging to Stem rather than to a child) to name only
+      --  Allowed of guikit's units -- and, for a glfw-* unit, only
+      --  Glfw_Allowed of the Glfw.* units.
       procedure Require_Layer
-        (Stem    : String;
-         Allowed : Project_Tools.Ada_Source.String_List)
+        (Stem         : String;
+         Allowed      : Project_Tools.Ada_Source.String_List;
+         Glfw_Allowed : Project_Tools.Ada_Source.String_List := No_Deps)
       is
+         Is_Glfw : constant Boolean := Starts_With (Stem, "glfw-");
+
          procedure Require (Path : String) is
          begin
             Project_Tools.Ada_Source.Require_Only_Allowed_With_Clauses (Path, "Guikit.", Allowed);
+            if Is_Glfw then
+               Project_Tools.Ada_Source.Require_Only_Allowed_With_Clauses (Path, "Glfw.", Glfw_Allowed);
+            end if;
          end Require;
 
-         Spec   : constant String := Root & "/src/" & Stem & ".ads";
-         Impl   : constant String := Root & "/src/" & Stem & ".adb";
-         Search : Ada.Directories.Search_Type;
-         Item   : Ada.Directories.Directory_Entry_Type;
+         --  Stem's subunits in Folder.
+         procedure Require_Subunits (Folder : String) is
+            Search : Ada.Directories.Search_Type;
+            Item   : Ada.Directories.Directory_Entry_Type;
+         begin
+            Ada.Directories.Start_Search
+              (Search, Folder, Stem & "-*.adb", [Ada.Directories.Ordinary_File => True, others => False]);
+            while Ada.Directories.More_Entries (Search) loop
+               Ada.Directories.Get_Next_Entry (Search, Item);
+               declare
+                  Path : constant String := Ada.Directories.Full_Name (Item);
+               begin
+                  if Is_Subunit (Path) and then Owner_Of (Ada.Directories.Base_Name (Path)) = Stem then
+                     Require (Path);
+                  end if;
+               end;
+            end loop;
+            Ada.Directories.End_Search (Search);
+         end Require_Subunits;
+
+         --  Stem's body and subunits in a platform folder.
+         procedure Require_Platform (Folder : String) is
+         begin
+            if Project_Tools.Files.File_Exists (Folder & "/" & Stem & ".adb") then
+               Require (Folder & "/" & Stem & ".adb");
+            end if;
+            Require_Subunits (Folder);
+         end Require_Platform;
+
+         Spec : constant String := Root & "/src/" & Stem & ".ads";
+         Impl : constant String := Root & "/src/" & Stem & ".adb";
       begin
          Layered.Append (Stem);
          if Project_Tools.Files.File_Exists (Spec) then
@@ -1055,61 +1121,47 @@ procedure Check_All is
          if Project_Tools.Files.File_Exists (Impl) then
             Require (Impl);
          end if;
+         Require_Subunits (Root & "/src");
+         For_Each_Platform_Folder (Require_Platform'Access);
+      end Require_Layer;
 
-         Ada.Directories.Start_Search
-           (Search, Root & "/src", Stem & "-*.adb", [Ada.Directories.Ordinary_File => True, others => False]);
-         while Ada.Directories.More_Entries (Search) loop
-            Ada.Directories.Get_Next_Entry (Search, Item);
-            declare
-               Path : constant String := Ada.Directories.Full_Name (Item);
-            begin
-               if Is_Subunit (Path) and then Owner_Of (Ada.Directories.Base_Name (Path)) = Stem then
-                  Require (Path);
-               end if;
-            end;
-         end loop;
-         Ada.Directories.End_Search (Search);
+      --  Every library unit in src has a layer, and every subunit, in src
+      --  or a platform folder, an owner: a subunit no unit owns would be
+      --  checked by no layer.
+      procedure Require_Every_Unit_Layered is
+         Missed : Boolean := False;
 
-         if Project_Tools.Files.Directory_Exists (Root & "/src/platform") then
+         procedure Check_Folder (Folder : String) is
+            Search : Ada.Directories.Search_Type;
+            Item   : Ada.Directories.Directory_Entry_Type;
+         begin
             Ada.Directories.Start_Search
-              (Search, Root & "/src/platform", "*", [Ada.Directories.Directory => True, others => False]);
+              (Search, Folder, "*.ad?", [Ada.Directories.Ordinary_File => True, others => False]);
             while Ada.Directories.More_Entries (Search) loop
                Ada.Directories.Get_Next_Entry (Search, Item);
                declare
-                  Platform_Body : constant String := Ada.Directories.Full_Name (Item) & "/" & Stem & ".adb";
+                  Name : constant String := Ada.Directories.Simple_Name (Item);
+                  Path : constant String := Ada.Directories.Full_Name (Item);
+                  Stem : constant String := Ada.Directories.Base_Name (Name);
                begin
-                  if Ada.Directories.Simple_Name (Item) not in "." | ".."
-                    and then Project_Tools.Files.File_Exists (Platform_Body)
-                  then
-                     Require (Platform_Body);
+                  if Ada.Directories.Extension (Name) = "adb" and then Is_Subunit (Path) then
+                     if Owner_Of (Stem) = "" then
+                        Put_Line (Standard_Error, "error: " & Path
+                                  & " is a subunit of no library unit in src, so no layer checks it");
+                        Missed := True;
+                     end if;
+                  elsif Is_Library_Unit (Stem) and then not Layered.Contains (Stem) then
+                     Put_Line (Standard_Error, "error: " & Path
+                               & " belongs to a unit Check_Layering gives no layer");
+                     Missed := True;
                   end if;
                end;
             end loop;
             Ada.Directories.End_Search (Search);
-         end if;
-      end Require_Layer;
-
-      --  Every library unit in src has a layer.
-      procedure Require_Every_Unit_Layered is
-         Search : Ada.Directories.Search_Type;
-         Item   : Ada.Directories.Directory_Entry_Type;
-         Missed : Boolean := False;
+         end Check_Folder;
       begin
-         Ada.Directories.Start_Search
-           (Search, Root & "/src", "*.ad?", [Ada.Directories.Ordinary_File => True, others => False]);
-         while Ada.Directories.More_Entries (Search) loop
-            Ada.Directories.Get_Next_Entry (Search, Item);
-            declare
-               Stem : constant String := Ada.Directories.Base_Name (Ada.Directories.Simple_Name (Item));
-            begin
-               if Is_Library_Unit (Stem) and then not Layered.Contains (Stem) then
-                  Put_Line (Standard_Error, "error: src/" & Ada.Directories.Simple_Name (Item)
-                            & " belongs to a unit Check_Layering gives no layer");
-                  Missed := True;
-               end if;
-            end;
-         end loop;
-         Ada.Directories.End_Search (Search);
+         Check_Folder (Root & "/src");
+         For_Each_Platform_Folder (Check_Folder'Access);
          if Missed then
             Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);
             raise Program_Error;
@@ -1183,13 +1235,18 @@ procedure Check_All is
          [To_Unbounded_String ("Guikit.Errors"),
           To_Unbounded_String ("Guikit.Text")]);
       --  The GLFW glue is the bottom layer: it may name only the input
-      --  vocabulary (the modifiers it reports), nothing that draws.
+      --  vocabulary (the modifiers it reports), nothing that draws, and of
+      --  the GLFW binding only the key vocabulary the modifiers are read
+      --  from.
       Require_Layer ("glfw-input-keys-codes", [1 => To_Unbounded_String ("Guikit.Input")]);
       Require_Layer ("glfw-input-keys-layout", No_Deps);
       Require_Layer ("glfw-windows-drop", No_Deps);
       Require_Layer ("glfw-windows-drop-paths", No_Deps);
       Require_Layer ("glfw-windows-icon", No_Deps);
-      Require_Layer ("glfw-windows-modifiers", [1 => To_Unbounded_String ("Guikit.Input")]);
+      Require_Layer
+        ("glfw-windows-modifiers",
+         [1 => To_Unbounded_String ("Guikit.Input")],
+         Glfw_Allowed => [1 => To_Unbounded_String ("Glfw.Input.Keys")]);
       Require_Layer ("glfw-windows-native", No_Deps);
       Require_Layer ("glfw-windows-vulkan", No_Deps);
       --  The root package names nothing.

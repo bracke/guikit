@@ -8,7 +8,7 @@ private package Guikit.Bidi.Carets is
    --  @param Content UTF-8 text, drawn from column 0.
    --  @param Cursor Byte offset into Content.
    --  @param Columns How many display cells the text is drawn in.
-   --  @param Has_Glyph Whether the font can draw a code point; null assumes it can.
+   --  @param Has_Glyph Whether the font can draw a code point; null asks Can_Draw_Form.
    --  @return Display column of the caret.
    function Caret_Column
      (Content   : String;
@@ -22,7 +22,7 @@ private package Guikit.Bidi.Carets is
    --  @param Content UTF-8 text, drawn from column 0.
    --  @param Half_Column Click position in half display cells.
    --  @param Columns How many display cells the text is drawn in.
-   --  @param Has_Glyph Whether the font can draw a code point; null assumes it can.
+   --  @param Has_Glyph Whether the font can draw a code point; null asks Can_Draw_Form.
    --  @return Zero-based byte offset into Content.
    function Cursor_At_Half_Column
      (Content     : String;
@@ -37,7 +37,7 @@ private package Guikit.Bidi.Carets is
    --  @param Cursor Zero-based byte offset of the caret.
    --  @param Rightward Whether the right arrow was pressed, not the left.
    --  @param By_Word Whether to step by word.
-   --  @param Has_Glyph Whether the font can draw a code point; null assumes it can.
+   --  @param Has_Glyph Whether the font can draw a code point; null asks Can_Draw_Form.
    --  @return The new zero-based byte offset; Cursor when nothing lies that way.
    function Caret_Step
      (Content   : String;

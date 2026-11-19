@@ -25,6 +25,7 @@ package body Guikit_Suite.Bidi is
 
    overriding function Name (T : Bidi_Test_Case) return AUnit.Message_String;
    overriding procedure Register_Tests (T : in out Bidi_Test_Case);
+   overriding procedure Set_Up (T : in out Bidi_Test_Case);
 
    procedure Test_Conformance (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Hebrew_Reads_Right_To_Left (T : in out AUnit.Test_Cases.Test_Case'Class);
@@ -40,6 +41,7 @@ package body Guikit_Suite.Bidi is
    procedure Test_Ligature_Is_One_Stop (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Undrawn_Ligature_Is_Two_Stops (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Wide_Character_Straddling_A_Mirrored_Field (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Default_Follows_Recorded_Forms (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function Utf8 (Codes : Guikit.Bidi.Codepoint_Array) return String is
       Result : Unbounded_String;
@@ -111,7 +113,18 @@ package body Guikit_Suite.Bidi is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Wide_Character_Straddling_A_Mirrored_Field'Access,
          "a mirrored field's caret counts the whole characters drawn");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Default_Follows_Recorded_Forms'Access,
+         "given no Has_Glyph, carets and layout follow the forms the loaded fonts draw");
    end Register_Tests;
+
+   --  Every test starts as before any font loaded -- every presentation
+   --  form drawn -- whatever another suite's renderers recorded.
+   overriding procedure Set_Up (T : in out Bidi_Test_Case) is
+      pragma Unreferenced (T);
+   begin
+      Guikit.Bidi.Set_Drawable_Forms ([others => True]);
+   end Set_Up;
 
    --  Runs every test line of File; returns how many failed and describes
    --  the first.
@@ -499,6 +512,13 @@ package body Guikit_Suite.Bidi is
    --  two letters, and the caret has to as well.
    function Without_Lam_Alef (Codepoint : Natural) return Boolean is (Codepoint not in 16#FEF5# .. 16#FEFC#);
 
+   --  A font chain drawing every form.
+   function Always (Codepoint : Natural) return Boolean is
+      pragma Unreferenced (Codepoint);
+   begin
+      return True;
+   end Always;
+
    procedure Test_Undrawn_Ligature_Is_Two_Stops (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);
       use Guikit.Bidi;
@@ -533,6 +553,34 @@ package body Guikit_Suite.Bidi is
          = 2,
          "and a click there puts it back between the letters");
    end Test_Undrawn_Ligature_Is_Two_Stops;
+
+   --  What the fonts Guikit.Text loaded draw is recorded in Guikit.Bidi, and
+   --  a layout given no Has_Glyph asks it: a caller that passes nothing
+   --  still agrees with the drawing.
+   procedure Test_Default_Follows_Recorded_Forms (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Guikit.Bidi;
+      Pair     : constant String := Utf8 ([Lam, Arabic_Alef]);
+      Coverage : Form_Coverage := [others => True];
+   begin
+      for Form in 16#FEF5# .. 16#FEFC# loop
+         Coverage (Form) := False;
+      end loop;
+      Set_Drawable_Forms (Coverage);
+      Assert (not Can_Draw_Form (16#FEFB#) and then Can_Draw_Form (16#FEFE#), "the recorded forms are answered");
+      Assert (Can_Draw_Form (Lam) and then Can_Draw_Form (65), "a code point that is no form is always drawn");
+      Assert (Natural (Lay_Out (Pair).Clusters.Length) = 2, "without the ligature the pair is two clusters");
+      Assert (Caret_Step (Pair, 0, Rightward => False) = 2, "and the caret stops between lam and alef");
+      Assert
+        (Guikit.Text_Fields.Caret_X (Pair, 2, 120, 20, 2, Mirrored => False) = 12,
+         "a field asked without Has_Glyph puts the caret one cell in");
+      Assert
+        (Natural (Lay_Out (Pair, Has_Glyph => Always'Access).Clusters.Length) = 1,
+         "an explicit Has_Glyph still overrides the record");
+
+      Set_Drawable_Forms ([others => True]);
+      Assert (Natural (Lay_Out (Pair).Clusters.Length) = 1, "with the ligature recorded it is one cluster");
+   end Test_Default_Follows_Recorded_Forms;
 
    procedure Test_Wide_Character_Straddling_A_Mirrored_Field (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);
@@ -575,6 +623,9 @@ package body Guikit_Suite.Bidi is
                                  Mirror_Glyph => True, others => <>));
       Text.Append (Text_Command'(X => 0, Y => 0, Width => 10, Height => 10,
                                  Text => Ada.Strings.Unbounded.To_Unbounded_String ("("), others => <>));
+      --  A fitted symbol wholly past the right edge.
+      Text.Append (Text_Command'(X => 120, Y => 0, Width => 10, Height => 10, Scale_To_Box => True,
+                                 Text => Ada.Strings.Unbounded.To_Unbounded_String ("x"), others => <>));
       Icons.Append (Icon_Command'(X => 0, Y => 0, Size => 16, others => <>));
       --  Wholly past the right edge, and sticking out past it.
       Icons.Append (Icon_Command'(X => 120, Y => 0, Size => 16, others => <>));
@@ -593,6 +644,9 @@ package body Guikit_Suite.Bidi is
       Assert
         (Ada.Strings.Unbounded.To_String (Text (5).Text) = "(",
          "a one-character text that is not a symbol, a query of '(', is shown as typed");
+      Assert
+        (Text (6).Width = 0 and then Ada.Strings.Unbounded.Length (Text (6).Text) = 0,
+         "text wholly past the right edge stays unseen, not drawn at the left");
       Assert (Icons (1).X = 84, "an icon moves with its box");
       Assert
         (Icons (2).Size = 0 and then Icons (2).Draw_Width = 0 and then Icons (2).Draw_Height = 0,

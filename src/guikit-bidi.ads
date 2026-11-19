@@ -96,13 +96,51 @@ package Guikit.Bidi is
       Glyphs : Codepoint_Vectors.Vector;
    end record;
 
+   --  The Arabic presentation forms (U+FB50 .. U+FDFF, U+FE70 .. U+FEFF)
+   --  and the code points between them, which are answered for alike.
+   subtype Form_Codepoint is Natural range 16#FB50# .. 16#FEFF#;
+
+   --  Which code points of Form_Codepoint a font chain draws.
+   type Form_Coverage is array (Form_Codepoint) of Boolean
+     with Pack;
+
+   --  Whether a code point is an Arabic presentation form, the only code
+   --  points whose drawability changes how text is laid out.
+   --
+   --  @param Codepoint A Unicode code point.
+   --  @return True for U+FB50 .. U+FDFF and U+FE70 .. U+FEFF.
+   function Is_Presentation_Form (Codepoint : Natural) return Boolean is
+     (Codepoint in 16#FB50# .. 16#FDFF# | 16#FE70# .. 16#FEFF#);
+
+   --  Record which presentation forms the text is drawn with, for
+   --  Can_Draw_Form and so for every layout given no Has_Glyph.
+   --  Guikit.Text.Initialize records its renderer's fonts here when they
+   --  load, and every form as drawable when a load fails. It may be called
+   --  from any task.
+   --
+   --  @param Coverage Whether each presentation form is drawn; entries for
+   --  code points that are not forms are ignored.
+   procedure Set_Drawable_Forms (Coverage : Form_Coverage);
+
+   --  Whether the fonts last recorded (Set_Drawable_Forms) draw Codepoint:
+   --  for a presentation form, what those fonts answer; for any other code
+   --  point, and before anything was recorded, True. With several text
+   --  renderers it answers for the one whose Initialize ran last. It may be
+   --  called from any task.
+   --
+   --  @param Codepoint A Unicode code point.
+   --  @return Whether the recorded fonts draw it, for a presentation form.
+   function Can_Draw_Form (Codepoint : Natural) return Boolean;
+
    --  Lay Content out for drawing: shape Arabic letters, resolve levels,
    --  mirror what a right-to-left run mirrors, and put the clusters in
    --  display order.
    --
    --  @param Content UTF-8 text, one paragraph.
    --  @param Has_Glyph Whether the font can draw a code point; a presentation
-   --  form it cannot draw is left as the plain letter. Null assumes it can.
+   --  form it cannot draw is left as the plain letter. Null asks
+   --  Can_Draw_Form -- the fonts Guikit.Text loaded -- so a caller laying
+   --  out text drawn by Guikit.Text need not pass anything.
    --  @return The laid-out line.
    function Lay_Out
      (Content   : String;
@@ -125,9 +163,9 @@ package Guikit.Bidi is
    --  @param Cursor Byte offset into Content.
    --  @param Columns How many display cells the text is drawn in.
    --  @param Has_Glyph Whether the font can draw a code point, as Lay_Out
-   --  takes it: pass the query the text is drawn with (for instance
-   --  Guikit.Text.Can_Draw_Form) so a lam-alef pair the font has no ligature
-   --  for is two characters here too. Null assumes it can.
+   --  takes it, so a lam-alef pair the font has no ligature for is two
+   --  characters here too. Null asks Can_Draw_Form, which answers for the
+   --  fonts Guikit.Text draws with.
    --  @return Display column of the caret.
    function Caret_Column
      (Content   : String;

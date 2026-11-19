@@ -38,6 +38,10 @@ package Guikit.Text is
    --  Load the monospace primary font and append the fallback chain into the
    --  same shared atlas. A missing or unloadable fallback is non-fatal (the
    --  primary already renders and the remaining fallbacks still apply).
+   --  Records which Arabic presentation forms the fonts draw for
+   --  Can_Draw_Form -- or, when the load fails, that every form is drawn.
+   --  May be called from any task, though one renderer only from one at a
+   --  time.
    --
    --  @param R Renderer to (re)initialize.
    --  @param Font_Path Monospace primary font path; "" fails.
@@ -63,15 +67,17 @@ package Guikit.Text is
    --  Codepoint, as far as Guikit.Bidi's Arabic shaping asks: for a
    --  presentation form (U+FB50 .. U+FDFF, U+FE70 .. U+FEFF) it answers what
    --  Build_Glyphs' own query answers for that renderer; for any other code
-   --  point, and before any font loaded, True.
+   --  point, before any font loaded and after the last Initialize failed,
+   --  True. With several renderers it answers for the one whose Initialize
+   --  ran last.
    --
    --  Build_Glyphs lays text out with its renderer's fonts, so a lam-alef
-   --  pair the fonts have no ligature for is drawn as two letters. Passed as
-   --  Has_Glyph to Guikit.Bidi's and Guikit.Text_Fields' caret subprograms
-   --  (Can_Draw_Form'Access), it makes carets, clicks and arrow keys lay the
-   --  text out the same way, without the renderer at hand. An application
-   --  drawing every window with one font chain gets that chain's answer. It
-   --  may be called from any task.
+   --  pair the fonts have no ligature for is drawn as two letters.
+   --  Initialize records the answer in Guikit.Bidi (Set_Drawable_Forms), and
+   --  Guikit.Bidi's and Guikit.Text_Fields' caret subprograms ask it when
+   --  given no Has_Glyph, so carets, clicks and arrow keys lay the text out
+   --  the same way without the renderer at hand; passing Can_Draw_Form'Access
+   --  explicitly is the same. It may be called from any task.
    --
    --  @param Codepoint A Unicode code point.
    --  @return Whether the loaded fonts draw it, for a presentation form.

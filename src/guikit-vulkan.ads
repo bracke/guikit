@@ -448,6 +448,11 @@ private
    --  Heap copy of the last read-back framebuffer, retained so layout-derived
    --  region checks can index it after the mapped Vulkan memory is unmapped.
 
+   --  What the atlas's descriptor binding names: nothing yet (Unwritten),
+   --  the texture's live view (Current), or a view since destroyed (Stale),
+   --  which the descriptor set must not be bound with.
+   type Atlas_Binding_State is (Binding_Unwritten, Binding_Current, Binding_Stale);
+
    --  A texture the shaders sample -- the text atlas or the icon atlas --
    --  and the host-visible staging buffer its pixels are copied through.
    type Atlas_Texture is record
@@ -470,6 +475,8 @@ private
       --  Pixels wait in the staging buffer for the next command buffer to
       --  copy them into the image.
       Upload_Pending   : Boolean := False;
+      --  What the atlas's descriptor binding names.
+      Binding          : Atlas_Binding_State := Binding_Unwritten;
    end record;
 
    --  The two textures the shaders sample: the glyph atlas (descriptor

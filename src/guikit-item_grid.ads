@@ -390,8 +390,9 @@ package Guikit.Item_Grid is
    --  @param Focus_Ring_Color Focus ring colour.
    --  @param Caret_Color Caret colour.
    --  @param Has_Glyph Whether the fonts the text is drawn with draw a code
-   --  point (Guikit.Text.Can_Draw_Form), so the caret stands where the drawn
-   --  text has it (Guikit.Text_Fields); null assumes they do.
+   --  point, so the caret stands where the drawn text has it
+   --  (Guikit.Text_Fields); null asks Guikit.Bidi.Can_Draw_Form, which
+   --  answers for the fonts Guikit.Text draws with.
    procedure Draw_Name_Field
      (Rectangles       : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
       Text_Commands    : in out Guikit.Draw.Text_Command_Vectors.Vector;

@@ -473,8 +473,9 @@ package body Guikit.Vulkan is
       --  again when it is not Width by Height in Format, the staging buffer
       --  when it is smaller than Bytes. Fill writes the pixels into the
       --  mapped staging memory. The command buffers copy them into the
-      --  image (Upload_Pending). False when a step fails; whatever failed
-      --  is left released, never half made.
+      --  image (Upload_Pending). False when a step fails: the texture is
+      --  then left released, never half made, and a binding that named it
+      --  is marked stale so the descriptor set is not bound with it.
       function Upload
         (Renderer : in out Vulkan_Renderer;
          Kind     : Atlas_Kind;
@@ -1040,6 +1041,7 @@ package body Guikit.Vulkan is
             Texture.Height := 0;
             Texture.Format := Atlas_Texture_None;
             Texture.Staging_Capacity := 0;
+            Texture.Binding := Binding_Unwritten;
          end loop;
          Renderer.Commands_Live := False;
          Renderer.Swapchain_Images := [others => System.Null_Address];

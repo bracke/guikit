@@ -13,10 +13,8 @@ is
         or else Texture.Width /= Batch.Atlas_Width
         or else Texture.Height /= Batch.Atlas_Height
         or else Texture.Format /= Atlas_Texture_R8);
-   --  Without text, the texture only has to be valid (a 1x1 stand-in):
+   --  Without text, the texture only has to be valid (a 1x1 R8 stand-in):
    --  icons are drawn from their own texture (Upload_Icon_Atlas).
-   Upload_Format : constant Atlas_Texture_Format :=
-     (if Use_Batch_Atlas then Atlas_Texture_R8 else Atlas_Texture_None);
    Actual_Width  : constant Natural := (if Use_Batch_Atlas then Batch.Atlas_Width else 1);
    Actual_Height : constant Natural := (if Use_Batch_Atlas then Batch.Atlas_Height else 1);
    Bytes         : constant Natural := (if Use_Batch_Atlas then Batch.Atlas_Bytes else 1);
@@ -32,7 +30,7 @@ is
       end loop;
    end Fill;
 begin
-   if not Use_Batch_Atlas and then Texture.Texture_Live then
+   if not Use_Batch_Atlas and then Texture.Texture_Live and then Texture.Binding = Binding_Current then
       return True;
    elsif Pixel_Address = System.Null_Address
      or else Actual_Width = 0
@@ -43,7 +41,7 @@ begin
       return False;
    end if;
 
-   if not Atlas_Uploads.Upload (Renderer, Text_Atlas, Actual_Width, Actual_Height, Upload_Format, Bytes, Fill'Access)
+   if not Atlas_Uploads.Upload (Renderer, Text_Atlas, Actual_Width, Actual_Height, Atlas_Texture_R8, Bytes, Fill'Access)
    then
       return False;
    end if;

@@ -31,6 +31,7 @@ package body Guikit_Suite.Text is
    procedure Test_Font_Discovery (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Right_To_Left_Glyphs (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Align_End (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Empty_Box_Draws_Nothing (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  A monospace face each host has, as textrender's own tests look for.
    Font_Candidates : constant array (Positive range <>) of access constant String :=
@@ -323,6 +324,31 @@ package body Guikit_Suite.Text is
       end;
    end Test_Align_End;
 
+   --  A box mirrored wholly past the frame keeps no width: neither its text
+   --  nor a zero-width mark leading it may be drawn, fitted to the box or
+   --  not -- fitted, it used to land at the frame's left edge.
+   procedure Test_Empty_Box_Draws_Nothing (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      R        : Guikit.Text.Renderer;
+      Empty    : Text_Command_Vectors.Vector;
+      Commands : Text_Command_Vectors.Vector;
+      Marked   : constant String := Guikit.Utf8.Encode (16#0301#) & "a";
+   begin
+      if not Font_Available ("empty box draws nothing") then
+         return;
+      end if;
+      Assert (Start (R), "the renderer loads the font");
+      for Fitted in Boolean loop
+         Commands.Append
+           (Text_Command'
+              (X => 0, Y => 0, Width => 0, Height => 200, Scale_To_Box => Fitted,
+               Text => Ada.Strings.Unbounded.To_Unbounded_String (Marked), others => <>));
+      end loop;
+      Assert
+        (Natural (Guikit.Text.Build_Glyphs (R, Commands, Empty).Glyphs.Length) = 0,
+         "no glyph is drawn for a box with no width");
+   end Test_Empty_Box_Draws_Nothing;
+
    procedure Test_Right_To_Left_Glyphs (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);
       Face  : access constant String := null;
@@ -453,6 +479,9 @@ package body Guikit_Suite.Text is
          "Hebrew is drawn right to left and Arabic joined, and a long one keeps its start");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Align_End'Access, "text aligned to its box's end stands against the right edge");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Empty_Box_Draws_Nothing'Access,
+         "text in a box with no width draws nothing, not even a leading mark");
    end Register_Tests;
 
    procedure Test_Font_Discovery (T : in out AUnit.Test_Cases.Test_Case'Class) is

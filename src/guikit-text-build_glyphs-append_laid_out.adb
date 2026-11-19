@@ -9,16 +9,10 @@ is
    Cell_X  : Float := Float (Text.X);
    Cell_Y  : constant Float := Float (Text.Y);
    Limit_X : constant Float := Float (Sat_Add (Text.X, Text.Width));
-   Total   : Natural := 0;
-   Skip    : Natural := 0;
+   --  The cells a right-to-left paragraph too long for its box loses on
+   --  the left.
+   Skip    : Natural := Guikit.Bidi.Cut_Columns (Laid, Text.Width / R.Cell_Width);
 begin
-   for Item of Laid.Clusters loop
-      Total := Sat_Add (Total, Item.Units);
-   end loop;
-   if Laid.Right_To_Left and then Total > Text.Width / R.Cell_Width then
-      Skip := Total - Text.Width / R.Cell_Width;
-   end if;
-
    for Item of Laid.Clusters loop
       if Skip > 0 and then Item.Units > 0 then
          --  Cut off: a wide cluster the cut runs through leaves its

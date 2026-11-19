@@ -134,7 +134,9 @@ is
 
    --  Each command of Cmds, aligned, as glyphs appended to Glyphs: laid out
    --  by Guikit.Bidi when it needs it, otherwise one cell per code point
-   --  until the box is full.
+   --  until the box is full. A command with no width draws nothing -- not
+   --  even a leading zero-width mark, which would otherwise land beside
+   --  its empty box (or, fitted to the box, at the frame's left edge).
    procedure Append_Glyphs
      (Cmds    : Text_Command_Vectors.Vector;
       Glyphs  : in out Glyph_Command_Vectors.Vector;
@@ -150,7 +152,9 @@ is
             Base_X  : Float := Float (Text.X);
             Index   : Integer := Content'First;
          begin
-            if Guikit.Bidi.Needs_Layout (Content) then
+            if Text.Width = 0 then
+               null;
+            elsif Guikit.Bidi.Needs_Layout (Content) then
                Append_Laid_Out (Glyphs, Overlay, Text, Content);
             else
                while Index <= Content'Last loop

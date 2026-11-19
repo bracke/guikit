@@ -185,7 +185,7 @@ is
       then
          return Vulkan_Swapchain_Image_Query_Failed;
       elsif Renderer.Swapchain_Image_Count > Interfaces.Unsigned_32 (Max_Swapchain_Images) then
-         return Vulkan_Render_Target_Create_Failed;
+         return Vulkan_Swapchain_Image_Query_Failed;
       elsif Vk.Get_Swapchain_Images_KHR
               (device                  => Renderer.Device,
                swapchain               => Renderer.Swapchain,
