@@ -260,16 +260,18 @@ package body Guikit.Bidi is
    function Cut_Columns (Laid : Line; Columns : Natural) return Natural renames Guikit.Bidi.Carets.Cut_Columns;
 
    function Caret_Column
-     (Content : String;
-      Cursor  : Natural;
-      Columns : Natural := Natural'Last)
+     (Content   : String;
+      Cursor    : Natural;
+      Columns   : Natural := Natural'Last;
+      Has_Glyph : access function (Codepoint : Natural) return Boolean := null)
       return Natural
      renames Guikit.Bidi.Carets.Caret_Column;
 
    function Cursor_At_Half_Column
      (Content     : String;
       Half_Column : Natural;
-      Columns     : Natural := Natural'Last)
+      Columns     : Natural := Natural'Last;
+      Has_Glyph   : access function (Codepoint : Natural) return Boolean := null)
       return Natural
      renames Guikit.Bidi.Carets.Cursor_At_Half_Column;
 
@@ -277,7 +279,8 @@ package body Guikit.Bidi is
      (Content   : String;
       Cursor    : Natural;
       Rightward : Boolean;
-      By_Word   : Boolean := False)
+      By_Word   : Boolean := False;
+      Has_Glyph : access function (Codepoint : Natural) return Boolean := null)
       return Natural
      renames Guikit.Bidi.Carets.Caret_Step;
 

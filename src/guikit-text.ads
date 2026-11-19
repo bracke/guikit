@@ -59,6 +59,24 @@ package Guikit.Text is
       Atlas_Height   : Positive := 1024)
       return Guikit.Draw.Text_Render_Status;
 
+   --  Whether the fonts last loaded by Initialize, in any renderer, can draw
+   --  Codepoint, as far as Guikit.Bidi's Arabic shaping asks: for a
+   --  presentation form (U+FB50 .. U+FDFF, U+FE70 .. U+FEFF) it answers what
+   --  Build_Glyphs' own query answers for that renderer; for any other code
+   --  point, and before any font loaded, True.
+   --
+   --  Build_Glyphs lays text out with its renderer's fonts, so a lam-alef
+   --  pair the fonts have no ligature for is drawn as two letters. Passed as
+   --  Has_Glyph to Guikit.Bidi's and Guikit.Text_Fields' caret subprograms
+   --  (Can_Draw_Form'Access), it makes carets, clicks and arrow keys lay the
+   --  text out the same way, without the renderer at hand. An application
+   --  drawing every window with one font chain gets that chain's answer. It
+   --  may be called from any task.
+   --
+   --  @param Codepoint A Unicode code point.
+   --  @return Whether the loaded fonts draw it, for a presentation form.
+   function Can_Draw_Form (Codepoint : Natural) return Boolean;
+
    --  Teach this renderer to decode the pictures some fonts hold instead of
    --  outlines, so emoji can be drawn in colour.
    --

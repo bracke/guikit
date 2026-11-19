@@ -12,7 +12,8 @@ procedure Build_Frame
    Hover_Y       : Integer;
    Rectangles    : out Guikit.Draw.Rectangle_Command_Vectors.Vector;
    Text          : out Guikit.Draw.Text_Command_Vectors.Vector;
-   Accessibility : out Guikit.Draw.Accessibility_Node_Vectors.Vector)
+   Accessibility : out Guikit.Draw.Accessibility_Node_Vectors.Vector;
+   Has_Glyph     : access function (Codepoint : Natural) return Boolean := null)
 is
    LH        : constant Positive := P.Config.Line_Height;
    --  The panel's spacing grows with its text (a 2x display, a larger font).

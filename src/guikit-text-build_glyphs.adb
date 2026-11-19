@@ -111,7 +111,9 @@ is
       Content : String) is separate;
 
    --  Text aligned to its box's right edge (Align_End) is drawn in a
-   --  box just as wide as what of it fits, standing against that edge.
+   --  box just as wide as the whole characters of it that fit, standing
+   --  against that edge: a wide character the box's start would cut goes
+   --  whole, so no blank cell is left at the edge the text stands against.
    function Aligned (Given : Text_Command) return Text_Command is
    begin
       if not Given.Align_End or else Given.Scale_To_Box then
@@ -120,7 +122,7 @@ is
       declare
          Content : constant String := To_String (Given.Text);
          Fit     : constant Natural :=
-           Natural'Min (Guikit.Utf8.Display_Units (Content), Given.Width / R.Cell_Width);
+           Guikit.Utf8.Display_Units (Guikit.Utf8.Prefix_By_Units (Content, Given.Width / R.Cell_Width));
          Used    : constant Natural := Sat_Mul (Fit, R.Cell_Width);
          Result  : Text_Command := Given;
       begin

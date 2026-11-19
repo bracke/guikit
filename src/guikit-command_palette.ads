@@ -188,6 +188,9 @@ package Guikit.Command_Palette is
    --  @param Text Out: text commands.
    --  @param Icons Out: icon commands.
    --  @param Accessibility Out: accessibility nodes for the palette elements.
+   --  @param Has_Glyph Whether the fonts the text is drawn with draw a code
+   --  point (Guikit.Text.Can_Draw_Form), so a field's caret stands where the
+   --  drawn text has it (Guikit.Text_Fields); null assumes they do.
    procedure Build_Frame
      (P             : in out Palette;
       Region_X      : Natural;
@@ -202,7 +205,8 @@ package Guikit.Command_Palette is
       Rectangles    : out Guikit.Draw.Rectangle_Command_Vectors.Vector;
       Text          : out Guikit.Draw.Text_Command_Vectors.Vector;
       Icons         : out Guikit.Draw.Icon_Command_Vectors.Vector;
-      Accessibility : out Guikit.Draw.Accessibility_Node_Vectors.Vector);
+      Accessibility : out Guikit.Draw.Accessibility_Node_Vectors.Vector;
+      Has_Glyph     : access function (Codepoint : Natural) return Boolean := null);
 
 private
 

@@ -196,6 +196,12 @@ package Guikit.Draw is
       --  what a label's box mirrored for a right-to-left layout (Mirror)
       --  asks, so the text still starts where the box does.
       Align_End : Boolean := False;
+      --  The text is a symbol pointing one way -- a breadcrumb's separator
+      --  ('>'), an arrow -- rather than words: a frame mirrored for a
+      --  right-to-left layout (Guikit.Mirroring.Mirror) draws a one-character
+      --  symbol as its mirror image ('<'). Text a user typed or reads (a
+      --  query, a value, a name) leaves it False and is shown as it is.
+      Mirror_Glyph : Boolean := False;
    end record;
 
    package Text_Command_Vectors is new Ada.Containers.Vectors

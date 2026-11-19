@@ -68,7 +68,9 @@ package Guikit.Mirroring is
    procedure Mirror (Items : in out Triangle_Command_Vectors.Vector; Width : Natural);
 
    --  @param Items Text boxes to reflect; Align_End is toggled, and a box
-   --  holding one mirrorable character ('>') takes its mirror image ('<').
+   --  marked as a symbol (Mirror_Glyph) holding one mirrorable character
+   --  ('>') takes its mirror image ('<'). Other text, one character or more,
+   --  keeps its characters.
    --  @param Width Frame width in pixels.
    procedure Mirror (Items : in out Text_Command_Vectors.Vector; Width : Natural);
 
@@ -78,6 +80,10 @@ package Guikit.Mirroring is
 
    --  @param Items Icons to move; their pictures are not flipped, nor cut:
    --  an icon sticking out past the frame's right edge starts at its left.
+   --  An icon wholly past the right edge, which the unmirrored frame does
+   --  not show, is not shown mirrored either: it is left at X 0 with no size
+   --  (Size, Draw_Width and Draw_Height 0), which the backend draws as
+   --  nothing.
    --  @param Width Frame width in pixels.
    procedure Mirror (Items : in out Icon_Command_Vectors.Vector; Width : Natural);
 

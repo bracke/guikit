@@ -972,22 +972,149 @@ procedure Check_All is
       No_Deps : constant Project_Tools.Ada_Source.String_List (1 .. 0) :=
         [others => <>];
 
+      package Stem_Vectors is new Ada.Containers.Indefinite_Vectors (Positive, String);
+
+      --  The units given a layer, so a unit without one is caught.
+      Layered : Stem_Vectors.Vector;
+
+      --  Whether the body at Path is a subunit: the first code after its
+      --  context clause is `separate`.
+      function Is_Subunit (Path : String) return Boolean is
+         File      : File_Type;
+         In_Clause : Boolean := False;
+         Result    : Boolean := False;
+      begin
+         Open (File, In_File, Path);
+         while not End_Of_File (File) loop
+            declare
+               Raw  : constant String := Get_Line (File);
+               Dash : constant Natural := Ada.Strings.Fixed.Index (Raw, "--");
+               Code : constant String :=
+                 Ada.Characters.Handling.To_Lower
+                   (Ada.Strings.Fixed.Trim
+                      ((if Dash = 0 then Raw else Raw (Raw'First .. Dash - 1)), Ada.Strings.Both));
+               Clause : constant Boolean :=
+                 Starts_With (Code, "with ") or else Starts_With (Code, "use ")
+                 or else Starts_With (Code, "limited ") or else Starts_With (Code, "private with ")
+                 or else Starts_With (Code, "pragma ");
+            begin
+               if Code = "" then
+                  null;
+               elsif In_Clause or else Clause then
+                  In_Clause := Ada.Strings.Fixed.Index (Code, ";") = 0;
+               else
+                  Result := Starts_With (Code, "separate");
+                  exit;
+               end if;
+            end;
+         end loop;
+         Close (File);
+         return Result;
+      end Is_Subunit;
+
+      --  Whether src holds library unit Stem: its spec, or a body that is
+      --  not a subunit.
+      function Is_Library_Unit (Stem : String) return Boolean is
+        (Project_Tools.Files.File_Exists (Root & "/src/" & Stem & ".ads")
+         or else (Project_Tools.Files.File_Exists (Root & "/src/" & Stem & ".adb")
+                  and then not Is_Subunit (Root & "/src/" & Stem & ".adb")));
+
+      --  The library unit a subunit file named Stem belongs to: Stem with
+      --  its trailing "-name" parts dropped until a library unit is left.
+      function Owner_Of (Stem : String) return String is
+      begin
+         for Cut in reverse Stem'Range loop
+            if Stem (Cut) = '-' and then Is_Library_Unit (Stem (Stem'First .. Cut - 1)) then
+               return Stem (Stem'First .. Cut - 1);
+            end if;
+         end loop;
+         return "";
+      end Owner_Of;
+
+      --  Require Stem's spec, body, platform bodies (src/platform/*/) and
+      --  subunits (Stem-*.adb starting with `separate`, belonging to Stem
+      --  rather than to a child) to name only Allowed of guikit's units.
       procedure Require_Layer
         (Stem    : String;
          Allowed : Project_Tools.Ada_Source.String_List)
       is
-         Spec : constant String := Root & "/src/" & Stem & ".ads";
-         Impl : constant String := Root & "/src/" & Stem & ".adb";
+         procedure Require (Path : String) is
+         begin
+            Project_Tools.Ada_Source.Require_Only_Allowed_With_Clauses (Path, "Guikit.", Allowed);
+         end Require;
+
+         Spec   : constant String := Root & "/src/" & Stem & ".ads";
+         Impl   : constant String := Root & "/src/" & Stem & ".adb";
+         Search : Ada.Directories.Search_Type;
+         Item   : Ada.Directories.Directory_Entry_Type;
       begin
+         Layered.Append (Stem);
          if Project_Tools.Files.File_Exists (Spec) then
-            Project_Tools.Ada_Source.Require_Only_Allowed_With_Clauses
-              (Spec, "Guikit.", Allowed);
+            Require (Spec);
          end if;
          if Project_Tools.Files.File_Exists (Impl) then
-            Project_Tools.Ada_Source.Require_Only_Allowed_With_Clauses
-              (Impl, "Guikit.", Allowed);
+            Require (Impl);
+         end if;
+
+         Ada.Directories.Start_Search
+           (Search, Root & "/src", Stem & "-*.adb", [Ada.Directories.Ordinary_File => True, others => False]);
+         while Ada.Directories.More_Entries (Search) loop
+            Ada.Directories.Get_Next_Entry (Search, Item);
+            declare
+               Path : constant String := Ada.Directories.Full_Name (Item);
+            begin
+               if Is_Subunit (Path) and then Owner_Of (Ada.Directories.Base_Name (Path)) = Stem then
+                  Require (Path);
+               end if;
+            end;
+         end loop;
+         Ada.Directories.End_Search (Search);
+
+         if Project_Tools.Files.Directory_Exists (Root & "/src/platform") then
+            Ada.Directories.Start_Search
+              (Search, Root & "/src/platform", "*", [Ada.Directories.Directory => True, others => False]);
+            while Ada.Directories.More_Entries (Search) loop
+               Ada.Directories.Get_Next_Entry (Search, Item);
+               declare
+                  Platform_Body : constant String := Ada.Directories.Full_Name (Item) & "/" & Stem & ".adb";
+               begin
+                  if Ada.Directories.Simple_Name (Item) not in "." | ".."
+                    and then Project_Tools.Files.File_Exists (Platform_Body)
+                  then
+                     Require (Platform_Body);
+                  end if;
+               end;
+            end loop;
+            Ada.Directories.End_Search (Search);
          end if;
       end Require_Layer;
+
+      --  Every library unit in src has a layer.
+      procedure Require_Every_Unit_Layered is
+         Search : Ada.Directories.Search_Type;
+         Item   : Ada.Directories.Directory_Entry_Type;
+         Missed : Boolean := False;
+      begin
+         Ada.Directories.Start_Search
+           (Search, Root & "/src", "*.ad?", [Ada.Directories.Ordinary_File => True, others => False]);
+         while Ada.Directories.More_Entries (Search) loop
+            Ada.Directories.Get_Next_Entry (Search, Item);
+            declare
+               Stem : constant String := Ada.Directories.Base_Name (Ada.Directories.Simple_Name (Item));
+            begin
+               if Is_Library_Unit (Stem) and then not Layered.Contains (Stem) then
+                  Put_Line (Standard_Error, "error: src/" & Ada.Directories.Simple_Name (Item)
+                            & " belongs to a unit Check_Layering gives no layer");
+                  Missed := True;
+               end if;
+            end;
+         end loop;
+         Ada.Directories.End_Search (Search);
+         if Missed then
+            Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);
+            raise Program_Error;
+         end if;
+      end Require_Every_Unit_Layered;
    begin
       Require_Layer ("guikit-shared_bytes", No_Deps);
       --  Where any layer reports what it caught: a leaf every layer may name.
@@ -1065,6 +1192,66 @@ procedure Check_All is
       Require_Layer ("glfw-windows-modifiers", [1 => To_Unbounded_String ("Guikit.Input")]);
       Require_Layer ("glfw-windows-native", No_Deps);
       Require_Layer ("glfw-windows-vulkan", No_Deps);
+      --  The root package names nothing.
+      Require_Layer ("guikit", No_Deps);
+      --  Queued input reports what it carries on past and names the mouse
+      --  button vocabulary.
+      Require_Layer
+        ("guikit-input-pending",
+         [To_Unbounded_String ("Guikit.Errors"),
+          To_Unbounded_String ("Guikit.Input.Mouse_Buttons")]);
+      --  The fuzzy matcher the command palette ranks with is text only.
+      Require_Layer ("guikit-palette", [1 => To_Unbounded_String ("Guikit.Utf8")]);
+      --  The components draw through the widgets and lay out with the
+      --  layout helpers; a stateful one may build on a stateless one, never
+      --  the reverse, and none of them reaches the backend or the text layer.
+      Require_Layer
+        ("guikit-segmented",
+         [To_Unbounded_String ("Guikit.Draw"),
+          To_Unbounded_String ("Guikit.Layout")]);
+      Require_Layer
+        ("guikit-list_panel",
+         [To_Unbounded_String ("Guikit.Draw"),
+          To_Unbounded_String ("Guikit.Layout"),
+          To_Unbounded_String ("Guikit.Utf8"),
+          To_Unbounded_String ("Guikit.Widgets")]);
+      Require_Layer
+        ("guikit-menu_tree",
+         [To_Unbounded_String ("Guikit.Draw"),
+          To_Unbounded_String ("Guikit.Layout"),
+          To_Unbounded_String ("Guikit.Utf8"),
+          To_Unbounded_String ("Guikit.Widgets")]);
+      Require_Layer
+        ("guikit-tree_panel",
+         [To_Unbounded_String ("Guikit.Draw"),
+          To_Unbounded_String ("Guikit.Layout"),
+          To_Unbounded_String ("Guikit.List_Panel")]);
+      Require_Layer
+        ("guikit-item_grid",
+         [To_Unbounded_String ("Guikit.Draw"),
+          To_Unbounded_String ("Guikit.Layout"),
+          To_Unbounded_String ("Guikit.Text_Fields"),
+          To_Unbounded_String ("Guikit.Utf8"),
+          To_Unbounded_String ("Guikit.Widgets")]);
+      Require_Layer
+        ("guikit-command_palette",
+         [To_Unbounded_String ("Guikit.Draw"),
+          To_Unbounded_String ("Guikit.Layout"),
+          To_Unbounded_String ("Guikit.Palette"),
+          To_Unbounded_String ("Guikit.Shared_Bytes"),
+          To_Unbounded_String ("Guikit.Text_Fields"),
+          To_Unbounded_String ("Guikit.Utf8"),
+          To_Unbounded_String ("Guikit.Utf8.Editing"),
+          To_Unbounded_String ("Guikit.Widgets")]);
+      Require_Layer
+        ("guikit-settings_panel",
+         [To_Unbounded_String ("Guikit.Draw"),
+          To_Unbounded_String ("Guikit.Layout"),
+          To_Unbounded_String ("Guikit.Segmented"),
+          To_Unbounded_String ("Guikit.Text_Fields"),
+          To_Unbounded_String ("Guikit.Utf8"),
+          To_Unbounded_String ("Guikit.Widgets")]);
+      Require_Every_Unit_Layered;
    end Check_Layering;
 
 begin

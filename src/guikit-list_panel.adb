@@ -55,63 +55,66 @@ package body Guikit.List_Panel is
       Row_Base_Y : constant Natural := Region_Y + (Title_Rows * Line_Height);
       Empty_Y : constant Natural := Region_Y + ((Title_Rows + 1) * Line_Height);
       Panel_Role_Name : constant UString := Config.Title;
-   begin
-      if Region_Width = 0 or else Region_Height = 0 then
-         return;
-      end if;
 
-      if Draw_Chrome then
-         Draw_Menu_Panel
-           (Rectangles,
-            Clip_Width   => Clip_Width,
-            Clip_Height  => Clip_Height,
-            X            => Region_X,
-            Y            => Region_Y,
-            Width        => Region_Width,
-            Height       => Region_Height,
-            Fill_Color   => Pane_Color,
-            Border_Color => Border_Color);
-      end if;
+      --  The panel, unless the caller draws it, its list node, and the
+      --  title with its heading node.
+      procedure Draw_Panel_And_Title is
+      begin
+         if Draw_Chrome then
+            Draw_Menu_Panel
+              (Rectangles,
+               Clip_Width   => Clip_Width,
+               Clip_Height  => Clip_Height,
+               X            => Region_X,
+               Y            => Region_Y,
+               Width        => Region_Width,
+               Height       => Region_Height,
+               Fill_Color   => Pane_Color,
+               Border_Color => Border_Color);
+         end if;
 
-      Accessibility.Append
-        (Accessibility_Node'
-           (Role        => Role_List,
-            X           => Region_X,
-            Y           => Region_Y,
-            Width       => Region_Width,
-            Height      => Region_Height,
-            Name        => Panel_Role_Name,
-            Description => Config.Empty_State,
-            Enabled     => True,
-            Selected    => False,
-            Focused     => False));
-
-      if Has_Title then
-         Text.Append
-           (Text_Command'
-              (X            => Title_X,
-               Y            => Title_Y,
-               Width        => Title_Width,
-               Height       => Title_Height,
-               Text         => Title_Text,
-               Color        => Text_Color,
-               Truncated    => Title_Truncated,
-               others       => <>));
          Accessibility.Append
            (Accessibility_Node'
-              (Role        => Role_Heading,
-               X           => Title_X,
-               Y           => Title_Y,
-               Width       => Title_Width,
-               Height      => Title_Height,
-               Name        => Title_Text,
-               Description => Title_Text,
-               Enabled     => False,
+              (Role        => Role_List,
+               X           => Region_X,
+               Y           => Region_Y,
+               Width       => Region_Width,
+               Height      => Region_Height,
+               Name        => Panel_Role_Name,
+               Description => Config.Empty_State,
+               Enabled     => True,
                Selected    => False,
                Focused     => False));
-      end if;
 
-      if Rows_To_Render = 0 then
+         if Has_Title then
+            Text.Append
+              (Text_Command'
+                 (X            => Title_X,
+                  Y            => Title_Y,
+                  Width        => Title_Width,
+                  Height       => Title_Height,
+                  Text         => Title_Text,
+                  Color        => Text_Color,
+                  Truncated    => Title_Truncated,
+                  others       => <>));
+            Accessibility.Append
+              (Accessibility_Node'
+                 (Role        => Role_Heading,
+                  X           => Title_X,
+                  Y           => Title_Y,
+                  Width       => Title_Width,
+                  Height      => Title_Height,
+                  Name        => Title_Text,
+                  Description => Title_Text,
+                  Enabled     => False,
+                  Selected    => False,
+                  Focused     => False));
+         end if;
+      end Draw_Panel_And_Title;
+
+      --  The empty-state message, when there is one, and its status node.
+      procedure Draw_Empty_State is
+      begin
          if Length (Config.Empty_State) > 0 then
             declare
                Empty_Text : constant UString := Fit_Text (Config.Empty_State, Text_Columns);
@@ -142,85 +145,95 @@ package body Guikit.List_Panel is
                      Focused     => False));
             end;
          end if;
+      end Draw_Empty_State;
+
+      --  Row I: its background, label and shortcut, and its list item node.
+      procedure Draw_Row (I : Positive) is
+         Row : constant List_Panel_Row := Rows (I);
+         Row_Y : constant Natural := Row_Base_Y + ((I - 1) * Eff_Row_Height);
+         --  Label is one Line_Height tall, vertically centred in the row.
+         Label_Y : constant Natural := Row_Y + (Eff_Row_Height - Line_Height) / 2;
+         --  Width available to the label after the reserved leading-icon column.
+         Avail_W : constant Natural :=
+           (if Text_Width > Leading_Icon_Width then Text_Width - Leading_Icon_Width else 0);
+         Combined : constant String :=
+           (if Length (Row.Detail) = 0 then To_String (Row.Label)
+            else To_String (Row.Label) & " - " & To_String (Row.Detail));
+         Shortcut_W : constant Natural :=
+           (if Length (Row.Shortcut) > 0 and then Avail_W > 14 * Cell_W then 10 * Cell_W else 0);
+         Label_W : constant Natural :=
+           (if Shortcut_W > 0 and then Avail_W > Shortcut_W + Cell_W
+            then Avail_W - Shortcut_W - Cell_W
+            else Avail_W);
+         Label_Columns : constant Natural := Label_W / Cell_W;
+         Shortcut_Columns : constant Natural := Shortcut_W / Cell_W;
+         Combined_Text : constant UString := Fit_Text (To_Unbounded_String (Combined), Label_Columns);
+         Shortcut_Text : constant UString := Fit_Text (Row.Shortcut, Shortcut_Columns);
+         Truncated : constant Boolean := Guikit.Utf8.Display_Units (Combined) > Label_Columns;
+         Shortcut_X : constant Natural :=
+           (if Shortcut_W > 0 then Region_X + Region_Width - Shortcut_W - Config.Text_Padding else 0);
+         Background : constant Render_Color :=
+           (if Row.Has_Background then Row.Background_Color
+            elsif Row.Selected then Selection_Color
+            elsif Config.Show_Alternate_Rows and then I mod 2 = 0 then Alternate_Row_Color
+            else Pane_Color);
+      begin
+         Draw_Palette_Row
+           (Rectangles            => Rectangles,
+            Text                  => Text,
+            Clip_Width            => Clip_Width,
+            Clip_Height           => Clip_Height,
+            Row_X                 => Region_X,
+            Row_Y                 => Row_Y,
+            Row_Width             => Region_Width,
+            Row_Height            => Eff_Row_Height,
+            Background_Color      => Background,
+            Selected              => Row.Selected,
+            Accent_Color          => Row.Accent_Color,
+            Accent_Width          => Guikit.Layout.Scaled (3, Line_Height),
+            Label_X               => Title_X + Leading_Icon_Width,
+            Label_Y               => Label_Y,
+            Label_Width           => Label_W,
+            Label_Height          => Line_Height,
+            Label_Text            => Combined_Text,
+            Label_Truncated       => Truncated,
+            Label_Color           => Row.Label_Color,
+            Shortcut_X            => Shortcut_X,
+            Shortcut_Width        => Shortcut_W,
+            Shortcut_Text         => Shortcut_Text,
+            Shortcut_Truncated    => Guikit.Utf8.Display_Units (To_String (Row.Shortcut)) > Shortcut_Columns,
+            Shortcut_Color        => Row.Shortcut_Color,
+            Description_Y         => 0,
+            Description_Width     => 0,
+            Description_Height    => 0,
+            Description_Text      => Null_Unbounded_String,
+            Description_Truncated => False,
+            Description_Color     => Muted_Text_Color);
+
+         Accessibility.Append
+           (Accessibility_Node'
+              (Role        => Role_List_Item,
+               X           => Region_X,
+               Y           => Row_Y,
+               Width       => Region_Width,
+               Height      => Eff_Row_Height,
+               Name        => To_Unbounded_String (Combined),
+               Description => Row.Detail,
+               Enabled     => Row.Enabled,
+               Selected    => Row.Selected,
+               Focused     => False));
+      end Draw_Row;
+   begin
+      if Region_Width = 0 or else Region_Height = 0 then
          return;
       end if;
 
+      Draw_Panel_And_Title;
+      if Rows_To_Render = 0 then
+         Draw_Empty_State;
+      end if;
       for I in 1 .. Rows_To_Render loop
-         declare
-            Row : constant List_Panel_Row := Rows (I);
-            Row_Y : constant Natural := Row_Base_Y + ((I - 1) * Eff_Row_Height);
-            --  Label is one Line_Height tall, vertically centred in the row.
-            Label_Y : constant Natural := Row_Y + (Eff_Row_Height - Line_Height) / 2;
-            --  Width available to the label after the reserved leading-icon column.
-            Avail_W : constant Natural :=
-              (if Text_Width > Leading_Icon_Width then Text_Width - Leading_Icon_Width else 0);
-            Combined : constant String :=
-              (if Length (Row.Detail) = 0 then To_String (Row.Label)
-               else To_String (Row.Label) & " - " & To_String (Row.Detail));
-            Shortcut_W : constant Natural :=
-              (if Length (Row.Shortcut) > 0 and then Avail_W > 14 * Cell_W then 10 * Cell_W else 0);
-            Label_W : constant Natural :=
-              (if Shortcut_W > 0 and then Avail_W > Shortcut_W + Cell_W
-               then Avail_W - Shortcut_W - Cell_W
-               else Avail_W);
-            Label_Columns : constant Natural := Label_W / Cell_W;
-            Shortcut_Columns : constant Natural := Shortcut_W / Cell_W;
-            Combined_Text : constant UString := Fit_Text (To_Unbounded_String (Combined), Label_Columns);
-            Shortcut_Text : constant UString := Fit_Text (Row.Shortcut, Shortcut_Columns);
-            Truncated : constant Boolean := Guikit.Utf8.Display_Units (Combined) > Label_Columns;
-            Shortcut_X : constant Natural :=
-              (if Shortcut_W > 0 then Region_X + Region_Width - Shortcut_W - Config.Text_Padding else 0);
-            Background : constant Render_Color :=
-              (if Row.Has_Background then Row.Background_Color
-               elsif Row.Selected then Selection_Color
-               elsif Config.Show_Alternate_Rows and then I mod 2 = 0 then Alternate_Row_Color
-               else Pane_Color);
-         begin
-            Draw_Palette_Row
-              (Rectangles            => Rectangles,
-               Text                  => Text,
-               Clip_Width            => Clip_Width,
-               Clip_Height           => Clip_Height,
-               Row_X                 => Region_X,
-               Row_Y                 => Row_Y,
-               Row_Width             => Region_Width,
-               Row_Height            => Eff_Row_Height,
-               Background_Color      => Background,
-               Selected              => Row.Selected,
-               Accent_Color          => Row.Accent_Color,
-               Accent_Width          => Guikit.Layout.Scaled (3, Line_Height),
-               Label_X               => Title_X + Leading_Icon_Width,
-               Label_Y               => Label_Y,
-               Label_Width           => Label_W,
-               Label_Height          => Line_Height,
-               Label_Text            => Combined_Text,
-               Label_Truncated       => Truncated,
-               Label_Color           => Row.Label_Color,
-               Shortcut_X            => Shortcut_X,
-               Shortcut_Width        => Shortcut_W,
-               Shortcut_Text         => Shortcut_Text,
-               Shortcut_Truncated    => Guikit.Utf8.Display_Units (To_String (Row.Shortcut)) > Shortcut_Columns,
-               Shortcut_Color        => Row.Shortcut_Color,
-               Description_Y         => 0,
-               Description_Width     => 0,
-               Description_Height    => 0,
-               Description_Text      => Null_Unbounded_String,
-               Description_Truncated => False,
-               Description_Color     => Muted_Text_Color);
-
-            Accessibility.Append
-              (Accessibility_Node'
-                 (Role        => Role_List_Item,
-                  X           => Region_X,
-                  Y           => Row_Y,
-                  Width       => Region_Width,
-                  Height      => Eff_Row_Height,
-                  Name        => To_Unbounded_String (Combined),
-                  Description => Row.Detail,
-                  Enabled     => Row.Enabled,
-                  Selected    => Row.Selected,
-                  Focused     => False));
-         end;
+         Draw_Row (I);
       end loop;
    end Draw_Frame;
 

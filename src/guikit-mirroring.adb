@@ -51,10 +51,12 @@ package body Guikit.Mirroring is
       end loop;
    end Mirror;
 
-   --  A box holding one character with a mirror image ('>', a bracket) is
-   --  a picture pointing one way, as a breadcrumb's separator is: the mirror
-   --  image points the other. In running text Guikit.Bidi already mirrors
-   --  what a right-to-left run holds.
+   --  A symbol (Text_Command.Mirror_Glyph) of one character with a mirror
+   --  image ('>', a bracket) is a picture pointing one way, as a
+   --  breadcrumb's separator is: the mirror image points the other. Other
+   --  text keeps its characters -- a query of just '>' is still '>' -- and
+   --  in running text Guikit.Bidi already mirrors what a right-to-left run
+   --  holds.
    function Mirrored_Glyph (Text : UString) return UString is
       Content   : constant String := To_String (Text);
       Index     : Integer := Content'First;
@@ -74,7 +76,9 @@ package body Guikit.Mirroring is
    begin
       for Item of Items loop
          Reflect (Item.X, Item.Width, Width);
-         Item.Text := Mirrored_Glyph (Item.Text);
+         if Item.Mirror_Glyph then
+            Item.Text := Mirrored_Glyph (Item.Text);
+         end if;
          if not Item.Scale_To_Box then
             Item.Align_End := not Item.Align_End;
          end if;
@@ -91,7 +95,15 @@ package body Guikit.Mirroring is
    procedure Mirror (Items : in out Icon_Command_Vectors.Vector; Width : Natural) is
    begin
       for Item of Items loop
-         Item.X := Reflected (Item.X, (if Item.Draw_Width > 0 then Item.Draw_Width else Item.Size), Width);
+         if Item.X >= Width then
+            --  Wholly past the frame: nothing of it shows, mirrored or not.
+            Item.X := 0;
+            Item.Size := 0;
+            Item.Draw_Width := 0;
+            Item.Draw_Height := 0;
+         else
+            Item.X := Reflected (Item.X, (if Item.Draw_Width > 0 then Item.Draw_Width else Item.Size), Width);
+         end if;
       end loop;
    end Mirror;
 

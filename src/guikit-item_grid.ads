@@ -389,6 +389,9 @@ package Guikit.Item_Grid is
    --  @param Border_Color Rename field border colour.
    --  @param Focus_Ring_Color Focus ring colour.
    --  @param Caret_Color Caret colour.
+   --  @param Has_Glyph Whether the fonts the text is drawn with draw a code
+   --  point (Guikit.Text.Can_Draw_Form), so the caret stands where the drawn
+   --  text has it (Guikit.Text_Fields); null assumes they do.
    procedure Draw_Name_Field
      (Rectangles       : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
       Text_Commands    : in out Guikit.Draw.Text_Command_Vectors.Vector;
@@ -406,7 +409,8 @@ package Guikit.Item_Grid is
       Dim_Color        : Guikit.Draw.Render_Color;
       Border_Color     : Guikit.Draw.Render_Color;
       Focus_Ring_Color : Guikit.Draw.Render_Color;
-      Caret_Color      : Guikit.Draw.Render_Color);
+      Caret_Color      : Guikit.Draw.Render_Color;
+      Has_Glyph        : access function (Codepoint : Natural) return Boolean := null);
 
    --  Draw an item's corner indicators over its icon: a favorite star glyph in
    --  the top-left corner and a filled color-label dot in the bottom-right. Each

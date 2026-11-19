@@ -12,9 +12,10 @@ with Guikit.Mirroring;
 --  Guikit.Mirroring.Mirrored_Layout) the text keeps its reading order and
 --  stands against the field's other edge, so a caret and a click are
 --  counted back from the end of the drawn text
---  (Guikit.Mirroring.Reflect_Column), and the caret's rectangle is placed
---  so that, once mirrored, it starts where the boundary it marks is drawn,
---  as it does in an unmirrored frame.
+--  (Guikit.Mirroring.Reflect_Column) -- the whole characters that fit, as
+--  Guikit.Text.Build_Glyphs sizes a box aligned to its end -- and the
+--  caret's rectangle is placed so that, once mirrored, it starts where the
+--  boundary it marks is drawn, as it does in an unmirrored frame.
 package Guikit.Text_Fields is
 
    type View is record
@@ -37,6 +38,10 @@ package Guikit.Text_Fields is
    --  @param Line_Height Text line height in pixels.
    --  @param Caret_Width Pixel width of the caret mark.
    --  @param Mirrored Whether the frame is mirrored.
+   --  @param Has_Glyph Whether the font can draw a code point
+   --  (Guikit.Bidi.Caret_Column): pass the query the text is drawn with, such
+   --  as Guikit.Text.Can_Draw_Form, so the caret and the drawn text lay
+   --  Arabic out alike. Null assumes it can.
    --  @return The caret's left edge, in pixels from the field's left edge.
    function Caret_X
      (Text        : String;
@@ -44,7 +49,8 @@ package Guikit.Text_Fields is
       Field_Width : Natural;
       Line_Height : Positive;
       Caret_Width : Natural;
-      Mirrored    : Boolean := Guikit.Mirroring.Mirrored_Layout)
+      Mirrored    : Boolean := Guikit.Mirroring.Mirrored_Layout;
+      Has_Glyph   : access function (Codepoint : Natural) return Boolean := null)
       return Natural;
 
    --  The view of Text in a field Field_Width pixels wide with the caret
@@ -58,6 +64,7 @@ package Guikit.Text_Fields is
    --  @param Line_Height Text line height in pixels.
    --  @param Caret_Width Pixel width of the caret mark.
    --  @param Mirrored Whether the frame is mirrored.
+   --  @param Has_Glyph Whether the font can draw a code point, as for Caret_X.
    --  @return The scroll and the caret position.
    function View_Of
      (Text        : String;
@@ -65,7 +72,8 @@ package Guikit.Text_Fields is
       Field_Width : Natural;
       Line_Height : Positive;
       Caret_Width : Natural;
-      Mirrored    : Boolean := Guikit.Mirroring.Mirrored_Layout)
+      Mirrored    : Boolean := Guikit.Mirroring.Mirrored_Layout;
+      Has_Glyph   : access function (Codepoint : Natural) return Boolean := null)
       return View;
 
    --  The byte offset a click puts the caret at: before the clicked
@@ -82,6 +90,7 @@ package Guikit.Text_Fields is
    --  the text is not cut.
    --  @param Line_Height Text line height in pixels.
    --  @param Mirrored Whether the frame is mirrored.
+   --  @param Has_Glyph Whether the font can draw a code point, as for Caret_X.
    --  @return Zero-based byte offset into Text.
    function Cursor_At
      (Text        : String;
@@ -89,7 +98,8 @@ package Guikit.Text_Fields is
       Click_X     : Natural;
       Field_Width : Natural;
       Line_Height : Positive;
-      Mirrored    : Boolean := Guikit.Mirroring.Mirrored_Layout)
+      Mirrored    : Boolean := Guikit.Mirroring.Mirrored_Layout;
+      Has_Glyph   : access function (Codepoint : Natural) return Boolean := null)
       return Natural;
 
 end Guikit.Text_Fields;

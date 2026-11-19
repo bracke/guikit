@@ -41,6 +41,7 @@ package body Guikit_Suite.Frame_Analysis is
    procedure Test_Region_Ink_Detection (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Region_Clamping (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Icon_Definitions_Come_From_The_Host (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Overlay_Drawn_Without_Text (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    --  Write one RGBA pixel into Buffer at column X, row Y.
    procedure Set_Pixel
@@ -121,6 +122,9 @@ package body Guikit_Suite.Frame_Analysis is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Icon_Definitions_Come_From_The_Host'Access,
          "guikit has no icons of its own: definitions come from the host's source");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Overlay_Drawn_Without_Text'Access,
+         "an overlay panel is drawn even when the frame's text could not be built");
    end Register_Tests;
 
    --  A host's icon source holding one icon, "probe", in a producer-tagged
@@ -143,6 +147,37 @@ package body Guikit_Suite.Frame_Analysis is
    --  there is no icon at all (no application's icons are built in), and a
    --  registered source answers for exactly its own. The format header is
    --  the neutral format name, alone or after a producer's prefix.
+   procedure Test_Overlay_Drawn_Without_Text (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      None    : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Panel   : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      No_Tri  : Guikit.Draw.Triangle_Command_Vectors.Vector;
+      No_Icon : Guikit.Draw.Icon_Command_Vectors.Vector;
+      --  The fonts did not load: the text result is not a success.
+      Text    : constant Guikit.Draw.Text_Render_Result :=
+        (Status => Guikit.Draw.Text_Render_Font_Not_Loaded, others => <>);
+      Layout  : Guikit.Draw.Layout_Metrics;
+   begin
+      Layout.Width := 100;
+      Layout.Height := 100;
+      Panel.Append (Guikit.Draw.Rectangle_Command'(X => 10, Y => 10, Width => 50, Height => 50, others => <>));
+      declare
+         Batch : constant Guikit.Vulkan.Submission_Batch :=
+           Guikit.Vulkan.Build_Submission
+             (Rectangles         => None,
+              Triangles          => No_Tri,
+              Icons              => No_Icon,
+              Overlay_Rectangles => Panel,
+              Layout             => Layout,
+              Theme              => Guikit.Draw.Theme_Dark,
+              Text               => Text);
+      begin
+         Assert
+           (Batch.Overlay_Vertex_Count = 6 and then Natural (Batch.Vertices.Length) = 6,
+            "the overlay panel's quad is emitted:" & Batch.Overlay_Vertex_Count'Image);
+      end;
+   end Test_Overlay_Drawn_Without_Text;
+
    procedure Test_Icon_Definitions_Come_From_The_Host (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);
       Body_Text : constant String :=

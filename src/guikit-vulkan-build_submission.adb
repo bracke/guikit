@@ -343,14 +343,18 @@ begin
       Emit_Main_Icons;
    end if;
 
+   --  Glyphs only when the text was built: a failed build's glyphs index
+   --  no atlas. The rest of each layer is drawn either way.
    if Text.Status = Guikit.Draw.Text_Render_Success then
       Emit_Glyphs (Text.Glyphs, Result.Glyph_Vertex_Count);
+   end if;
 
-      --  The overlay layer on top of it, in the same order.
-      Emit_Rectangles (Overlay_Rectangles, Result.Overlay_Vertex_Count);
-      if Result.Icon_Atlas_Dirty then
-         Emit_Overlay_Icons;
-      end if;
+   --  The overlay layer on top of it, in the same order.
+   Emit_Rectangles (Overlay_Rectangles, Result.Overlay_Vertex_Count);
+   if Result.Icon_Atlas_Dirty then
+      Emit_Overlay_Icons;
+   end if;
+   if Text.Status = Guikit.Draw.Text_Render_Success then
       Emit_Glyphs (Text.Overlay_Glyphs, Result.Overlay_Vertex_Count);
    end if;
 

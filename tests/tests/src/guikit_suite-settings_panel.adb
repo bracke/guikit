@@ -8,6 +8,7 @@ with AUnit.Test_Cases;
 with Guikit.Settings_Panel;
 with Guikit.Draw;
 with Guikit.Layout;
+with Guikit.Mirroring;
 
 --  Exercises the settings-panel state machine (typed field editing, change
 --  emission, focus navigation) and a headless Build_Frame that emits draw
@@ -30,6 +31,7 @@ package body Guikit_Suite.Settings_Panel is
    procedure Test_Close_Button_Drawn_Where_Hit (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Sections (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Shortcut_Capture (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Shortcut_Caret_Is_A_Field_Caret (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Switch_Tooltip (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Field_Help (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Choice_Fits_Options (T : in out AUnit.Test_Cases.Test_Case'Class);
@@ -99,6 +101,9 @@ package body Guikit_Suite.Settings_Panel is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Shortcut_Capture'Access,
          "a Shortcut row arms press-to-capture; commit emits the chord, cancel and focus-move disarm");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Shortcut_Caret_Is_A_Field_Caret'Access,
+         "an armed Shortcut row's caret is placed as every field's is, mirrored with the frame");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Switch_Tooltip'Access,
          "hovering the tab switcher draws the configured tooltip; hovering elsewhere does not");
@@ -515,6 +520,53 @@ package body Guikit_Suite.Settings_Panel is
                  "a click inside the panel lands on a laid-out row");
       end;
    end Test_Shortcut_Capture;
+
+   procedure Test_Shortcut_Caret_Is_A_Field_Caret (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use type Guikit.Draw.Render_Color;
+      P : SP.Panel;
+
+      --  The armed row's chord text box's X and the caret's X, in a frame
+      --  drawn mirrored or not.
+      procedure Draw (Mirrored : Boolean; Text_X, Caret_X : out Natural) is
+         Rects : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         Text  : Guikit.Draw.Text_Command_Vectors.Vector;
+         Nodes : Guikit.Draw.Accessibility_Node_Vectors.Vector;
+      begin
+         Guikit.Mirroring.Set_Mirrored_Layout (Mirrored);
+         SP.Build_Frame (P, 0, 0, 500, 400, 500, 400, True, -1, -1, Rects, Text, Nodes);
+         Guikit.Mirroring.Set_Mirrored_Layout (False);
+         Text_X := 0;
+         Caret_X := 0;
+         for Command of Text loop
+            if To_String (Command.Text) = "control+c" then
+               Text_X := Command.X;
+            end if;
+         end loop;
+         for Rect of Rects loop
+            if Rect.Color = Guikit.Draw.Selection_Color and then Rect.Width = 2 and then Rect.Height = 20 then
+               Caret_X := Rect.X;
+            end if;
+         end loop;
+      end Draw;
+
+      Cell_W : constant Natural := Guikit.Layout.Caret_Advance_Width (20);
+      Text_X, Caret_X : Natural;
+   begin
+      SP.Set_Fields (P, Shortcut_Fields);
+      SP.Move_Focus (P, 1);
+      SP.Begin_Capture (P);
+      Assert (SP.Is_Capturing (P), "the Shortcut field is armed");
+
+      Draw (Mirrored => False, Text_X => Text_X, Caret_X => Caret_X);
+      Assert (Text_X > 0, "the chord is drawn");
+      Assert (Caret_X = Text_X + 9 * Cell_W, "unmirrored, the caret follows the chord:" & Caret_X'Image);
+
+      Draw (Mirrored => True, Text_X => Text_X, Caret_X => Caret_X);
+      Assert
+        (Caret_X = Text_X,
+         "mirrored, the caret's rectangle starts where, once mirrored, the chord ends:" & Caret_X'Image);
+   end Test_Shortcut_Caret_Is_A_Field_Caret;
 
    procedure Test_Switch_Tooltip (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);

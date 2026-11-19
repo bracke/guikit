@@ -261,7 +261,8 @@ package body Guikit.Bidi.Levels is
       end Set;
 
       Last_Strong : Bidi_Class;
-      K           : Positive;
+      --  W5's scan: where the next run of European terminators may start.
+      Run_Start   : Positive;
    begin
       --  W1.
       for K in 1 .. M loop
@@ -300,24 +301,24 @@ package body Guikit.Bidi.Levels is
       end loop;
 
       --  W5.
-      K := 1;
-      while K <= M loop
-         if T (K) = ET then
+      Run_Start := 1;
+      while Run_Start <= M loop
+         if T (Run_Start) = ET then
             declare
-               Last : Positive := K;
+               Last : Positive := Run_Start;
             begin
                while Last < M and then T (Last + 1) = ET loop
                   Last := Last + 1;
                end loop;
-               if (K > 1 and then T (K - 1) = EN) or else (Last < M and then T (Last + 1) = EN) then
-                  for J in K .. Last loop
+               if (Run_Start > 1 and then T (Run_Start - 1) = EN) or else (Last < M and then T (Last + 1) = EN) then
+                  for J in Run_Start .. Last loop
                      Set (J, EN);
                   end loop;
                end if;
-               K := Last + 1;
+               Run_Start := Last + 1;
             end;
          else
-            K := K + 1;
+            Run_Start := Run_Start + 1;
          end if;
       end loop;
 

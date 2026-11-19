@@ -34,9 +34,10 @@ package body Guikit.Bidi.Carets is
    end Column_In;
 
    function Caret_Column
-     (Content : String;
-      Cursor  : Natural;
-      Columns : Natural := Natural'Last)
+     (Content   : String;
+      Cursor    : Natural;
+      Columns   : Natural := Natural'Last;
+      Has_Glyph : access function (Codepoint : Natural) return Boolean := null)
       return Natural
    is
    begin
@@ -45,7 +46,7 @@ package body Guikit.Bidi.Carets is
       end if;
 
       declare
-         Laid   : constant Line := Lay_Out (Content);
+         Laid   : constant Line := Lay_Out (Content, Has_Glyph);
          Cut    : constant Natural := Cut_Columns (Laid, Columns);
          Column : constant Natural := Column_In (Laid, Content'Length, Cursor);
       begin
@@ -57,7 +58,8 @@ package body Guikit.Bidi.Carets is
      (Content   : String;
       Cursor    : Natural;
       Rightward : Boolean;
-      By_Word   : Boolean := False)
+      By_Word   : Boolean := False;
+      Has_Glyph : access function (Codepoint : Natural) return Boolean := null)
       return Natural
    is
       use Guikit.Utf8.Editing;
@@ -74,7 +76,7 @@ package body Guikit.Bidi.Carets is
       end if;
 
       declare
-         Laid : constant Line := Lay_Out (Content);
+         Laid : constant Line := Lay_Out (Content, Has_Glyph);
          Here : constant Natural := Natural'Min (Cursor, Content'Length);
       begin
          if By_Word then
@@ -137,7 +139,8 @@ package body Guikit.Bidi.Carets is
    function Cursor_At_Half_Column
      (Content     : String;
       Half_Column : Natural;
-      Columns     : Natural := Natural'Last)
+      Columns     : Natural := Natural'Last;
+      Has_Glyph   : access function (Codepoint : Natural) return Boolean := null)
       return Natural
    is
    begin
@@ -146,7 +149,7 @@ package body Guikit.Bidi.Carets is
       end if;
 
       declare
-         Laid       : constant Line := Lay_Out (Content);
+         Laid       : constant Line := Lay_Out (Content, Has_Glyph);
          Half       : constant Natural := Half_Column + 2 * Cut_Columns (Laid, Columns);
          X          : Natural := 0;
          Last_Drawn : Natural := 0;

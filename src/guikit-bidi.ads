@@ -124,11 +124,16 @@ package Guikit.Bidi is
    --  @param Content UTF-8 text, drawn from column 0.
    --  @param Cursor Byte offset into Content.
    --  @param Columns How many display cells the text is drawn in.
+   --  @param Has_Glyph Whether the font can draw a code point, as Lay_Out
+   --  takes it: pass the query the text is drawn with (for instance
+   --  Guikit.Text.Can_Draw_Form) so a lam-alef pair the font has no ligature
+   --  for is two characters here too. Null assumes it can.
    --  @return Display column of the caret.
    function Caret_Column
-     (Content : String;
-      Cursor  : Natural;
-      Columns : Natural := Natural'Last)
+     (Content   : String;
+      Cursor    : Natural;
+      Columns   : Natural := Natural'Last;
+      Has_Glyph : access function (Codepoint : Natural) return Boolean := null)
       return Natural;
 
    --  The byte offset a click at Half_Column half-cells from the start of
@@ -140,11 +145,14 @@ package Guikit.Bidi is
    --  @param Half_Column Click position in half display cells.
    --  @param Columns How many display cells the text is drawn in, as for
    --  Caret_Column.
+   --  @param Has_Glyph Whether the font can draw a code point, as for
+   --  Caret_Column.
    --  @return Zero-based byte offset into Content.
    function Cursor_At_Half_Column
      (Content     : String;
       Half_Column : Natural;
-      Columns     : Natural := Natural'Last)
+      Columns     : Natural := Natural'Last;
+      Has_Glyph   : access function (Codepoint : Natural) return Boolean := null)
       return Natural;
 
    --  Where an arrow key moves a caret standing Cursor bytes into Content:
@@ -157,20 +165,23 @@ package Guikit.Bidi is
    --  The caret stops are ordered by drawn column (Caret_Column) and, where
    --  two stops share a column -- at the seam between runs -- by byte offset,
    --  so every stop is reachable and the two arrows undo each other. The
-   --  stops are where the laid-out clusters start, so a lam-alef ligature is
-   --  stepped over whole. Text that needs no layout steps exactly as
+   --  stops are where the laid-out clusters start, so a lam-alef ligature the
+   --  font draws is stepped over whole. Text that needs no layout steps exactly as
    --  Guikit.Utf8.Editing does.
    --
    --  @param Content UTF-8 text.
    --  @param Cursor Zero-based byte offset of the caret.
    --  @param Rightward Whether the right arrow was pressed, not the left.
    --  @param By_Word Whether to step by word.
+   --  @param Has_Glyph Whether the font can draw a code point, as for
+   --  Caret_Column: a lam-alef pair drawn as two letters is two stops.
    --  @return The new zero-based byte offset; Cursor when nothing lies that way.
    function Caret_Step
      (Content   : String;
       Cursor    : Natural;
       Rightward : Boolean;
-      By_Word   : Boolean := False)
+      By_Word   : Boolean := False;
+      Has_Glyph : access function (Codepoint : Natural) return Boolean := null)
       return Natural;
 
    --  How many display cells a right-to-left Laid paragraph loses on the

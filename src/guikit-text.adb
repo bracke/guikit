@@ -26,6 +26,53 @@ package body Guikit.Text is
 
    function Loaded (R : Renderer) return Boolean is (R.Is_Loaded);
 
+   --  The Arabic presentation forms, and the forms between them (variation
+   --  selectors and the like), which are answered for alike.
+   subtype Form_Codepoint is Natural range 16#FB50# .. 16#FEFF#;
+
+   function Is_Form (Codepoint : Natural) return Boolean is
+     (Codepoint in 16#FB50# .. 16#FDFF# | 16#FE70# .. 16#FEFF#);
+
+   type Form_Coverage is array (Form_Codepoint) of Boolean
+     with Pack;
+
+   --  Which presentation forms the fonts last loaded draw (Can_Draw_Form).
+   protected Loaded_Forms is
+
+      procedure Set (Coverage : Form_Coverage);
+
+      function Draws (Codepoint : Form_Codepoint) return Boolean;
+
+   private
+      Known : Form_Coverage := [others => True];
+   end Loaded_Forms;
+
+   protected body Loaded_Forms is
+
+      procedure Set (Coverage : Form_Coverage) is
+      begin
+         Known := Coverage;
+      end Set;
+
+      function Draws (Codepoint : Form_Codepoint) return Boolean is (Known (Codepoint));
+
+   end Loaded_Forms;
+
+   function Can_Draw_Form (Codepoint : Natural) return Boolean is
+     (not Is_Form (Codepoint) or else Loaded_Forms.Draws (Codepoint));
+
+   --  Record which presentation forms R's fonts draw, for Can_Draw_Form.
+   procedure Record_Forms (R : Renderer) is
+      Coverage : Form_Coverage := [others => True];
+   begin
+      for Codepoint in Form_Codepoint loop
+         if Is_Form (Codepoint) then
+            Coverage (Codepoint) := Textrender.Can_Draw (R.Backend, Codepoint);
+         end if;
+      end loop;
+      Loaded_Forms.Set (Coverage);
+   end Record_Forms;
+
    function Atlas_Version (R : Renderer) return Natural is (R.Atlas_Version);
 
    --  How tall the glyph atlas may grow: four times its usual height, which
@@ -88,6 +135,7 @@ package body Guikit.Text is
       --  full sheet can simply be emptied rather than leave emoji out.
       Textrender.Set_Colour_Sheet_Eviction (R.Backend, Enabled => True);
 
+      Record_Forms (R);
       R.Is_Loaded    := True;
       R.Atlas_Version := New_Atlas_Version;
       R.Cell_Width   := Cell_Width;

@@ -4,9 +4,12 @@ with Guikit.Utf8;
 
 package body Guikit.Text_Fields is
 
-   --  How many display cells Text takes when drawn in Columns cells.
+   --  How many display cells Text takes when drawn in Columns cells: the
+   --  whole characters that fit, as Guikit.Text.Build_Glyphs sizes a box
+   --  aligned to its end, so a wide character straddling the end is not
+   --  counted.
    function Shown_Units (Text : String; Columns : Natural) return Natural is
-     (Natural'Min (Guikit.Utf8.Display_Units (Text), Columns));
+     (Guikit.Utf8.Display_Units (Guikit.Utf8.Prefix_By_Units (Text, Columns)));
 
    function Caret_X
      (Text        : String;
@@ -14,19 +17,23 @@ package body Guikit.Text_Fields is
       Field_Width : Natural;
       Line_Height : Positive;
       Caret_Width : Natural;
-      Mirrored    : Boolean := Guikit.Mirroring.Mirrored_Layout)
+      Mirrored    : Boolean := Guikit.Mirroring.Mirrored_Layout;
+      Has_Glyph   : access function (Codepoint : Natural) return Boolean := null)
       return Natural
    is
       Cell_W  : constant Positive := Guikit.Layout.Caret_Advance_Width (Line_Height);
       Columns : constant Natural := Field_Width / Cell_W;
-      Column  : constant Natural := Guikit.Bidi.Caret_Column (Text, Natural'Min (Cursor, Text'Length), Columns);
+      --  A mirrored field's text is aligned to its end, in a box as wide as
+      --  the whole characters that fit: the text is drawn in that many cells.
+      Shown   : constant Natural := (if Mirrored then Shown_Units (Text, Columns) else Columns);
+      Column  : constant Natural :=
+        Guikit.Bidi.Caret_Column (Text, Natural'Min (Cursor, Text'Length), Shown, Has_Glyph);
       Room    : constant Natural := (if Field_Width > Caret_Width then Field_Width - Caret_Width else 0);
       X       : Natural;
    begin
       if Mirrored then
          --  The rectangle ends where, once mirrored, it starts.
-         X := Guikit.Layout.Saturating_Multiply
-           (Guikit.Mirroring.Reflect_Column (Column, Shown_Units (Text, Columns)), Cell_W);
+         X := Guikit.Layout.Saturating_Multiply (Guikit.Mirroring.Reflect_Column (Column, Shown), Cell_W);
          X := (if X > Caret_Width then X - Caret_Width else 0);
       else
          X := Guikit.Layout.Saturating_Multiply (Column, Cell_W);
@@ -40,7 +47,8 @@ package body Guikit.Text_Fields is
       Field_Width : Natural;
       Line_Height : Positive;
       Caret_Width : Natural;
-      Mirrored    : Boolean := Guikit.Mirroring.Mirrored_Layout)
+      Mirrored    : Boolean := Guikit.Mirroring.Mirrored_Layout;
+      Has_Glyph   : access function (Codepoint : Natural) return Boolean := null)
       return View
    is
       At_Cursor    : constant Natural := Natural'Min (Cursor, Text'Length);
@@ -73,7 +81,7 @@ package body Guikit.Text_Fields is
          Caret_X    =>
            Caret_X
              (Text (Text'First + Skip .. Text'Last), At_Cursor - Skip, Field_Width, Line_Height, Caret_Width,
-              Mirrored));
+              Mirrored, Has_Glyph));
    end View_Of;
 
    function Cursor_At
@@ -82,13 +90,16 @@ package body Guikit.Text_Fields is
       Click_X     : Natural;
       Field_Width : Natural;
       Line_Height : Positive;
-      Mirrored    : Boolean := Guikit.Mirroring.Mirrored_Layout)
+      Mirrored    : Boolean := Guikit.Mirroring.Mirrored_Layout;
+      Has_Glyph   : access function (Codepoint : Natural) return Boolean := null)
       return Natural
    is
       Cell_W  : constant Positive := Guikit.Layout.Caret_Advance_Width (Line_Height);
       Columns : constant Natural := Field_Width / Cell_W;
       Skip    : constant Natural := Natural'Min (Skip_Bytes, Text'Length);
       Shown   : constant String := Text (Text'First + Skip .. Text'Last);
+      --  The cells the text is drawn in, as Caret_X counts them.
+      Cells   : constant Natural := (if Mirrored then Shown_Units (Shown, Columns) else Columns);
       --  The click in half cells: which half of a character it lands on
       --  decides the side of it the caret goes.
       Half    : constant Natural := Guikit.Layout.Saturating_Multiply (Click_X, 2) / Cell_W;
@@ -96,8 +107,9 @@ package body Guikit.Text_Fields is
       return Skip
         + Guikit.Bidi.Cursor_At_Half_Column
             (Shown,
-             (if Mirrored then Guikit.Mirroring.Reflect_Half_Column (Half, Shown_Units (Shown, Columns)) else Half),
-             Columns);
+             (if Mirrored then Guikit.Mirroring.Reflect_Half_Column (Half, Cells) else Half),
+             Cells,
+             Has_Glyph);
    end Cursor_At;
 
 end Guikit.Text_Fields;

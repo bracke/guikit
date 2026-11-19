@@ -448,6 +448,36 @@ private
    --  Heap copy of the last read-back framebuffer, retained so layout-derived
    --  region checks can index it after the mapped Vulkan memory is unmapped.
 
+   --  A texture the shaders sample -- the text atlas or the icon atlas --
+   --  and the host-visible staging buffer its pixels are copied through.
+   type Atlas_Texture is record
+      Image            : Vk.Image_T := System.Null_Address;
+      Memory           : Vk.Device_Memory_T := System.Null_Address;
+      View             : Vk.Image_View_T := System.Null_Address;
+      Sampler          : Vk.Sampler_T := System.Null_Address;
+      Staging_Buffer   : Vk.Buffer_T := System.Null_Address;
+      Staging_Memory   : Vk.Device_Memory_T := System.Null_Address;
+      --  The texture's size and format, while Texture_Live.
+      Width            : Natural := 0;
+      Height           : Natural := 0;
+      Format           : Atlas_Texture_Format := Atlas_Texture_None;
+      --  The staging buffer's size in bytes, while Staging_Live.
+      Staging_Capacity : Natural := 0;
+      Texture_Live     : Boolean := False;
+      Staging_Live     : Boolean := False;
+      --  The image has been moved out of its undefined layout once.
+      Initialized      : Boolean := False;
+      --  Pixels wait in the staging buffer for the next command buffer to
+      --  copy them into the image.
+      Upload_Pending   : Boolean := False;
+   end record;
+
+   --  The two textures the shaders sample: the glyph atlas (descriptor
+   --  binding 0, one coverage byte per pixel) and the icon atlas (binding 1).
+   type Atlas_Kind is (Text_Atlas, Icon_Atlas);
+
+   type Atlas_Texture_Array is array (Atlas_Kind) of Atlas_Texture;
+
    type Vulkan_Renderer is record
       Instance              : Vk.Instance_T := System.Null_Address;
       Physical_Device       : Vk.Physical_Device_T := System.Null_Address;
@@ -478,18 +508,8 @@ private
       --  textures hold, cleared when a present fails.
       Uploaded_Atlas_Version  : Natural := 0;
       Uploaded_Icon_Signature : Ada.Strings.Unbounded.Unbounded_String;
-      Atlas_Image           : Vk.Image_T := System.Null_Address;
-      Atlas_Memory          : Vk.Device_Memory_T := System.Null_Address;
-      Atlas_View            : Vk.Image_View_T := System.Null_Address;
-      Atlas_Sampler         : Vk.Sampler_T := System.Null_Address;
-      Atlas_Staging_Buffer  : Vk.Buffer_T := System.Null_Address;
-      Atlas_Staging_Memory  : Vk.Device_Memory_T := System.Null_Address;
-      Icon_Atlas_Image      : Vk.Image_T := System.Null_Address;
-      Icon_Atlas_Memory     : Vk.Device_Memory_T := System.Null_Address;
-      Icon_Atlas_View       : Vk.Image_View_T := System.Null_Address;
-      Icon_Atlas_Sampler    : Vk.Sampler_T := System.Null_Address;
-      Icon_Atlas_Staging_Buffer : Vk.Buffer_T := System.Null_Address;
-      Icon_Atlas_Staging_Memory : Vk.Device_Memory_T := System.Null_Address;
+      --  The glyph atlas and the icon atlas.
+      Atlases               : Atlas_Texture_Array;
       Readback_Buffer      : Vk.Buffer_T := System.Null_Address;
       Readback_Memory      : Vk.Device_Memory_T := System.Null_Address;
       Image_Available       : Vk.Semaphore_T := System.Null_Address;
@@ -508,14 +528,6 @@ private
       Texture_Binding_Count : Natural := 0;
       Pipeline_Live         : Boolean := False;
       Vertex_Buffer_Live    : Boolean := False;
-      Atlas_Texture_Live    : Boolean := False;
-      Atlas_Staging_Live    : Boolean := False;
-      Atlas_Initialized     : Boolean := False;
-      Atlas_Upload_Pending  : Boolean := False;
-      Icon_Atlas_Texture_Live : Boolean := False;
-      Icon_Atlas_Staging_Live : Boolean := False;
-      Icon_Atlas_Initialized : Boolean := False;
-      Icon_Atlas_Upload_Pending : Boolean := False;
       Commands_Live         : Boolean := False;
       Sync_Live             : Boolean := False;
       Swapchain_Configured  : Boolean := False;
@@ -530,14 +542,6 @@ private
       Command_Buffer_Count  : Interfaces.Unsigned_32 := 0;
       Current_Image_Index   : Interfaces.Unsigned_32 := 0;
       Vertex_Buffer_Capacity : Natural := 0;
-      Atlas_Width_Value     : Natural := 0;
-      Atlas_Height_Value    : Natural := 0;
-      Atlas_Format_Value    : Atlas_Texture_Format := Atlas_Texture_None;
-      Atlas_Staging_Capacity : Natural := 0;
-      Icon_Atlas_Width_Value : Natural := 0;
-      Icon_Atlas_Height_Value : Natural := 0;
-      Icon_Atlas_Format_Value : Atlas_Texture_Format := Atlas_Texture_None;
-      Icon_Atlas_Staging_Capacity : Natural := 0;
       Readback_Capacity    : Natural := 0;
       Readback_Bytes       : Natural := 0;
       Readback_Enabled     : Boolean := False;

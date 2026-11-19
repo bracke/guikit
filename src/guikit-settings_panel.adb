@@ -465,6 +465,7 @@ package body Guikit.Settings_Panel is
       Hover_Y       : Integer;
       Rectangles    : out Guikit.Draw.Rectangle_Command_Vectors.Vector;
       Text          : out Guikit.Draw.Text_Command_Vectors.Vector;
-      Accessibility : out Guikit.Draw.Accessibility_Node_Vectors.Vector) is separate;
+      Accessibility : out Guikit.Draw.Accessibility_Node_Vectors.Vector;
+      Has_Glyph     : access function (Codepoint : Natural) return Boolean := null) is separate;
 
 end Guikit.Settings_Panel;

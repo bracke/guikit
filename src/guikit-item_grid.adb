@@ -144,6 +144,81 @@ package body Guikit.Item_Grid is
                others        => 0));
       end Place_Grid_Item;
 
+      --  A Details row: a group header's caption, or an item's icon, name
+      --  and the other columns.
+      procedure Place_Details_Row (Index : Positive) is
+         Row_Step    : constant Natural := Metrics.Height;
+         Header_H    : constant Natural :=
+           Natural'Min (Add (Line_Height, Mul (Row_Padding (Line_Height), 2)), Content_H);
+         Rows_Y      : constant Natural := Add (Content_Y, Header_H);
+         Rows_H      : constant Natural := Sub (Content_H, Header_H);
+         Row_Offset  : constant Natural := Mul (Natural (Index - 1), Row_Step);
+         Hidden_Px   : constant Natural :=
+           (if Row_Offset < Scroll_Pixels then Natural'Min (Row_Step, Scroll_Pixels - Row_Offset) else 0);
+         Visible_Row : constant Natural := Sub (Row_Offset, Scroll_Pixels);
+         Row_Y       : constant Natural := Add (Rows_Y, Visible_Row);
+         Row_H       : constant Natural :=
+           (if Hidden_Px = 0 and then Rows_H >= Add (Visible_Row, Row_Step) then Row_Step else 0);
+         Row_Draw_H  : constant Natural :=
+           (if Row_H > Details_Row_Gap then Row_H - Details_Row_Gap else Row_H);
+         Row_Pad     : constant Natural := Natural'Min (Row_Padding (Line_Height), Row_Draw_H);
+         Inner_H     : constant Natural :=
+           (if Row_Draw_H > Mul (Row_Pad, 2) then Row_Draw_H - Mul (Row_Pad, 2) else Row_Draw_H);
+         Row_Inner_X : constant Natural := Add (Content_X, Row_Pad);
+         Text_Pad    : constant Natural := Natural'Min (Column_Padding (Line_Height), Row_Draw_H);
+         --  Text and icon sit this far above the row padding (the
+         --  glyphs' optical lift), scaled with the text.
+         Lift        : constant Natural := Guikit.Layout.Scaled (2, Line_Height);
+         Name_X      : constant Natural := Columns (Name_Column).X;
+         Name_W      : constant Natural := Columns (Name_Column).Width;
+         Header_Name_W : constant Natural :=
+           (if Add (Content_X, Content_W) > Name_X then Add (Content_X, Content_W) - Name_X else 0);
+      begin
+         if Is_Header_At (Index) then
+            Result.Replace_Element
+              (Index,
+               Item_Layout'
+                 (Visible_Index => 0,
+                  X             => Content_X,
+                  Y             => Row_Y,
+                  Width         => Content_W,
+                  Height        => Row_Draw_H,
+                  Text_X        => Add (Name_X, Text_Pad),
+                  Text_Y        => Add (Row_Y, Sub (Row_Pad, Lift)),
+                  Text_Width    => Sub (Header_Name_W, Text_Pad),
+                  Name_X        => Name_X,
+                  Name_Width    => Header_Name_W,
+                  others        => 0));
+         else
+            Result.Replace_Element
+              (Index,
+               Item_Layout'
+                 (Visible_Index     => Visible_Index_At (Index),
+                  X                 => Content_X,
+                  Y                 => Row_Y,
+                  Width             => Content_W,
+                  Height            => Row_Draw_H,
+                  Icon_X            => Row_Inner_X,
+                  Icon_Y            => Add (Row_Y, Sub (Row_Pad, Lift)),
+                  Icon_Size         => Natural'Min (Line_Height, Inner_H),
+                  Text_X            => Add (Name_X, Text_Pad),
+                  Text_Y            => Add (Row_Y, Sub (Row_Pad, Lift)),
+                  Text_Width        => Sub (Name_W, Text_Pad),
+                  Name_X            => Add (Name_X, Text_Pad),
+                  Name_Width        => Sub (Name_W, Text_Pad),
+                  Modified_X        => Columns (Modified_Column).X,
+                  Modified_Width    => Columns (Modified_Column).Width,
+                  Size_X            => Columns (Size_Column).X,
+                  Size_Width        => Columns (Size_Column).Width,
+                  Filetype_X        => Columns (Filetype_Column).X,
+                  Filetype_Width    => Columns (Filetype_Column).Width,
+                  Created_X         => Columns (Created_Column).X,
+                  Created_Width     => Columns (Created_Column).Width,
+                  Permissions_X     => Columns (Permissions_Column).X,
+                  Permissions_Width => Columns (Permissions_Column).Width));
+         end if;
+      end Place_Details_Row;
+
       --  Whether a position's cell lies wholly inside the viewport. Only those
       --  are laid out: the others (all but a screenful in a large folder) keep
       --  the default all-zero cell, as they always had no area.
@@ -199,78 +274,7 @@ package body Guikit.Item_Grid is
                  (Index, Positive (Metrics.Width), Positive (Metrics.Height),
                   Positive (Metrics.Icon_Size), Metrics.Large);
             when Details =>
-               declare
-                  Row_Step    : constant Natural := Metrics.Height;
-                  Header_H    : constant Natural :=
-                    Natural'Min (Add (Line_Height, Mul (Row_Padding (Line_Height), 2)), Content_H);
-                  Rows_Y      : constant Natural := Add (Content_Y, Header_H);
-                  Rows_H      : constant Natural := Sub (Content_H, Header_H);
-                  Row_Offset  : constant Natural := Mul (Natural (Index - 1), Row_Step);
-                  Hidden_Px   : constant Natural :=
-                    (if Row_Offset < Scroll_Pixels then Natural'Min (Row_Step, Scroll_Pixels - Row_Offset) else 0);
-                  Visible_Row : constant Natural := Sub (Row_Offset, Scroll_Pixels);
-                  Row_Y       : constant Natural := Add (Rows_Y, Visible_Row);
-                  Row_H       : constant Natural :=
-                    (if Hidden_Px = 0 and then Rows_H >= Add (Visible_Row, Row_Step) then Row_Step else 0);
-                  Row_Draw_H  : constant Natural :=
-                    (if Row_H > Details_Row_Gap then Row_H - Details_Row_Gap else Row_H);
-                  Row_Pad     : constant Natural := Natural'Min (Row_Padding (Line_Height), Row_Draw_H);
-                  Inner_H     : constant Natural :=
-                    (if Row_Draw_H > Mul (Row_Pad, 2) then Row_Draw_H - Mul (Row_Pad, 2) else Row_Draw_H);
-                  Row_Inner_X : constant Natural := Add (Content_X, Row_Pad);
-                  Text_Pad    : constant Natural := Natural'Min (Column_Padding (Line_Height), Row_Draw_H);
-                  --  Text and icon sit this far above the row padding (the
-                  --  glyphs' optical lift), scaled with the text.
-                  Lift        : constant Natural := Guikit.Layout.Scaled (2, Line_Height);
-                  Name_X      : constant Natural := Columns (Name_Column).X;
-                  Name_W      : constant Natural := Columns (Name_Column).Width;
-                  Header_Name_W : constant Natural :=
-                    (if Add (Content_X, Content_W) > Name_X then Add (Content_X, Content_W) - Name_X else 0);
-               begin
-                  if Is_Header_At (Index) then
-                     Result.Replace_Element
-                       (Index,
-                        Item_Layout'
-                          (Visible_Index => 0,
-                           X             => Content_X,
-                           Y             => Row_Y,
-                           Width         => Content_W,
-                           Height        => Row_Draw_H,
-                           Text_X        => Add (Name_X, Text_Pad),
-                           Text_Y        => Add (Row_Y, Sub (Row_Pad, Lift)),
-                           Text_Width    => Sub (Header_Name_W, Text_Pad),
-                           Name_X        => Name_X,
-                           Name_Width    => Header_Name_W,
-                           others        => 0));
-                  else
-                     Result.Replace_Element
-                       (Index,
-                        Item_Layout'
-                          (Visible_Index     => Visible_Index_At (Index),
-                           X                 => Content_X,
-                           Y                 => Row_Y,
-                           Width             => Content_W,
-                           Height            => Row_Draw_H,
-                           Icon_X            => Row_Inner_X,
-                           Icon_Y            => Add (Row_Y, Sub (Row_Pad, Lift)),
-                           Icon_Size         => Natural'Min (Line_Height, Inner_H),
-                           Text_X            => Add (Name_X, Text_Pad),
-                           Text_Y            => Add (Row_Y, Sub (Row_Pad, Lift)),
-                           Text_Width        => Sub (Name_W, Text_Pad),
-                           Name_X            => Add (Name_X, Text_Pad),
-                           Name_Width        => Sub (Name_W, Text_Pad),
-                           Modified_X        => Columns (Modified_Column).X,
-                           Modified_Width    => Columns (Modified_Column).Width,
-                           Size_X            => Columns (Size_Column).X,
-                           Size_Width        => Columns (Size_Column).Width,
-                           Filetype_X        => Columns (Filetype_Column).X,
-                           Filetype_Width    => Columns (Filetype_Column).Width,
-                           Created_X         => Columns (Created_Column).X,
-                           Created_Width     => Columns (Created_Column).Width,
-                           Permissions_X     => Columns (Permissions_Column).X,
-                           Permissions_Width => Columns (Permissions_Column).Width));
-                  end if;
-               end;
+               Place_Details_Row (Index);
          end case;
          exit when Index = Count;
          Index := Index + 1;
@@ -379,7 +383,8 @@ package body Guikit.Item_Grid is
       Dim_Color        : Guikit.Draw.Render_Color;
       Border_Color     : Guikit.Draw.Render_Color;
       Focus_Ring_Color : Guikit.Draw.Render_Color;
-      Caret_Color      : Guikit.Draw.Render_Color)
+      Caret_Color      : Guikit.Draw.Render_Color;
+      Has_Glyph        : access function (Codepoint : Natural) return Boolean := null)
    is
       function Add (L, R : Natural) return Natural renames Guikit.Layout.Saturating_Add;
       function Mul (V, F : Natural) return Natural renames Guikit.Layout.Saturating_Multiply;
@@ -401,7 +406,8 @@ package body Guikit.Item_Grid is
    begin
       Rename_Field_Extent (Cell, View, Renaming, Field_X, Field_W, Line_Height);
       if Editing then
-         Field := Guikit.Text_Fields.View_Of (Raw, Cursor, Field_W, Line_Height, Caret_Width => 2);
+         Field := Guikit.Text_Fields.View_Of
+           (Raw, Cursor, Field_W, Line_Height, Caret_Width => 2, Has_Glyph => Has_Glyph);
          Skip_Bytes := Field.Skip_Bytes;
       end if;
       --  A focused rename field scrolls its leading columns off the left edge

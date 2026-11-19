@@ -8,11 +8,13 @@ private package Guikit.Bidi.Carets is
    --  @param Content UTF-8 text, drawn from column 0.
    --  @param Cursor Byte offset into Content.
    --  @param Columns How many display cells the text is drawn in.
+   --  @param Has_Glyph Whether the font can draw a code point; null assumes it can.
    --  @return Display column of the caret.
    function Caret_Column
-     (Content : String;
-      Cursor  : Natural;
-      Columns : Natural := Natural'Last)
+     (Content   : String;
+      Cursor    : Natural;
+      Columns   : Natural := Natural'Last;
+      Has_Glyph : access function (Codepoint : Natural) return Boolean := null)
       return Natural;
 
    --  See Guikit.Bidi.Cursor_At_Half_Column.
@@ -20,11 +22,13 @@ private package Guikit.Bidi.Carets is
    --  @param Content UTF-8 text, drawn from column 0.
    --  @param Half_Column Click position in half display cells.
    --  @param Columns How many display cells the text is drawn in.
+   --  @param Has_Glyph Whether the font can draw a code point; null assumes it can.
    --  @return Zero-based byte offset into Content.
    function Cursor_At_Half_Column
      (Content     : String;
       Half_Column : Natural;
-      Columns     : Natural := Natural'Last)
+      Columns     : Natural := Natural'Last;
+      Has_Glyph   : access function (Codepoint : Natural) return Boolean := null)
       return Natural;
 
    --  See Guikit.Bidi.Caret_Step.
@@ -33,12 +37,14 @@ private package Guikit.Bidi.Carets is
    --  @param Cursor Zero-based byte offset of the caret.
    --  @param Rightward Whether the right arrow was pressed, not the left.
    --  @param By_Word Whether to step by word.
+   --  @param Has_Glyph Whether the font can draw a code point; null assumes it can.
    --  @return The new zero-based byte offset; Cursor when nothing lies that way.
    function Caret_Step
      (Content   : String;
       Cursor    : Natural;
       Rightward : Boolean;
-      By_Word   : Boolean := False)
+      By_Word   : Boolean := False;
+      Has_Glyph : access function (Codepoint : Natural) return Boolean := null)
       return Natural;
 
    --  See Guikit.Bidi.Cut_Columns.

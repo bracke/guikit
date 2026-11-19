@@ -112,7 +112,8 @@ begin
             --  The caret is at the end of the value; a long value scrolls so
             --  it stays in the field (Guikit.Text_Fields).
             Field   : constant Guikit.Text_Fields.View :=
-              (if Editing then Guikit.Text_Fields.View_Of (Value, Value'Length, Text_W, LH, Caret_W)
+              (if Editing
+               then Guikit.Text_Fields.View_Of (Value, Value'Length, Text_W, LH, Caret_W, Has_Glyph => Has_Glyph)
                else (others => 0));
          begin
             Guikit.Widgets.Draw_Input_Field
@@ -135,25 +136,31 @@ begin
          --  selection accent plus a caret so the user sees it is
          --  waiting for a chord.
          declare
-            Armed : constant Boolean := I = P.Capturing;
-            TH : constant Natural := Ctrl_H;
-            TY : constant Natural := Row_Y + (Row_H - TH) / 2;
-            VY : constant Natural := Row_Y + (Row_H - LH) / 2;
-            Shown : constant UString := (if Length (F.Display) > 0 then F.Display else F.Value);
+            Armed   : constant Boolean := I = P.Capturing;
+            TH      : constant Natural := Ctrl_H;
+            TY      : constant Natural := Row_Y + (Row_H - TH) / 2;
+            VY      : constant Natural := Row_Y + (Row_H - LH) / 2;
+            Shown   : constant UString := (if Length (F.Display) > 0 then F.Display else F.Value);
+            Text_W  : constant Natural := (if Ctrl_W > 2 * Field_Inset then Ctrl_W - 2 * Field_Inset else 0);
+            Caret_W : constant Natural := Natural'Max (1, Cell_W / 6);
          begin
             Guikit.Widgets.Draw_Input_Field
               (Rectangles, Clip_Width, Clip_Height, Ctrl_X, TY, Ctrl_W, TH,
                Guikit.Draw.Input_Color,
                (if Armed then Guikit.Draw.Selection_Color else Guikit.Draw.Border_Color));
-            Add_Text (Ctrl_X + Field_Inset, VY,
-                      (if Ctrl_W > 2 * Field_Inset then Ctrl_W - 2 * Field_Inset else 0), Shown,
+            Add_Text (Ctrl_X + Field_Inset, VY, Text_W, Shown,
                       (if F.Enabled then Guikit.Draw.Text_Color
                        else Guikit.Draw.Disabled_Text_Color));
             if Armed then
+               --  After the chord, placed as every field's caret is
+               --  (Guikit.Text_Fields): mirrored with the frame and kept
+               --  inside the field.
                Guikit.Widgets.Draw_Caret
                  (Rectangles, Clip_Width, Clip_Height,
-                  Ctrl_X + Field_Inset + Guikit.Utf8.Display_Units (To_String (Shown)) * Cell_W, VY,
-                  Natural'Max (1, Cell_W / 6), LH, Guikit.Draw.Selection_Color);
+                  Ctrl_X + Field_Inset
+                  + Guikit.Text_Fields.Caret_X
+                      (To_String (Shown), Length (Shown), Text_W, LH, Caret_W, Has_Glyph => Has_Glyph),
+                  VY, Caret_W, LH, Guikit.Draw.Selection_Color);
             end if;
          end;
 

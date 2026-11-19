@@ -197,6 +197,32 @@ package body Guikit.Vulkan is
 
    Fallback_Atlas_Pixel : aliased Interfaces.Unsigned_8 := 255;
 
+   --  Destroy Handle on Device with Destroy, unless it is null, and leave it
+   --  null: one of these for each kind of handle a renderer tears down.
+   generic
+      with procedure Destroy (Device : Vk.Device_T; Handle : System.Address; Allocator : System.Address);
+   procedure Destroy_Handle (Device : Vk.Device_T; Handle : in out System.Address);
+
+   procedure Destroy_Handle (Device : Vk.Device_T; Handle : in out System.Address) is
+   begin
+      if Handle /= System.Null_Address then
+         Destroy (Device, Handle, System.Null_Address);
+         Handle := System.Null_Address;
+      end if;
+   end Destroy_Handle;
+
+   procedure Destroy_Buffer is new Destroy_Handle (Vk.Destroy_Buffer);
+   procedure Free_Memory is new Destroy_Handle (Vk.Free_Memory);
+   procedure Destroy_Image is new Destroy_Handle (Vk.Destroy_Image);
+   procedure Destroy_Image_View is new Destroy_Handle (Vk.Destroy_Image_View);
+   procedure Destroy_Sampler is new Destroy_Handle (Vk.Destroy_Sampler);
+   procedure Destroy_Pipeline is new Destroy_Handle (Vk.Destroy_Pipeline);
+   procedure Destroy_Pipeline_Layout is new Destroy_Handle (Vk.Destroy_Pipeline_Layout);
+   procedure Destroy_Descriptor_Set_Layout is new Destroy_Handle (Vk.Destroy_Descriptor_Set_Layout);
+   procedure Destroy_Framebuffer is new Destroy_Handle (Vk.Destroy_Framebuffer);
+   procedure Destroy_Render_Pass is new Destroy_Handle (Vk.Destroy_Render_Pass);
+   procedure Destroy_Command_Pool is new Destroy_Handle (Vk.Destroy_Command_Pool);
+
    Gpu_Vertex_Size : constant Interfaces.Unsigned_64 := Interfaces.Unsigned_64 (Gpu_Vertex'Size / 8);
    Gpu_Vertex_Buffer_Size : constant Interfaces.Unsigned_64 :=
      Interfaces.Unsigned_64 (Max_Batch_Vertices) * Gpu_Vertex_Size;
@@ -428,6 +454,41 @@ package body Guikit.Vulkan is
       Memory_Type_Bits : Interfaces.Unsigned_32;
       Memory_Type      : out Interfaces.Unsigned_32)
       return Boolean;
+
+   --  The steps uploading pixels into either atlas texture (Atlas_Kind)
+   --  takes: the glyph atlas (Upload_Atlas) and the icon atlas
+   --  (Upload_Icon_Atlas) share them.
+   package Atlas_Uploads is
+
+      --  Destroy the atlas's image, memory, view and sampler: it has no
+      --  texture until the next upload makes one.
+      procedure Release_Texture (Renderer : in out Vulkan_Renderer; Kind : Atlas_Kind);
+
+      --  Destroy the atlas's staging buffer and its memory: the next upload
+      --  makes another.
+      procedure Release_Staging (Renderer : in out Vulkan_Renderer; Kind : Atlas_Kind);
+
+      --  Copy Bytes bytes of pixels into the atlas through its staging
+      --  buffer and point its descriptor binding at it: the texture is made
+      --  again when it is not Width by Height in Format, the staging buffer
+      --  when it is smaller than Bytes. Fill writes the pixels into the
+      --  mapped staging memory. The command buffers copy them into the
+      --  image (Upload_Pending). False when a step fails; whatever failed
+      --  is left released, never half made.
+      function Upload
+        (Renderer : in out Vulkan_Renderer;
+         Kind     : Atlas_Kind;
+         Width    : Positive;
+         Height   : Positive;
+         Format   : Atlas_Texture_Format;
+         Bytes    : Positive;
+         Fill     : not null access procedure (Target : Byte_Array_Conversions.Object_Pointer))
+         return Boolean
+        with Pre => Bytes <= Max_Atlas_Bytes;
+
+   end Atlas_Uploads;
+
+   package body Atlas_Uploads is separate;
 
    function Clamp
      (Value : Interfaces.Unsigned_32;
@@ -860,13 +921,11 @@ package body Guikit.Vulkan is
 
    procedure Destroy_Swapchain_Resources
      (Renderer       : in out Vulkan_Renderer;
-      Keep_Swapchain : Boolean := False) is
-   begin
-      if Renderer.Device_Live then
-         --  Command buffers, pipelines, atlases and the swapchain images may
-         --  all still be referenced by a submitted frame or a pending present.
-         Wait_Device_Idle (Renderer);
-
+      Keep_Swapchain : Boolean := False)
+   is
+      --  The command buffers and their pool, and the vertex buffer.
+      procedure Destroy_Commands_And_Vertices is
+      begin
          if Renderer.Command_Buffer_Count > 0 and then Renderer.Command_Pool /= System.Null_Address then
             Vk.Free_Command_Buffers
               (device               => Renderer.Device,
@@ -874,160 +933,31 @@ package body Guikit.Vulkan is
                command_Buffer_Count => Renderer.Command_Buffer_Count,
                p_Command_Buffers    => Renderer.Command_Buffers (Renderer.Command_Buffers'First)'Address);
          end if;
+         Destroy_Command_Pool (Renderer.Device, Renderer.Command_Pool);
 
-         if Renderer.Command_Pool /= System.Null_Address then
-            Vk.Destroy_Command_Pool
-              (device        => Renderer.Device,
-               command_Pool  => Renderer.Command_Pool,
-               p_Allocator   => System.Null_Address);
-            Renderer.Command_Pool := System.Null_Address;
-         end if;
-
-         if Renderer.Vertex_Buffer /= System.Null_Address then
-            Vk.Destroy_Buffer
-              (device      => Renderer.Device,
-               buffer      => Renderer.Vertex_Buffer,
-               p_Allocator => System.Null_Address);
-            Renderer.Vertex_Buffer := System.Null_Address;
-         end if;
-
+         Destroy_Buffer (Renderer.Device, Renderer.Vertex_Buffer);
          if Renderer.Vertex_Memory /= System.Null_Address then
-            Vk.Free_Memory
-              (device      => Renderer.Device,
-               memory      => Renderer.Vertex_Memory,
-               p_Allocator => System.Null_Address);
-            Renderer.Vertex_Memory := System.Null_Address;
+            Free_Memory (Renderer.Device, Renderer.Vertex_Memory);
             Renderer.Uploaded_Vertices_Valid := False;
          end if;
+      end Destroy_Commands_And_Vertices;
 
-         if Renderer.Atlas_Staging_Buffer /= System.Null_Address then
-            Vk.Destroy_Buffer
-              (device      => Renderer.Device,
-               buffer      => Renderer.Atlas_Staging_Buffer,
-               p_Allocator => System.Null_Address);
-            Renderer.Atlas_Staging_Buffer := System.Null_Address;
-         end if;
+      --  Both atlases' staging buffers and textures, and the read-back buffer.
+      procedure Destroy_Textures_And_Readback is
+      begin
+         for Kind in Atlas_Kind loop
+            Atlas_Uploads.Release_Staging (Renderer, Kind);
+            Atlas_Uploads.Release_Texture (Renderer, Kind);
+         end loop;
+         Destroy_Buffer (Renderer.Device, Renderer.Readback_Buffer);
+         Free_Memory (Renderer.Device, Renderer.Readback_Memory);
+      end Destroy_Textures_And_Readback;
 
-         if Renderer.Atlas_Staging_Memory /= System.Null_Address then
-            Vk.Free_Memory
-              (device      => Renderer.Device,
-               memory      => Renderer.Atlas_Staging_Memory,
-               p_Allocator => System.Null_Address);
-            Renderer.Atlas_Staging_Memory := System.Null_Address;
-         end if;
-
-         if Renderer.Atlas_View /= System.Null_Address then
-            Vk.Destroy_Image_View
-              (device      => Renderer.Device,
-               image_View  => Renderer.Atlas_View,
-               p_Allocator => System.Null_Address);
-            Renderer.Atlas_View := System.Null_Address;
-         end if;
-
-         if Renderer.Atlas_Sampler /= System.Null_Address then
-            Vk.Destroy_Sampler
-              (device      => Renderer.Device,
-               sampler     => Renderer.Atlas_Sampler,
-               p_Allocator => System.Null_Address);
-            Renderer.Atlas_Sampler := System.Null_Address;
-         end if;
-
-         if Renderer.Atlas_Image /= System.Null_Address then
-            Vk.Destroy_Image
-              (device      => Renderer.Device,
-               image       => Renderer.Atlas_Image,
-               p_Allocator => System.Null_Address);
-            Renderer.Atlas_Image := System.Null_Address;
-         end if;
-
-         if Renderer.Atlas_Memory /= System.Null_Address then
-            Vk.Free_Memory
-              (device      => Renderer.Device,
-               memory      => Renderer.Atlas_Memory,
-               p_Allocator => System.Null_Address);
-            Renderer.Atlas_Memory := System.Null_Address;
-         end if;
-
-         if Renderer.Icon_Atlas_Staging_Buffer /= System.Null_Address then
-            Vk.Destroy_Buffer
-              (device      => Renderer.Device,
-               buffer      => Renderer.Icon_Atlas_Staging_Buffer,
-               p_Allocator => System.Null_Address);
-            Renderer.Icon_Atlas_Staging_Buffer := System.Null_Address;
-         end if;
-
-         if Renderer.Icon_Atlas_Staging_Memory /= System.Null_Address then
-            Vk.Free_Memory
-              (device      => Renderer.Device,
-               memory      => Renderer.Icon_Atlas_Staging_Memory,
-               p_Allocator => System.Null_Address);
-            Renderer.Icon_Atlas_Staging_Memory := System.Null_Address;
-         end if;
-
-         if Renderer.Icon_Atlas_View /= System.Null_Address then
-            Vk.Destroy_Image_View
-              (device      => Renderer.Device,
-               image_View  => Renderer.Icon_Atlas_View,
-               p_Allocator => System.Null_Address);
-            Renderer.Icon_Atlas_View := System.Null_Address;
-         end if;
-
-         if Renderer.Icon_Atlas_Sampler /= System.Null_Address then
-            Vk.Destroy_Sampler
-              (device      => Renderer.Device,
-               sampler     => Renderer.Icon_Atlas_Sampler,
-               p_Allocator => System.Null_Address);
-            Renderer.Icon_Atlas_Sampler := System.Null_Address;
-         end if;
-
-         if Renderer.Icon_Atlas_Image /= System.Null_Address then
-            Vk.Destroy_Image
-              (device      => Renderer.Device,
-               image       => Renderer.Icon_Atlas_Image,
-               p_Allocator => System.Null_Address);
-            Renderer.Icon_Atlas_Image := System.Null_Address;
-         end if;
-
-         if Renderer.Icon_Atlas_Memory /= System.Null_Address then
-            Vk.Free_Memory
-              (device      => Renderer.Device,
-               memory      => Renderer.Icon_Atlas_Memory,
-               p_Allocator => System.Null_Address);
-            Renderer.Icon_Atlas_Memory := System.Null_Address;
-         end if;
-
-         if Renderer.Readback_Buffer /= System.Null_Address then
-            Vk.Destroy_Buffer
-              (device      => Renderer.Device,
-               buffer      => Renderer.Readback_Buffer,
-               p_Allocator => System.Null_Address);
-            Renderer.Readback_Buffer := System.Null_Address;
-         end if;
-
-         if Renderer.Readback_Memory /= System.Null_Address then
-            Vk.Free_Memory
-              (device      => Renderer.Device,
-               memory      => Renderer.Readback_Memory,
-               p_Allocator => System.Null_Address);
-            Renderer.Readback_Memory := System.Null_Address;
-         end if;
-
-         if Renderer.Graphics_Pipeline /= System.Null_Address then
-            Vk.Destroy_Pipeline
-              (device      => Renderer.Device,
-               pipeline    => Renderer.Graphics_Pipeline,
-               p_Allocator => System.Null_Address);
-            Renderer.Graphics_Pipeline := System.Null_Address;
-         end if;
-
-         if Renderer.Pipeline_Layout /= System.Null_Address then
-            Vk.Destroy_Pipeline_Layout
-              (device          => Renderer.Device,
-               pipeline_Layout => Renderer.Pipeline_Layout,
-               p_Allocator     => System.Null_Address);
-            Renderer.Pipeline_Layout := System.Null_Address;
-         end if;
-
+      --  The pipeline, its layout and the descriptors it binds.
+      procedure Destroy_Pipeline_And_Descriptors is
+      begin
+         Destroy_Pipeline (Renderer.Device, Renderer.Graphics_Pipeline);
+         Destroy_Pipeline_Layout (Renderer.Device, Renderer.Pipeline_Layout);
          if Renderer.Descriptor_Pool /= System.Null_Address then
             Vk.Destroy_Descriptor_Pool
               (device          => Renderer.Device,
@@ -1037,68 +967,32 @@ package body Guikit.Vulkan is
             Renderer.Descriptor_Set := System.Null_Address;
             Renderer.Texture_Binding_Count := 0;
          end if;
+         Destroy_Descriptor_Set_Layout (Renderer.Device, Renderer.Descriptor_Set_Layout);
+      end Destroy_Pipeline_And_Descriptors;
 
-         if Renderer.Descriptor_Set_Layout /= System.Null_Address then
-            Vk.Destroy_Descriptor_Set_Layout
-              (device                => Renderer.Device,
-               descriptor_Set_Layout => Renderer.Descriptor_Set_Layout,
-               p_Allocator           => System.Null_Address);
-            Renderer.Descriptor_Set_Layout := System.Null_Address;
-         end if;
-
-         for Index in Renderer.Framebuffers'Range loop
-            if Renderer.Framebuffers (Index) /= System.Null_Address then
-               Vk.Destroy_Framebuffer
-                 (device      => Renderer.Device,
-                  framebuffer => Renderer.Framebuffers (Index),
-                  p_Allocator => System.Null_Address);
-               Renderer.Framebuffers (Index) := System.Null_Address;
-            end if;
+      --  The framebuffers, render pass, multisampled colour target and the
+      --  swapchain images' views.
+      procedure Destroy_Render_Targets is
+      begin
+         for Framebuffer of Renderer.Framebuffers loop
+            Destroy_Framebuffer (Renderer.Device, Framebuffer);
          end loop;
+         Destroy_Render_Pass (Renderer.Device, Renderer.Render_Pass);
 
-         if Renderer.Render_Pass /= System.Null_Address then
-            Vk.Destroy_Render_Pass
-              (device      => Renderer.Device,
-               render_Pass => Renderer.Render_Pass,
-               p_Allocator => System.Null_Address);
-            Renderer.Render_Pass := System.Null_Address;
-         end if;
-
-         if Renderer.Color_MSAA_View /= System.Null_Address then
-            Vk.Destroy_Image_View (Renderer.Device, Renderer.Color_MSAA_View, System.Null_Address);
-            Renderer.Color_MSAA_View := System.Null_Address;
-         end if;
-         if Renderer.Color_MSAA_Image /= System.Null_Address then
-            Vk.Destroy_Image (Renderer.Device, Renderer.Color_MSAA_Image, System.Null_Address);
-            Renderer.Color_MSAA_Image := System.Null_Address;
-         end if;
-         if Renderer.Color_MSAA_Memory /= System.Null_Address then
-            Vk.Free_Memory (Renderer.Device, Renderer.Color_MSAA_Memory, System.Null_Address);
-            Renderer.Color_MSAA_Memory := System.Null_Address;
-         end if;
+         Destroy_Image_View (Renderer.Device, Renderer.Color_MSAA_View);
+         Destroy_Image (Renderer.Device, Renderer.Color_MSAA_Image);
+         Free_Memory (Renderer.Device, Renderer.Color_MSAA_Memory);
          Renderer.Color_MSAA_Live := False;
 
-         for Index in Renderer.Image_Views'Range loop
-            if Renderer.Image_Views (Index) /= System.Null_Address then
-               Vk.Destroy_Image_View
-                 (device      => Renderer.Device,
-                  image_View  => Renderer.Image_Views (Index),
-                  p_Allocator => System.Null_Address);
-               Renderer.Image_Views (Index) := System.Null_Address;
-            end if;
+         for View of Renderer.Image_Views loop
+            Destroy_Image_View (Renderer.Device, View);
          end loop;
+      end Destroy_Render_Targets;
 
-         Destroy_Sync_Objects (Renderer);
-
-         if Renderer.Swapchain_Live and then not Keep_Swapchain then
-            Vk.Destroy_Swapchain_KHR
-              (device      => Renderer.Device,
-               swapchain   => Renderer.Swapchain,
-               p_Allocator => System.Null_Address);
-            Renderer.Swapchain := System.Null_Address;
-            Renderer.Swapchain_Live := False;
-         end if;
-      else
+      --  Without a device there is nothing to destroy them on: forget the
+      --  handles.
+      procedure Forget_Handles is
+      begin
          Renderer.Image_Available := System.Null_Address;
          Renderer.Render_Finished := [others => System.Null_Address];
          Renderer.In_Flight := System.Null_Address;
@@ -1117,59 +1011,72 @@ package body Guikit.Vulkan is
          Renderer.Vertex_Buffer := System.Null_Address;
          Renderer.Vertex_Memory := System.Null_Address;
          Renderer.Uploaded_Vertices_Valid := False;
-         Renderer.Atlas_Image := System.Null_Address;
-         Renderer.Atlas_Memory := System.Null_Address;
-         Renderer.Atlas_View := System.Null_Address;
-         Renderer.Atlas_Sampler := System.Null_Address;
-         Renderer.Atlas_Staging_Buffer := System.Null_Address;
-         Renderer.Atlas_Staging_Memory := System.Null_Address;
-         Renderer.Icon_Atlas_Image := System.Null_Address;
-         Renderer.Icon_Atlas_Memory := System.Null_Address;
-         Renderer.Icon_Atlas_View := System.Null_Address;
-         Renderer.Icon_Atlas_Sampler := System.Null_Address;
-         Renderer.Icon_Atlas_Staging_Buffer := System.Null_Address;
-         Renderer.Icon_Atlas_Staging_Memory := System.Null_Address;
+         Renderer.Atlases := [others => <>];
          Renderer.Readback_Buffer := System.Null_Address;
          Renderer.Readback_Memory := System.Null_Address;
          Renderer.Sync_Live := False;
          Renderer.Swapchain_Live := False;
+      end Forget_Handles;
+
+      --  What the renderer records about the resources, now that none are
+      --  left.
+      procedure Reset_State is
+      begin
+         Renderer.Swapchain_Configured := False;
+         Renderer.Swapchain_Image_Count := 0;
+         Renderer.Render_Target_Count := 0;
+         Renderer.Command_Buffer_Count := 0;
+         Renderer.Render_Targets_Live := False;
+         Renderer.Descriptor_Live := False;
+         Renderer.Texture_Binding_Count := 0;
+         Renderer.Pipeline_Live := False;
+         Renderer.Vertex_Buffer_Live := False;
+         for Texture of Renderer.Atlases loop
+            Texture.Texture_Live := False;
+            Texture.Staging_Live := False;
+            Texture.Initialized := False;
+            Texture.Upload_Pending := False;
+            Texture.Width := 0;
+            Texture.Height := 0;
+            Texture.Format := Atlas_Texture_None;
+            Texture.Staging_Capacity := 0;
+         end loop;
+         Renderer.Commands_Live := False;
+         Renderer.Swapchain_Images := [others => System.Null_Address];
+         Renderer.Command_Buffers := [others => System.Null_Address];
+         Renderer.Current_Image_Index := 0;
+         Renderer.Vertex_Buffer_Capacity := 0;
+         Renderer.Readback_Capacity := 0;
+         Renderer.Readback_Bytes := 0;
+         Renderer.Readback_Pending := False;
+         Renderer.Readback_Ready := False;
+         Renderer.Last_Readback_Hash := 0;
+      end Reset_State;
+   begin
+      if Renderer.Device_Live then
+         --  Command buffers, pipelines, atlases and the swapchain images may
+         --  all still be referenced by a submitted frame or a pending present.
+         Wait_Device_Idle (Renderer);
+
+         Destroy_Commands_And_Vertices;
+         Destroy_Textures_And_Readback;
+         Destroy_Pipeline_And_Descriptors;
+         Destroy_Render_Targets;
+         Destroy_Sync_Objects (Renderer);
+
+         if Renderer.Swapchain_Live and then not Keep_Swapchain then
+            Vk.Destroy_Swapchain_KHR
+              (device      => Renderer.Device,
+               swapchain   => Renderer.Swapchain,
+               p_Allocator => System.Null_Address);
+            Renderer.Swapchain := System.Null_Address;
+            Renderer.Swapchain_Live := False;
+         end if;
+      else
+         Forget_Handles;
       end if;
 
-      Renderer.Swapchain_Configured := False;
-      Renderer.Swapchain_Image_Count := 0;
-      Renderer.Render_Target_Count := 0;
-      Renderer.Command_Buffer_Count := 0;
-      Renderer.Render_Targets_Live := False;
-      Renderer.Descriptor_Live := False;
-      Renderer.Texture_Binding_Count := 0;
-      Renderer.Pipeline_Live := False;
-      Renderer.Vertex_Buffer_Live := False;
-      Renderer.Atlas_Texture_Live := False;
-      Renderer.Atlas_Staging_Live := False;
-      Renderer.Atlas_Initialized := False;
-      Renderer.Atlas_Upload_Pending := False;
-      Renderer.Icon_Atlas_Texture_Live := False;
-      Renderer.Icon_Atlas_Staging_Live := False;
-      Renderer.Icon_Atlas_Initialized := False;
-      Renderer.Icon_Atlas_Upload_Pending := False;
-      Renderer.Commands_Live := False;
-      Renderer.Swapchain_Images := [others => System.Null_Address];
-      Renderer.Command_Buffers := [others => System.Null_Address];
-      Renderer.Current_Image_Index := 0;
-      Renderer.Vertex_Buffer_Capacity := 0;
-      Renderer.Atlas_Width_Value := 0;
-      Renderer.Atlas_Height_Value := 0;
-      Renderer.Atlas_Format_Value := Atlas_Texture_None;
-      Renderer.Atlas_Staging_Capacity := 0;
-      Renderer.Icon_Atlas_Width_Value := 0;
-      Renderer.Icon_Atlas_Height_Value := 0;
-      Renderer.Icon_Atlas_Format_Value := Atlas_Texture_None;
-      Renderer.Icon_Atlas_Staging_Capacity := 0;
-      Renderer.Readback_Capacity := 0;
-      Renderer.Readback_Bytes := 0;
-      Renderer.Readback_Pending := False;
-      Renderer.Readback_Ready := False;
-      Renderer.Last_Readback_Hash := 0;
+      Reset_State;
    end Destroy_Swapchain_Resources;
 
    procedure Set_Readback_Enabled
@@ -1358,264 +1265,7 @@ package body Guikit.Vulkan is
 
    function Create_Graphics_Pipeline
      (Renderer : in out Vulkan_Renderer)
-      return Boolean
-   is
-      Set_Layouts : aliased Descriptor_Set_Layout_Array_C (1 .. 1) := [1 => Renderer.Descriptor_Set_Layout];
-      Vertex_Module_Info : aliased Vk.Shader_Module_Create_Info_T :=
-        (s_Type    => Vk.STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-         p_Next    => System.Null_Address,
-         flags     => 0,
-         code_Size => Interfaces.C.size_t (Vertex_Shader_Code'Size / 8),
-         p_Code    => Vertex_Shader_Code (Vertex_Shader_Code'First)'Address);
-      Fragment_Module_Info : aliased Vk.Shader_Module_Create_Info_T :=
-        (s_Type    => Vk.STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-         p_Next    => System.Null_Address,
-         flags     => 0,
-         code_Size => Interfaces.C.size_t (Fragment_Shader_Code'Size / 8),
-         p_Code    => Fragment_Shader_Code (Fragment_Shader_Code'First)'Address);
-      Vertex_Module : aliased Vk.Shader_Module_T := System.Null_Address;
-      Fragment_Module : aliased Vk.Shader_Module_T := System.Null_Address;
-      Layout_Info : aliased Vk.Pipeline_Layout_Create_Info_T :=
-        (s_Type                    => Vk.STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-         p_Next                    => System.Null_Address,
-         flags                     => 0,
-         set_Layout_Count          => 1,
-         p_Set_Layouts             => Set_Layouts'Address,
-         push_Constant_Range_Count => 0,
-         p_Push_Constant_Ranges    => System.Null_Address);
-      Layout_Handle : aliased Vk.Pipeline_Layout_T := System.Null_Address;
-      Main_Name : aliased Interfaces.C.char_array := Interfaces.C.To_C ("main");
-      Stages : aliased Shader_Stage_Array (1 .. 2);
-      Binding : aliased Vertex_Binding_Array (1 .. 1) :=
-        [1 =>
-           (binding    => 0,
-            stride     => Interfaces.Unsigned_32 (Gpu_Vertex_Size),
-            input_Rate => Vk.VERTEX_INPUT_RATE_VERTEX)];
-      Attributes : aliased Vertex_Attribute_Array (1 .. 2) :=
-        [1 =>
-           (location => 0,
-            binding  => 0,
-            format   => Vk.FORMAT_R32G32_SFLOAT,
-            offset   => 0),
-         2 =>
-           (location => 1,
-            binding  => 0,
-            format   => Vk.FORMAT_R32G32_SFLOAT,
-            offset   => Interfaces.Unsigned_32 (2 * Interfaces.C.C_float'Size / 8))];
-      Textured_Attributes : aliased Vertex_Attribute_Array (1 .. 5) :=
-        [1 =>
-           (location => 0,
-            binding  => 0,
-            format   => Vk.FORMAT_R32G32_SFLOAT,
-            offset   => 0),
-         2 =>
-           (location => 1,
-            binding  => 0,
-            format   => Vk.FORMAT_R32G32_SFLOAT,
-            offset   => Interfaces.Unsigned_32 (2 * Interfaces.C.C_float'Size / 8)),
-         3 =>
-           (location => 2,
-            binding  => 0,
-            format   => Vk.FORMAT_R32G32B32A32_SFLOAT,
-            offset   => Interfaces.Unsigned_32 (4 * Interfaces.C.C_float'Size / 8)),
-         4 =>
-           (location => 3,
-            binding  => 0,
-            format   => Vk.FORMAT_R32_SFLOAT,
-            offset   => Interfaces.Unsigned_32 (8 * Interfaces.C.C_float'Size / 8)),
-         5 =>
-           (location => 4,
-            binding  => 0,
-            format   => Vk.FORMAT_R32_SFLOAT,
-            offset   => Interfaces.Unsigned_32 (9 * Interfaces.C.C_float'Size / 8))];
-      Vertex_Input : aliased Vk.Pipeline_Vertex_Input_State_Create_Info_T :=
-        (s_Type                           => Vk.STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-         p_Next                           => System.Null_Address,
-         flags                            => 0,
-         vertex_Binding_Description_Count => 1,
-         p_Vertex_Binding_Descriptions    => Binding'Address,
-         vertex_Attribute_Description_Count => 5,
-         p_Vertex_Attribute_Descriptions    => Textured_Attributes'Address);
-      Input_Assembly : aliased Vk.Pipeline_Input_Assembly_State_Create_Info_T :=
-        (s_Type                   => Vk.STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-         p_Next                   => System.Null_Address,
-         flags                    => 0,
-         topology                 => Vk.PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-         primitive_Restart_Enable => 0);
-      Framebuffer_Width  : constant Interfaces.C.C_float :=
-        Interfaces.C.C_float (Renderer.Frame_Width_Value);
-      Framebuffer_Height : constant Interfaces.C.C_float :=
-        Interfaces.C.C_float (Renderer.Frame_Height_Value);
-      Viewport : aliased Vk.Viewport_T :=
-        (x         => 0.0,
-         y         => Framebuffer_Height,
-         width     => Framebuffer_Width,
-         height    => -Framebuffer_Height,
-         min_Depth => 0.0,
-         max_Depth => 1.0);
-      Scissor : aliased Vk.Rect2_D_T :=
-        (offset => (x => 0, y => 0),
-         extent =>
-           (width  => Interfaces.Unsigned_32 (Renderer.Frame_Width_Value),
-            height => Interfaces.Unsigned_32 (Renderer.Frame_Height_Value)));
-      Viewport_State : aliased Vk.Pipeline_Viewport_State_Create_Info_T :=
-        (s_Type         => Vk.STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-         p_Next         => System.Null_Address,
-         flags          => 0,
-         viewport_Count => 1,
-         p_Viewports    => Viewport'Address,
-         scissor_Count  => 1,
-         p_Scissors     => Scissor'Address);
-      Rasterization : aliased Vk.Pipeline_Rasterization_State_Create_Info_T :=
-        (s_Type                   => Vk.STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-         p_Next                   => System.Null_Address,
-         flags                    => 0,
-         depth_Clamp_Enable       => 0,
-         rasterizer_Discard_Enable => 0,
-         polygon_Mode             => Vk.POLYGON_MODE_FILL,
-         cull_Mode                => Vk.CULL_MODE_NONE,
-         front_Face               => Vk.FRONT_FACE_COUNTER_CLOCKWISE,
-         depth_Bias_Enable        => 0,
-         depth_Bias_Constant_Factor => 0.0,
-         depth_Bias_Clamp         => 0.0,
-         depth_Bias_Slope_Factor  => 0.0,
-         line_Width               => 1.0);
-      Multisample : aliased Vk.Pipeline_Multisample_State_Create_Info_T :=
-        (s_Type                  => Vk.STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-         p_Next                  => System.Null_Address,
-         flags                   => 0,
-         rasterization_Samples   => Renderer.Color_Sample_Count,
-         sample_Shading_Enable   => 0,
-         min_Sample_Shading      => 1.0,
-         p_Sample_Mask           => System.Null_Address,
-         alpha_To_Coverage_Enable => 0,
-         alpha_To_One_Enable     => 0);
-      Blend_Attachment : aliased Vk.Pipeline_Color_Blend_Attachment_State_T :=
-        (blend_Enable         => 1,
-         src_Color_Blend_Factor => Vk.BLEND_FACTOR_SRC_ALPHA,
-         dst_Color_Blend_Factor => Vk.BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-         color_Blend_Op      => Vk.BLEND_OP_ADD,
-         src_Alpha_Blend_Factor => Vk.BLEND_FACTOR_ONE,
-         dst_Alpha_Blend_Factor => Vk.BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-         alpha_Blend_Op      => Vk.BLEND_OP_ADD,
-         color_Write_Mask    =>
-           Vk.COLOR_COMPONENT_R_BIT or Vk.COLOR_COMPONENT_G_BIT or
-           Vk.COLOR_COMPONENT_B_BIT or Vk.COLOR_COMPONENT_A_BIT);
-      Color_Blend : aliased Vk.Pipeline_Color_Blend_State_Create_Info_T :=
-        (s_Type           => Vk.STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-         p_Next           => System.Null_Address,
-         flags            => 0,
-         logic_Op_Enable  => 0,
-         logic_Op         => Vk.LOGIC_OP_COPY,
-         attachment_Count => 1,
-         p_Attachments    => Blend_Attachment'Address,
-         blend_Constants  => [0.0, 0.0, 0.0, 0.0]);
-      Pipeline_Info : aliased Vk.Graphics_Pipeline_Create_Info_T;
-      Pipeline_Handle : aliased Vk.Pipeline_T := System.Null_Address;
-      Result : Vk.Result_T;
-   begin
-      Result :=
-        Vk.Create_Shader_Module
-          (device          => Renderer.Device,
-           p_Create_Info   => Vertex_Module_Info'Address,
-           p_Allocator     => System.Null_Address,
-           p_Shader_Module => Vertex_Module'Address);
-
-      if Result /= Vk.SUCCESS or else Vertex_Module = System.Null_Address then
-         return False;
-      end if;
-
-      Result :=
-        Vk.Create_Shader_Module
-          (device          => Renderer.Device,
-           p_Create_Info   => Fragment_Module_Info'Address,
-           p_Allocator     => System.Null_Address,
-           p_Shader_Module => Fragment_Module'Address);
-
-      if Result /= Vk.SUCCESS or else Fragment_Module = System.Null_Address then
-         Vk.Destroy_Shader_Module (Renderer.Device, Vertex_Module, System.Null_Address);
-         return False;
-      end if;
-
-      Result :=
-        Vk.Create_Pipeline_Layout
-          (device            => Renderer.Device,
-           p_Create_Info     => Layout_Info'Address,
-           p_Allocator       => System.Null_Address,
-           p_Pipeline_Layout => Layout_Handle'Address);
-
-      if Result /= Vk.SUCCESS or else Layout_Handle = System.Null_Address then
-         Vk.Destroy_Shader_Module (Renderer.Device, Fragment_Module, System.Null_Address);
-         Vk.Destroy_Shader_Module (Renderer.Device, Vertex_Module, System.Null_Address);
-         return False;
-      end if;
-
-      Stages :=
-        [1 =>
-           (s_Type                => Vk.STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-            p_Next                => System.Null_Address,
-            flags                 => 0,
-            stage                 => Vk.SHADER_STAGE_VERTEX_BIT,
-            module                => Vertex_Module,
-            p_Name                => Main_Name (Main_Name'First)'Address,
-            p_Specialization_Info => System.Null_Address),
-         2 =>
-           (s_Type                => Vk.STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-            p_Next                => System.Null_Address,
-            flags                 => 0,
-            stage                 => Vk.SHADER_STAGE_FRAGMENT_BIT,
-            module                => Fragment_Module,
-            p_Name                => Main_Name (Main_Name'First)'Address,
-            p_Specialization_Info => System.Null_Address)];
-      Pipeline_Info :=
-        (s_Type                 => Vk.STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-         p_Next                 => System.Null_Address,
-         flags                  => 0,
-         stage_Count            => 2,
-         p_Stages               => Stages'Address,
-         p_Vertex_Input_State   => Vertex_Input'Address,
-         p_Input_Assembly_State => Input_Assembly'Address,
-         p_Tessellation_State   => System.Null_Address,
-         p_Viewport_State       => Viewport_State'Address,
-         p_Rasterization_State  => Rasterization'Address,
-         p_Multisample_State    => Multisample'Address,
-         p_Depth_Stencil_State  => System.Null_Address,
-         p_Color_Blend_State    => Color_Blend'Address,
-         p_Dynamic_State        => System.Null_Address,
-         layout                 => Layout_Handle,
-         render_Pass            => Renderer.Render_Pass,
-         subpass                => 0,
-         base_Pipeline_Handle   => System.Null_Address,
-         base_Pipeline_Index    => Interfaces.Integer_32'(-1));
-      Result :=
-        Vk.Create_Graphics_Pipelines
-          (device            => Renderer.Device,
-           pipeline_Cache    => System.Null_Address,
-           create_Info_Count => 1,
-           p_Create_Infos    => Pipeline_Info'Address,
-           p_Allocator       => System.Null_Address,
-           p_Pipelines       => Pipeline_Handle'Address);
-
-      Vk.Destroy_Shader_Module (Renderer.Device, Fragment_Module, System.Null_Address);
-      Vk.Destroy_Shader_Module (Renderer.Device, Vertex_Module, System.Null_Address);
-
-      if Result /= Vk.SUCCESS or else Pipeline_Handle = System.Null_Address then
-         Vk.Destroy_Pipeline_Layout
-           (device          => Renderer.Device,
-            pipeline_Layout => Layout_Handle,
-            p_Allocator     => System.Null_Address);
-         return False;
-      end if;
-
-      Renderer.Pipeline_Layout := Layout_Handle;
-      Renderer.Graphics_Pipeline := Pipeline_Handle;
-      Renderer.Pipeline_Live := True;
-      return True;
-   exception
-      when Error : others =>
-         Guikit.Errors.Note (Error, "Guikit.Vulkan");
-         return False;
-   end Create_Graphics_Pipeline;
+      return Boolean is separate;
 
    function Create_Descriptor_Resources
      (Renderer : in out Vulkan_Renderer)
@@ -2204,18 +1854,24 @@ package body Guikit.Vulkan is
       Batch    : Submission_Batch)
       return Boolean
    is
+      Texture : Atlas_Texture renames Renderer.Atlases (Icon_Atlas);
       Upload_Format : constant Atlas_Texture_Format := Icon_Upload_Texture_Format (Batch);
-      Vulkan_Format : constant Vk.Format_T :=
-        (if Upload_Format = Atlas_Texture_RGBA8 then Format_R8G8B8A8_Srgb else Vk.FORMAT_R8_UNORM);
       Bytes : constant Natural := Batch.Icon_Atlas_Bytes;
       Needs_New_Texture : constant Boolean :=
-        not Renderer.Icon_Atlas_Texture_Live
-        or else Renderer.Icon_Atlas_Width_Value /= Batch.Icon_Atlas_Width
-        or else Renderer.Icon_Atlas_Height_Value /= Batch.Icon_Atlas_Height
-        or else Renderer.Icon_Atlas_Format_Value /= Upload_Format;
-      Result : Vk.Result_T;
+        not Texture.Texture_Live
+        or else Texture.Width /= Batch.Icon_Atlas_Width
+        or else Texture.Height /= Batch.Icon_Atlas_Height
+        or else Texture.Format /= Upload_Format;
+
+      --  The batch's icon atlas pixels into the staging memory.
+      procedure Fill (Target : Byte_Array_Conversions.Object_Pointer) is
+      begin
+         for Index in 1 .. Bytes loop
+            Target.all (Index) := Batch.Icon_Atlas_Pixels.Element (Index);
+         end loop;
+      end Fill;
    begin
-      if Renderer.Icon_Atlas_Texture_Live
+      if Texture.Texture_Live
         and then (not Batch.Icon_Atlas_Dirty
                   or else (Length (Batch.Icon_Atlas_Signature) > 0
                            and then Batch.Icon_Atlas_Signature = Renderer.Uploaded_Icon_Signature
@@ -2233,302 +1889,12 @@ package body Guikit.Vulkan is
          return False;
       end if;
 
-      if Needs_New_Texture then
-         if Renderer.Icon_Atlas_View /= System.Null_Address then
-            Vk.Destroy_Image_View (Renderer.Device, Renderer.Icon_Atlas_View, System.Null_Address);
-            Renderer.Icon_Atlas_View := System.Null_Address;
-         end if;
-
-         if Renderer.Icon_Atlas_Sampler /= System.Null_Address then
-            Vk.Destroy_Sampler (Renderer.Device, Renderer.Icon_Atlas_Sampler, System.Null_Address);
-            Renderer.Icon_Atlas_Sampler := System.Null_Address;
-         end if;
-
-         if Renderer.Icon_Atlas_Image /= System.Null_Address then
-            Vk.Destroy_Image (Renderer.Device, Renderer.Icon_Atlas_Image, System.Null_Address);
-            Renderer.Icon_Atlas_Image := System.Null_Address;
-         end if;
-
-         if Renderer.Icon_Atlas_Memory /= System.Null_Address then
-            Vk.Free_Memory (Renderer.Device, Renderer.Icon_Atlas_Memory, System.Null_Address);
-            Renderer.Icon_Atlas_Memory := System.Null_Address;
-         end if;
-
-         Renderer.Icon_Atlas_Texture_Live := False;
-         Renderer.Icon_Atlas_Initialized := False;
-
-         declare
-            Image_Info : aliased Vk.Image_Create_Info_T :=
-              (s_Type                   => Vk.STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-               p_Next                   => System.Null_Address,
-               flags                    => 0,
-               image_Type               => Vk.IMAGE_TYPE_2D,
-               format                   => Vulkan_Format,
-               extent                   =>
-                 (width  => Interfaces.Unsigned_32 (Batch.Icon_Atlas_Width),
-                  height => Interfaces.Unsigned_32 (Batch.Icon_Atlas_Height),
-                  depth  => 1),
-               mip_Levels               => 1,
-               array_Layers             => 1,
-               samples                  => Vk.SAMPLE_COUNT_1_BIT,
-               tiling                   => Vk.IMAGE_TILING_OPTIMAL,
-               usage                    => Vk.IMAGE_USAGE_TRANSFER_DST_BIT or Vk.IMAGE_USAGE_SAMPLED_BIT,
-               sharing_Mode             => Vk.SHARING_MODE_EXCLUSIVE,
-               queue_Family_Index_Count => 0,
-               p_Queue_Family_Indices   => System.Null_Address,
-               initial_Layout           => Vk.IMAGE_LAYOUT_UNDEFINED);
-            Image_Handle : aliased Vk.Image_T := System.Null_Address;
-            Requirements : aliased Vk.Memory_Requirements_T;
-            Memory_Type  : Interfaces.Unsigned_32 := 0;
-            Allocate_Info : aliased Vk.Memory_Allocate_Info_T;
-            Memory_Handle : aliased Vk.Device_Memory_T := System.Null_Address;
-            View_Info : aliased Vk.Image_View_Create_Info_T;
-            View_Handle : aliased Vk.Image_View_T := System.Null_Address;
-            Sampler_Info : aliased Vk.Sampler_Create_Info_T :=
-              (s_Type                   => Vk.STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-               p_Next                   => System.Null_Address,
-               flags                    => 0,
-               mag_Filter               => Vk.FILTER_NEAREST,
-               min_Filter               => Vk.FILTER_NEAREST,
-               mipmap_Mode              => Vk.SAMPLER_MIPMAP_MODE_NEAREST,
-               address_Mode_U           => Vk.SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-               address_Mode_V           => Vk.SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-               address_Mode_W           => Vk.SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-               mip_Lod_Bias             => 0.0,
-               anisotropy_Enable        => 0,
-               max_Anisotropy           => 1.0,
-               compare_Enable           => 0,
-               compare_Op               => Vk.COMPARE_OP_ALWAYS,
-               min_Lod                  => 0.0,
-               max_Lod                  => 0.0,
-               border_Color             => Vk.BORDER_COLOR_FLOAT_TRANSPARENT_BLACK,
-               unnormalized_Coordinates => 0);
-            Sampler_Handle : aliased Vk.Sampler_T := System.Null_Address;
-         begin
-            Result :=
-              Vk.Create_Image
-                (device        => Renderer.Device,
-                 p_Create_Info => Image_Info'Address,
-                 p_Allocator   => System.Null_Address,
-                 p_Image       => Image_Handle'Address);
-
-            if Result /= Vk.SUCCESS or else Image_Handle = System.Null_Address then
-               return False;
-            end if;
-
-            Vk.Get_Image_Memory_Requirements (Renderer.Device, Image_Handle, Requirements'Address);
-            if not Any_Memory_Type (Renderer, Requirements.memory_Type_Bits, Memory_Type) then
-               Vk.Destroy_Image (Renderer.Device, Image_Handle, System.Null_Address);
-               return False;
-            end if;
-
-            Allocate_Info :=
-              (s_Type            => Vk.STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-               p_Next            => System.Null_Address,
-               allocation_Size   => Requirements.size,
-               memory_Type_Index => Memory_Type);
-            Result :=
-              Vk.Allocate_Memory
-                (device          => Renderer.Device,
-                 p_Allocate_Info => Allocate_Info'Address,
-                 p_Allocator     => System.Null_Address,
-                 p_Memory        => Memory_Handle'Address);
-
-            if Result /= Vk.SUCCESS or else Memory_Handle = System.Null_Address then
-               Vk.Destroy_Image (Renderer.Device, Image_Handle, System.Null_Address);
-               return False;
-            end if;
-
-            if Vk.Bind_Image_Memory (Renderer.Device, Image_Handle, Memory_Handle, 0) /= Vk.SUCCESS then
-               Vk.Free_Memory (Renderer.Device, Memory_Handle, System.Null_Address);
-               Vk.Destroy_Image (Renderer.Device, Image_Handle, System.Null_Address);
-               return False;
-            end if;
-
-            View_Info :=
-              (s_Type            => Vk.STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-               p_Next            => System.Null_Address,
-               flags             => 0,
-               image             => Image_Handle,
-               view_Type         => Vk.IMAGE_VIEW_TYPE_2D,
-               format            => Vulkan_Format,
-               components        =>
-                 (r => Vk.COMPONENT_SWIZZLE_R,
-                  g => Vk.COMPONENT_SWIZZLE_G,
-                  b => Vk.COMPONENT_SWIZZLE_B,
-                  a => Vk.COMPONENT_SWIZZLE_A),
-               subresource_Range =>
-                 (aspect_Mask      => Vk.IMAGE_ASPECT_COLOR_BIT,
-                  base_Mip_Level   => 0,
-                  level_Count      => 1,
-                  base_Array_Layer => 0,
-                  layer_Count      => 1));
-            Result :=
-              Vk.Create_Image_View
-                (device        => Renderer.Device,
-                 p_Create_Info => View_Info'Address,
-                 p_Allocator   => System.Null_Address,
-                 p_View        => View_Handle'Address);
-
-            if Result /= Vk.SUCCESS or else View_Handle = System.Null_Address then
-               Vk.Free_Memory (Renderer.Device, Memory_Handle, System.Null_Address);
-               Vk.Destroy_Image (Renderer.Device, Image_Handle, System.Null_Address);
-               return False;
-            end if;
-
-            Result :=
-              Vk.Create_Sampler
-                (device        => Renderer.Device,
-                 p_Create_Info => Sampler_Info'Address,
-                 p_Allocator   => System.Null_Address,
-                 p_Sampler     => Sampler_Handle'Address);
-
-            if Result /= Vk.SUCCESS or else Sampler_Handle = System.Null_Address then
-               Vk.Destroy_Image_View (Renderer.Device, View_Handle, System.Null_Address);
-               Vk.Free_Memory (Renderer.Device, Memory_Handle, System.Null_Address);
-               Vk.Destroy_Image (Renderer.Device, Image_Handle, System.Null_Address);
-               return False;
-            end if;
-
-            Renderer.Icon_Atlas_Image := Image_Handle;
-            Renderer.Icon_Atlas_Memory := Memory_Handle;
-            Renderer.Icon_Atlas_View := View_Handle;
-            Renderer.Icon_Atlas_Sampler := Sampler_Handle;
-            Renderer.Icon_Atlas_Width_Value := Batch.Icon_Atlas_Width;
-            Renderer.Icon_Atlas_Height_Value := Batch.Icon_Atlas_Height;
-            Renderer.Icon_Atlas_Format_Value := Upload_Format;
-            Renderer.Icon_Atlas_Texture_Live := True;
-         end;
+      if not Atlas_Uploads.Upload
+        (Renderer, Icon_Atlas, Batch.Icon_Atlas_Width, Batch.Icon_Atlas_Height, Upload_Format, Bytes, Fill'Access)
+      then
+         return False;
       end if;
 
-      if not Renderer.Icon_Atlas_Staging_Live or else Renderer.Icon_Atlas_Staging_Capacity < Bytes then
-         if Renderer.Icon_Atlas_Staging_Buffer /= System.Null_Address then
-            Vk.Destroy_Buffer (Renderer.Device, Renderer.Icon_Atlas_Staging_Buffer, System.Null_Address);
-            Renderer.Icon_Atlas_Staging_Buffer := System.Null_Address;
-         end if;
-
-         if Renderer.Icon_Atlas_Staging_Memory /= System.Null_Address then
-            Vk.Free_Memory (Renderer.Device, Renderer.Icon_Atlas_Staging_Memory, System.Null_Address);
-            Renderer.Icon_Atlas_Staging_Memory := System.Null_Address;
-         end if;
-
-         declare
-            Buffer_Info : aliased Vk.Buffer_Create_Info_T :=
-              (s_Type                   => Vk.STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-               p_Next                   => System.Null_Address,
-               flags                    => 0,
-               size                     => Interfaces.Unsigned_64 (Bytes),
-               usage                    => Vk.BUFFER_USAGE_TRANSFER_SRC_BIT,
-               sharing_Mode             => Vk.SHARING_MODE_EXCLUSIVE,
-               queue_Family_Index_Count => 0,
-               p_Queue_Family_Indices   => System.Null_Address);
-            Buffer_Handle : aliased Vk.Buffer_T := System.Null_Address;
-            Requirements  : aliased Vk.Memory_Requirements_T;
-            Memory_Type   : Interfaces.Unsigned_32 := 0;
-            Allocate_Info : aliased Vk.Memory_Allocate_Info_T;
-            Memory_Handle : aliased Vk.Device_Memory_T := System.Null_Address;
-         begin
-            Result :=
-              Vk.Create_Buffer
-                (device        => Renderer.Device,
-                 p_Create_Info => Buffer_Info'Address,
-                 p_Allocator   => System.Null_Address,
-                 p_Buffer      => Buffer_Handle'Address);
-
-            if Result /= Vk.SUCCESS or else Buffer_Handle = System.Null_Address then
-               return False;
-            end if;
-
-            Vk.Get_Buffer_Memory_Requirements (Renderer.Device, Buffer_Handle, Requirements'Address);
-            if not Host_Visible_Memory_Type (Renderer, Requirements.memory_Type_Bits, Memory_Type) then
-               Vk.Destroy_Buffer (Renderer.Device, Buffer_Handle, System.Null_Address);
-               return False;
-            end if;
-
-            Allocate_Info :=
-              (s_Type            => Vk.STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-               p_Next            => System.Null_Address,
-               allocation_Size   => Requirements.size,
-               memory_Type_Index => Memory_Type);
-            Result :=
-              Vk.Allocate_Memory
-                (device          => Renderer.Device,
-                 p_Allocate_Info => Allocate_Info'Address,
-                 p_Allocator     => System.Null_Address,
-                 p_Memory        => Memory_Handle'Address);
-
-            if Result /= Vk.SUCCESS or else Memory_Handle = System.Null_Address then
-               Vk.Destroy_Buffer (Renderer.Device, Buffer_Handle, System.Null_Address);
-               return False;
-            end if;
-
-            if Vk.Bind_Buffer_Memory (Renderer.Device, Buffer_Handle, Memory_Handle, 0) /= Vk.SUCCESS then
-               Vk.Free_Memory (Renderer.Device, Memory_Handle, System.Null_Address);
-               Vk.Destroy_Buffer (Renderer.Device, Buffer_Handle, System.Null_Address);
-               return False;
-            end if;
-
-            Renderer.Icon_Atlas_Staging_Buffer := Buffer_Handle;
-            Renderer.Icon_Atlas_Staging_Memory := Memory_Handle;
-            Renderer.Icon_Atlas_Staging_Capacity := Bytes;
-            Renderer.Icon_Atlas_Staging_Live := True;
-         end;
-      end if;
-
-      declare
-         Mapped_Data : aliased System.Address := System.Null_Address;
-      begin
-         Result :=
-           Vk.Map_Memory
-             (device  => Renderer.Device,
-              memory  => Renderer.Icon_Atlas_Staging_Memory,
-              offset  => 0,
-              size    => Interfaces.Unsigned_64 (Bytes),
-              flags   => 0,
-              pp_Data => Mapped_Data'Address);
-
-         if Result /= Vk.SUCCESS or else Mapped_Data = System.Null_Address then
-            return False;
-         end if;
-
-         declare
-            Target : constant Byte_Array_Conversions.Object_Pointer :=
-              Byte_Array_Conversions.To_Pointer (Mapped_Data);
-         begin
-            for Index in 1 .. Bytes loop
-               Target.all (Index) := Batch.Icon_Atlas_Pixels.Element (Index);
-            end loop;
-         end;
-
-         Vk.Unmap_Memory (Renderer.Device, Renderer.Icon_Atlas_Staging_Memory);
-      end;
-
-      declare
-         Image_Info : aliased Vk.Descriptor_Image_Info_T :=
-           (sampler      => Renderer.Icon_Atlas_Sampler,
-            image_View   => Renderer.Icon_Atlas_View,
-            image_Layout => Vk.IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-         Write : aliased Vk.Write_Descriptor_Set_T :=
-           (s_Type                => Vk.STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            p_Next                => System.Null_Address,
-            dst_Set               => Renderer.Descriptor_Set,
-            dst_Binding           => 1,
-            dst_Array_Element     => 0,
-            descriptor_Count      => 1,
-            descriptor_Type       => Vk.DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            p_Image_Info          => Image_Info'Address,
-            p_Buffer_Info         => System.Null_Address,
-            p_Texel_Buffer_View   => System.Null_Address);
-      begin
-         Vk.Update_Descriptor_Sets
-           (device                 => Renderer.Device,
-            descriptor_Write_Count => 1,
-            p_Descriptor_Writes    => Write'Address,
-            descriptor_Copy_Count  => 0,
-            p_Descriptor_Copies    => System.Null_Address);
-      end;
-
-      Renderer.Icon_Atlas_Upload_Pending := True;
       Renderer.Uploaded_Icon_Signature := Batch.Icon_Atlas_Signature;
       return True;
    exception
@@ -2561,281 +1927,7 @@ package body Guikit.Vulkan is
      (Renderer : in out Vulkan_Renderer;
       Width    : Natural;
       Height   : Natural)
-      return Vulkan_Status
-   is
-      Capabilities : aliased Vk.Surface_Capabilities_KHR_T;
-      Surface_Supported : aliased Interfaces.Unsigned_32 := 0;
-      Format_Count : aliased Interfaces.Unsigned_32 := 0;
-      Formats      : Surface_Format_Array (1 .. Max_Surface_Formats);
-      Surface_Result : Vk.Result_T;
-      Chosen_Format : Vk.Surface_Format_KHR_T :=
-        (format => Vk.FORMAT_B8G8R8A8_SRGB, color_Space => Vk.COLOR_SPACE_SRGB_NONLINEAR_KHR);
-      Image_Count : Interfaces.Unsigned_32;
-      Extent      : Vk.Extent2_D_T;
-      Images      : Image_Array (1 .. Max_Swapchain_Images);
-      Swapchain_Info : aliased Vk.Swapchain_Create_Info_KHR_T;
-      Swapchain_Handle : aliased Vk.Swapchain_KHR_T := System.Null_Address;
-      Swapchain_Result : Vk.Result_T;
-      --  The swapchain being replaced, if any. It is handed to the driver as
-      --  oldSwapchain, which retires it (it can no longer acquire) and lets
-      --  the driver reuse its resources, and is destroyed once the new one has
-      --  been created -- or as soon as it is clear none will be.
-      Old_Swapchain : Vk.Swapchain_KHR_T := System.Null_Address;
-
-      procedure Retire_Old_Swapchain is
-      begin
-         if Old_Swapchain /= System.Null_Address then
-            Vk.Destroy_Swapchain_KHR
-              (device      => Renderer.Device,
-               swapchain   => Old_Swapchain,
-               p_Allocator => System.Null_Address);
-            Old_Swapchain := System.Null_Address;
-         end if;
-      end Retire_Old_Swapchain;
-   begin
-      --  Everything but the swapchain handle goes now, after the device has
-      --  gone idle; the handle survives only until the new swapchain exists.
-      Destroy_Swapchain_Resources (Renderer, Keep_Swapchain => True);
-      if Renderer.Swapchain_Live then
-         Old_Swapchain := Renderer.Swapchain;
-         Renderer.Swapchain := System.Null_Address;
-         Renderer.Swapchain_Live := False;
-      end if;
-
-      Surface_Result :=
-        Vk.Get_Physical_Device_Surface_Support_KHR
-          (physical_Device    => Renderer.Physical_Device,
-           queue_Family_Index => Renderer.Queue_Family_Index,
-           surface            => Renderer.Surface,
-           p_Supported        => Surface_Supported'Address);
-
-      if Surface_Result /= Vk.SUCCESS or else Surface_Supported = 0 then
-         Retire_Old_Swapchain;
-         Renderer.Last_Status := Vulkan_Surface_Unsupported;
-         return Renderer.Last_Status;
-      end if;
-
-      Surface_Result :=
-        Vk.Get_Physical_Device_Surface_Capabilities_KHR
-          (physical_Device        => Renderer.Physical_Device,
-           surface                => Renderer.Surface,
-           p_Surface_Capabilities => Capabilities'Address);
-
-      if Surface_Result /= Vk.SUCCESS then
-         Retire_Old_Swapchain;
-         Renderer.Last_Status := Vulkan_Swapchain_Create_Failed;
-         return Renderer.Last_Status;
-      end if;
-
-      Surface_Result :=
-        Vk.Get_Physical_Device_Surface_Formats_KHR
-          (physical_Device        => Renderer.Physical_Device,
-           surface                => Renderer.Surface,
-           p_Surface_Format_Count => Format_Count'Address,
-           p_Surface_Formats      => System.Null_Address);
-
-      if Surface_Result /= Vk.SUCCESS or else Format_Count = 0 then
-         Retire_Old_Swapchain;
-         Renderer.Last_Status := Vulkan_Swapchain_Create_Failed;
-         return Renderer.Last_Status;
-      end if;
-
-      if Format_Count > Formats'Length then
-         Format_Count := Formats'Length;
-      end if;
-
-      Surface_Result :=
-        Vk.Get_Physical_Device_Surface_Formats_KHR
-          (physical_Device        => Renderer.Physical_Device,
-           surface                => Renderer.Surface,
-           p_Surface_Format_Count => Format_Count'Address,
-           p_Surface_Formats      => Formats (Formats'First)'Address);
-
-      if Surface_Result /= Vk.SUCCESS then
-         Retire_Old_Swapchain;
-         Renderer.Last_Status := Vulkan_Swapchain_Create_Failed;
-         return Renderer.Last_Status;
-      end if;
-
-      --  An sRGB swapchain is not a preference here, it is a requirement.
-      --  Color_To_Vertex converts every colour from sRGB to linear on the way to
-      --  the GPU, on the understanding that the swapchain encodes back to sRGB
-      --  when it stores. That is what makes the blending gamma-correct. Handed a
-      --  UNORM target instead, the same linear values are displayed as if they
-      --  were already sRGB and the whole interface comes out too dark -- a wrong
-      --  picture rather than an error, which is the kind of failure worth
-      --  refusing outright.
-      --
-      --  Either sRGB byte order will do; the surface reports which it prefers.
-      declare
-         Found_Srgb : Boolean := False;
-      begin
-         for Index in 1 .. Natural (Format_Count) loop
-            if (Formats (Index).format = Vk.FORMAT_B8G8R8A8_SRGB
-                  or else Formats (Index).format = Format_R8G8B8A8_Srgb)
-              and then Formats (Index).color_Space = Vk.COLOR_SPACE_SRGB_NONLINEAR_KHR
-            then
-               Chosen_Format := Formats (Index);
-               Found_Srgb := True;
-               exit;
-            end if;
-         end loop;
-
-         if not Found_Srgb then
-            Retire_Old_Swapchain;
-            Renderer.Last_Status := Vulkan_Swapchain_Create_Failed;
-            return Renderer.Last_Status;
-         end if;
-      end;
-
-      Image_Count := Capabilities.min_Image_Count + 1;
-      if Capabilities.max_Image_Count /= 0 and then Image_Count > Capabilities.max_Image_Count then
-         Image_Count := Capabilities.max_Image_Count;
-      end if;
-
-      if Capabilities.current_Extent.width /= Interfaces.Unsigned_32'Last then
-         Extent := Capabilities.current_Extent;
-      else
-         Extent :=
-           (width  =>
-              Clamp
-                (Interfaces.Unsigned_32 (Width),
-                 Capabilities.min_Image_Extent.width,
-                 Capabilities.max_Image_Extent.width),
-            height =>
-              Clamp
-                (Interfaces.Unsigned_32 (Height),
-                 Capabilities.min_Image_Extent.height,
-                 Capabilities.max_Image_Extent.height));
-      end if;
-
-      Swapchain_Info :=
-        (s_Type                  => Structure_Type_Swapchain_Create_Info_KHR,
-         p_Next                  => System.Null_Address,
-         flags                   => 0,
-         surface                 => Renderer.Surface,
-         min_Image_Count         => Image_Count,
-         image_Format            => Chosen_Format.format,
-         image_Color_Space       => Chosen_Format.color_Space,
-         image_Extent            => Extent,
-         image_Array_Layers      => 1,
-         image_Usage             => Vk.IMAGE_USAGE_COLOR_ATTACHMENT_BIT or Vk.IMAGE_USAGE_TRANSFER_SRC_BIT,
-         image_Sharing_Mode      => Vk.SHARING_MODE_EXCLUSIVE,
-         queue_Family_Index_Count => 0,
-         p_Queue_Family_Indices  => System.Null_Address,
-         pre_Transform           => Capabilities.current_Transform,
-         composite_Alpha         => Vk.COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-         present_Mode            => Vk.PRESENT_MODE_FIFO_KHR,
-         clipped                 => 1,
-         old_Swapchain           => Old_Swapchain);
-
-      Swapchain_Result :=
-        Vk.Create_Swapchain_KHR
-          (device         => Renderer.Device,
-           p_Create_Info  => Swapchain_Info'Address,
-           p_Allocator    => System.Null_Address,
-           p_Swapchain    => Swapchain_Handle'Address);
-
-      --  Retired either way: a failed create still retires oldSwapchain.
-      Retire_Old_Swapchain;
-
-      if Swapchain_Result /= Vk.SUCCESS or else Swapchain_Handle = System.Null_Address then
-         Renderer.Last_Status := Vulkan_Swapchain_Create_Failed;
-         return Renderer.Last_Status;
-      end if;
-
-      Renderer.Swapchain := Swapchain_Handle;
-      Renderer.Swapchain_Live := True;
-      Renderer.Frame_Width_Value := Natural (Extent.width);
-      Renderer.Frame_Height_Value := Natural (Extent.height);
-
-      Renderer.Swapchain_Image_Count := 0;
-      Swapchain_Result :=
-        Vk.Get_Swapchain_Images_KHR
-          (device                  => Renderer.Device,
-           swapchain               => Renderer.Swapchain,
-           p_Swapchain_Image_Count => Renderer.Swapchain_Image_Count'Address,
-           p_Swapchain_Images      => System.Null_Address);
-
-      if Swapchain_Result /= Vk.SUCCESS or else Renderer.Swapchain_Image_Count = 0 then
-         Destroy_Swapchain_Resources (Renderer);
-         Renderer.Last_Status := Vulkan_Swapchain_Image_Query_Failed;
-         return Renderer.Last_Status;
-      end if;
-
-      if Renderer.Swapchain_Image_Count > Interfaces.Unsigned_32 (Max_Swapchain_Images) then
-         Destroy_Swapchain_Resources (Renderer);
-         Renderer.Last_Status := Vulkan_Render_Target_Create_Failed;
-         return Renderer.Last_Status;
-      end if;
-
-      Swapchain_Result :=
-        Vk.Get_Swapchain_Images_KHR
-          (device                  => Renderer.Device,
-           swapchain               => Renderer.Swapchain,
-           p_Swapchain_Image_Count => Renderer.Swapchain_Image_Count'Address,
-           p_Swapchain_Images      => Images (Images'First)'Address);
-
-      if Swapchain_Result /= Vk.SUCCESS then
-         Destroy_Swapchain_Resources (Renderer);
-         Renderer.Last_Status := Vulkan_Swapchain_Image_Query_Failed;
-         return Renderer.Last_Status;
-      end if;
-
-      for Index in 1 .. Natural (Renderer.Swapchain_Image_Count) loop
-         Renderer.Swapchain_Images (Index) := Images (Index);
-      end loop;
-
-      if not Create_Render_Targets (Renderer, Chosen_Format.format) then
-         Destroy_Swapchain_Resources (Renderer);
-         Renderer.Last_Status := Vulkan_Render_Target_Create_Failed;
-         return Renderer.Last_Status;
-      end if;
-
-      if not Create_Command_Resources (Renderer) then
-         Destroy_Swapchain_Resources (Renderer);
-         Renderer.Last_Status := Vulkan_Command_Create_Failed;
-         return Renderer.Last_Status;
-      end if;
-
-      if not Create_Descriptor_Resources (Renderer) then
-         Destroy_Swapchain_Resources (Renderer);
-         Renderer.Last_Status := Vulkan_Descriptor_Create_Failed;
-         return Renderer.Last_Status;
-      end if;
-
-      if not Create_Graphics_Pipeline (Renderer) then
-         Destroy_Swapchain_Resources (Renderer);
-         Renderer.Last_Status := Vulkan_Pipeline_Create_Failed;
-         return Renderer.Last_Status;
-      end if;
-
-      if not Record_Command_Buffers (Renderer, 0) then
-         Destroy_Swapchain_Resources (Renderer);
-         Renderer.Last_Status := Vulkan_Command_Record_Failed;
-         return Renderer.Last_Status;
-      end if;
-
-      if not Create_Sync_Objects (Renderer) then
-         Destroy_Swapchain_Resources (Renderer);
-         Renderer.Last_Status := Vulkan_Sync_Create_Failed;
-         return Renderer.Last_Status;
-      end if;
-
-      Renderer.Swapchain_Configured := True;
-      Renderer.Swapchain_Pending := False;
-      Renderer.Pending_Width_Value := 0;
-      Renderer.Pending_Height_Value := 0;
-      Renderer.Last_Status := Vulkan_Swapchain_Ready;
-      return Renderer.Last_Status;
-   exception
-      when Error : others =>
-         Guikit.Errors.Note (Error, "Guikit.Vulkan");
-         Retire_Old_Swapchain;
-         Destroy_Swapchain_Resources (Renderer);
-         Renderer.Last_Status := Vulkan_Swapchain_Create_Failed;
-         return Renderer.Last_Status;
-   end Create_Swapchain_Resources;
+      return Vulkan_Status is separate;
 
    --  Drivers layered over another API (MoltenVK on macOS) implement only a
    --  portability subset of Vulkan. The loader hides them unless the instance
@@ -3291,8 +2383,8 @@ package body Guikit.Vulkan is
          Texture_Binding_Count => Renderer.Texture_Binding_Count,
          Mixed_Texture_Bindings_Ready => Renderer.Texture_Binding_Count >= 2,
          Vertex_Buffer_Ready   => Renderer.Vertex_Buffer_Live,
-         Atlas_Texture_Ready   => Renderer.Atlas_Texture_Live,
-         Icon_Atlas_Texture_Ready => Renderer.Icon_Atlas_Texture_Live,
+         Atlas_Texture_Ready   => Renderer.Atlases (Text_Atlas).Texture_Live,
+         Icon_Atlas_Texture_Ready => Renderer.Atlases (Icon_Atlas).Texture_Live,
          Presented_Frames      => Renderer.Presented_Frames,
          Skipped_Frames        => Renderer.Skipped_Frames,
          Failed_Frames         => Renderer.Failed_Frames,
@@ -3393,213 +2485,7 @@ package body Guikit.Vulkan is
    function Present
      (Renderer : in out Vulkan_Renderer;
       Batch    : Submission_Batch)
-      return Vulkan_Status is
-      Image_Index : aliased Interfaces.Unsigned_32 := 0;
-      Swapchains  : aliased Swapchain_Array (1 .. 1) := [1 => Renderer.Swapchain];
-      Indices     : aliased Image_Index_Array (1 .. 1);
-      --  The render-finished semaphore is the acquired image's own, set once
-      --  the acquire has said which image that is.
-      Present_Waits : aliased Semaphore_Array (1 .. 1) := [1 => System.Null_Address];
-      Submit_Waits  : aliased Semaphore_Array (1 .. 1) := [1 => Renderer.Image_Available];
-      Submit_Signals : aliased Semaphore_Array (1 .. 1) := [1 => System.Null_Address];
-      Wait_Stages : aliased Interfaces.Unsigned_32 := Vk.PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-      Fence_Array : aliased Fence_Array_C (1 .. 1) := [1 => Renderer.In_Flight];
-      Submit_Commands : aliased Command_Buffer_Array_C (1 .. 1);
-      Submit_Info : aliased Vk.Submit_Info_T :=
-        (s_Type                 => Vk.STRUCTURE_TYPE_SUBMIT_INFO,
-         p_Next                 => System.Null_Address,
-         wait_Semaphore_Count   => 1,
-         p_Wait_Semaphores      => Submit_Waits'Address,
-         p_Wait_Dst_Stage_Mask  => Wait_Stages'Address,
-         command_Buffer_Count   => 1,
-         p_Command_Buffers      => Submit_Commands'Address,
-         signal_Semaphore_Count => 1,
-         p_Signal_Semaphores    => Submit_Signals'Address);
-      Present_Info : aliased Vk.Present_Info_KHR_T :=
-        (s_Type               => Structure_Type_Present_Info_KHR,
-         p_Next               => System.Null_Address,
-         wait_Semaphore_Count => 1,
-         p_Wait_Semaphores    => Present_Waits'Address,
-         swapchain_Count      => 1,
-         p_Swapchains         => Swapchains'Address,
-         p_Image_Indices      => Indices'Address,
-         p_Results            => System.Null_Address);
-      Present_Result : Vk.Result_T;
-      --  An image is acquired and its submit has not been made yet.
-      Acquired : Boolean := False;
-   begin
-      Renderer.Last_Vk_Result := -10_000;
-      Renderer.Last_Vertex_Count := Natural (Batch.Vertices.Length);
-      Renderer.Last_Texture_Count := Batch.Texture_Count;
-      Renderer.Last_Used_Mixed_Textures := Batch.Uses_Separate_Text_And_Icon_Textures;
-
-      if not Renderer.Device_Live or else not Renderer.Surface_Live then
-         Renderer.Last_Status := Vulkan_Present_Skipped;
-      elsif not Renderer.Swapchain_Configured
-        or else not Renderer.Swapchain_Live
-        or else not Renderer.Sync_Live
-        or else not Renderer.Commands_Live
-        or else Renderer.Graphics_Queue = System.Null_Address
-      then
-         Renderer.Last_Status := Vulkan_Present_Skipped;
-      elsif Batch.Width = 0
-        or else Batch.Height = 0
-        or else Batch.Vertices.Is_Empty
-      then
-         Renderer.Last_Status := Vulkan_Present_Skipped;
-      elsif Batch.Width /= Renderer.Frame_Width_Value
-        or else Batch.Height /= Renderer.Frame_Height_Value
-      then
-         Request_Swapchain_Recreate (Renderer, Batch.Width, Batch.Height);
-         Renderer.Last_Status := Vulkan_Swapchain_Recreate_Needed;
-      else
-         Renderer.Last_Vk_Result := -10_010;
-         Present_Result :=
-           Vk.Wait_For_Fences
-             (device      => Renderer.Device,
-              fence_Count => 1,
-              p_Fences    => Fence_Array'Address,
-              wait_All    => 1,
-              timeout     => Infinite_Timeout);
-
-         if Present_Result /= Vk.SUCCESS then
-            Renderer.Last_Vk_Result := Interfaces.Integer_32 (Present_Result);
-            Renderer.Last_Status := Vulkan_Submit_Failed;
-         else
-            if Renderer.Readback_Enabled then
-               Capture_Completed_Readback (Renderer);
-            end if;
-            Renderer.Last_Vk_Result := -10_020;
-            if not Upload_Vertices (Renderer, Batch) then
-               Renderer.Last_Status := Vulkan_Vertex_Buffer_Create_Failed;
-            elsif not Upload_Atlas (Renderer, Batch) then
-               Renderer.Last_Status := Vulkan_Atlas_Texture_Create_Failed;
-            elsif Batch.Icon_Atlas_Dirty
-              and then not Upload_Icon_Atlas (Renderer, Batch)
-            then
-               --  Populate the icon descriptor (binding 1) whenever icons are
-               --  present, not only when text shares the frame: icon quads
-               --  always sample binding 1, so an icon-only frame would
-               --  otherwise read an unwritten descriptor (garbage icons).
-               Renderer.Last_Status := Vulkan_Atlas_Texture_Create_Failed;
-            elsif Renderer.Readback_Enabled
-              and then not Ensure_Readback_Buffer
-                (Renderer,
-                 Saturating_Multiply (Saturating_Multiply (Batch.Width, Batch.Height), 4))
-            then
-               Renderer.Last_Status := Vulkan_Vertex_Buffer_Create_Failed;
-            else
-               Renderer.Last_Vk_Result := -10_030;
-               Present_Result :=
-                 Vk.Acquire_Next_Image_KHR
-                   (device        => Renderer.Device,
-                    swapchain     => Renderer.Swapchain,
-                    timeout       => Infinite_Timeout,
-                    semaphore     => Renderer.Image_Available,
-                    fence         => System.Null_Address,
-                    p_Image_Index => Image_Index'Address);
-               Acquired := Present_Result = Vk.SUCCESS or else Present_Result = Suboptimal_KHR;
-
-               if Present_Result = Error_Out_Of_Date_KHR then
-                  Renderer.Last_Vk_Result := Interfaces.Integer_32 (Present_Result);
-                  Request_Swapchain_Recreate (Renderer, Batch.Width, Batch.Height);
-                  Renderer.Last_Status := Vulkan_Swapchain_Recreate_Needed;
-               elsif Present_Result /= Vk.SUCCESS and then Present_Result /= Suboptimal_KHR then
-                  Renderer.Last_Vk_Result := Interfaces.Integer_32 (Present_Result);
-                  Renderer.Last_Status := Vulkan_Present_Failed;
-               elsif not Record_Command_Buffers
-                 (Renderer, Natural (Batch.Vertices.Length), Only_Image => Positive (Image_Index + 1))
-               then
-                  Renderer.Last_Status := Vulkan_Command_Record_Failed;
-                  Abandon_Acquired_Frame (Renderer, Batch.Width, Batch.Height);
-               else
-                  Renderer.Last_Vk_Result := -10_040;
-                  Renderer.Current_Image_Index := Image_Index;
-                  Indices (1) := Image_Index;
-                  Submit_Commands (1) := Renderer.Command_Buffers (Positive (Image_Index + 1));
-                  Submit_Signals (1) := Renderer.Render_Finished (Positive (Image_Index + 1));
-                  Present_Waits (1) := Submit_Signals (1);
-                  Renderer.Last_Vk_Result := -10_050;
-                  --  Nothing that can fail lies between this reset and the
-                  --  submit that signals the fence again.
-                  Present_Result :=
-                    Vk.Reset_Fences
-                      (device      => Renderer.Device,
-                       fence_Count => 1,
-                       p_Fences    => Fence_Array'Address);
-
-                  if Present_Result /= Vk.SUCCESS then
-                     Renderer.Last_Vk_Result := Interfaces.Integer_32 (Present_Result);
-                     Renderer.Last_Status := Vulkan_Submit_Failed;
-                     Abandon_Acquired_Frame (Renderer, Batch.Width, Batch.Height);
-                  else
-                     Renderer.Last_Vk_Result := -10_060;
-                     Present_Result :=
-                       Vk.Queue_Submit
-                         (queue        => Renderer.Graphics_Queue,
-                          submit_Count => 1,
-                          p_Submits    => Submit_Info'Address,
-                          fence        => Renderer.In_Flight);
-
-                     if Present_Result /= Vk.SUCCESS then
-                        Renderer.Last_Vk_Result := Interfaces.Integer_32 (Present_Result);
-                        Renderer.Last_Status := Vulkan_Submit_Failed;
-                        Abandon_Acquired_Frame (Renderer, Batch.Width, Batch.Height);
-                     else
-                        Acquired := False;
-                        Renderer.Submitted_Frames := Renderer.Submitted_Frames + 1;
-                        Renderer.Readback_Pending := Renderer.Readback_Enabled;
-                        Renderer.Readback_Pending_Frame := Renderer.Submitted_Frames;
-                        Renderer.Last_Vk_Result := -10_070;
-                        Present_Result :=
-                          Vk.Queue_Present_KHR
-                            (queue          => Renderer.Graphics_Queue,
-                             p_Present_Info => Present_Info'Address);
-
-                        if Present_Result = Vk.SUCCESS then
-                           Renderer.Last_Vk_Result := Interfaces.Integer_32 (Present_Result);
-                           Renderer.Last_Status := Vulkan_Presented;
-                        elsif Present_Result = Suboptimal_KHR or else Present_Result = Error_Out_Of_Date_KHR then
-                           Renderer.Last_Vk_Result := Interfaces.Integer_32 (Present_Result);
-                           Request_Swapchain_Recreate (Renderer, Batch.Width, Batch.Height);
-                           Renderer.Last_Status := Vulkan_Swapchain_Recreate_Needed;
-                        else
-                           Renderer.Last_Vk_Result := Interfaces.Integer_32 (Present_Result);
-                           Renderer.Last_Status := Vulkan_Present_Failed;
-                        end if;
-                     end if;
-                  end if;
-               end if;
-            end if;
-         end if;
-      end if;
-
-      case Renderer.Last_Status is
-         when Vulkan_Presented =>
-            Renderer.Presented_Frames := Renderer.Presented_Frames + 1;
-         when Vulkan_Present_Skipped | Vulkan_Swapchain_Recreate_Needed =>
-            Renderer.Skipped_Frames := Renderer.Skipped_Frames + 1;
-         when Vulkan_Present_Failed
-            | Vulkan_Submit_Failed
-            | Vulkan_Command_Record_Failed
-            | Vulkan_Vertex_Buffer_Create_Failed
-            | Vulkan_Atlas_Texture_Create_Failed =>
-            Renderer.Failed_Frames := Renderer.Failed_Frames + 1;
-         when others =>
-            null;
-      end case;
-
-      return Renderer.Last_Status;
-   exception
-      when Error : others =>
-         Guikit.Errors.Note (Error, "Guikit.Vulkan");
-         Renderer.Last_Status := Vulkan_Present_Failed;
-         if Acquired then
-            Abandon_Acquired_Frame (Renderer, Batch.Width, Batch.Height);
-         end if;
-         Renderer.Failed_Frames := Renderer.Failed_Frames + 1;
-         return Renderer.Last_Status;
-   end Present;
+      return Vulkan_Status is separate;
 
    procedure Ensure_Ready
      (Renderer : in out Vulkan_Renderer;

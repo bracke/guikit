@@ -223,7 +223,8 @@ package body Guikit.Command_Palette is
       Rectangles    : out Guikit.Draw.Rectangle_Command_Vectors.Vector;
       Text          : out Guikit.Draw.Text_Command_Vectors.Vector;
       Icons         : out Guikit.Draw.Icon_Command_Vectors.Vector;
-      Accessibility : out Guikit.Draw.Accessibility_Node_Vectors.Vector)
+      Accessibility : out Guikit.Draw.Accessibility_Node_Vectors.Vector;
+      Has_Glyph     : access function (Codepoint : Natural) return Boolean := null)
    is
       LH      : constant Positive := P.Config.Line_Height;
       --  Reserve a title band (one line plus a gap) at the top when a heading is
@@ -269,7 +270,7 @@ package body Guikit.Command_Palette is
       --  as every field does) so the caret, and the text being typed, stay in
       --  the field instead of running on under the close button.
       Field       : constant Guikit.Text_Fields.View :=
-        Guikit.Text_Fields.View_Of (Q, Q'Length, Field_W, LH, Caret_W);
+        Guikit.Text_Fields.View_Of (Q, Q'Length, Field_W, LH, Caret_W, Has_Glyph => Has_Glyph);
       Shown_Query : constant String := Q (Q'First + Field.Skip_Bytes .. Q'Last);
       Caret_X     : constant Natural := Field_X + Field.Caret_X;
 

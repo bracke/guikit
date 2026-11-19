@@ -299,6 +299,28 @@ package body Guikit_Suite.Text is
       Assert (Start (R), "the renderer loads the font");
       Assert (First_X (Align_End => False) < 100.0, "by default the text starts at the box's left");
       Assert (First_X (Align_End => True) in 800.0 .. 900.0, "aligned to the end, it fills the last two cells");
+
+      --  Four two-cell characters in five cells: two fit, and the box is as
+      --  wide as they are, so they stand against the end with no gap.
+      declare
+         Commands : Text_Command_Vectors.Vector;
+      begin
+         Commands.Append
+           (Text_Command'
+              (X => 0, Y => 0, Width => 500, Height => 200,
+               Text => Ada.Strings.Unbounded.To_Unbounded_String
+                 (Guikit.Utf8.Encode (16#6F22#) & Guikit.Utf8.Encode (16#5B57#)
+                  & Guikit.Utf8.Encode (16#6F22#) & Guikit.Utf8.Encode (16#5B57#)),
+               Align_End => True, others => <>));
+         declare
+            Frame : constant Text_Render_Result := Guikit.Text.Build_Glyphs (R, Commands, Empty);
+         begin
+            Assert (Natural (Frame.Glyphs.Length) = 2, "the two characters that fit are drawn");
+            Assert
+              (Frame.Glyphs.First_Element.X >= 100.0,
+               "they start one cell in, not at the box's start:" & Frame.Glyphs.First_Element.X'Image);
+         end;
+      end;
    end Test_Align_End;
 
    procedure Test_Right_To_Left_Glyphs (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -364,6 +386,9 @@ package body Guikit_Suite.Text is
         (Drawn ([Beh, Beh, Beh], 10) = Codes'[16#FE90#, 16#FE92#, 16#FE91#],
          "Arabic letters are drawn joined: final, medial, initial");
       Assert
+        (Guikit.Text.Can_Draw_Form (16#FE90#) and then Guikit.Text.Can_Draw_Form (Character'Pos ('a')),
+         "the loaded fonts' presentation forms are recorded for the carets");
+      Assert
         (Drawn ([Alef, Bet, Gimel], 2) = Codes'[Bet, Alef],
          "a right-to-left text too long for its box keeps its start, on the right");
       Assert
@@ -383,6 +408,9 @@ package body Guikit_Suite.Text is
                   Pixel_Size => 16, Cell_Width => 100, Cell_Height => 200) = Text_Render_Success,
                "the renderer loads " & Latin.all);
             if Drawn ([Beh, Beh, Beh], 10) /= Codes'[16#FE90#, 16#FE92#, 16#FE91#] then
+               Assert
+                 (not Guikit.Text.Can_Draw_Form (16#FE90#),
+                  "the carets are told the forms " & Latin.all & " does not draw, as drawing is");
                declare
                   Chain : Guikit.Text.Font_Path_Vectors.Vector;
                begin
@@ -395,6 +423,7 @@ package body Guikit_Suite.Text is
                   Assert
                     (Drawn ([Beh, Beh, Beh], 10) = Codes'[16#FE90#, 16#FE92#, 16#FE91#],
                      "Arabic is drawn joined from a fallback face behind " & Latin.all);
+                  Assert (Guikit.Text.Can_Draw_Form (16#FE90#), "and the carets are told so");
                end;
                exit;
             end if;

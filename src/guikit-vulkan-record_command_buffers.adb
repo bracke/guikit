@@ -115,7 +115,7 @@ is
         (command_Buffer      => Buffer,
          pipeline_Bind_Point => Vk.PIPELINE_BIND_POINT_GRAPHICS,
          pipeline            => Renderer.Graphics_Pipeline);
-      if Renderer.Descriptor_Live and then Renderer.Atlas_Texture_Live then
+      if Renderer.Descriptor_Live and then Renderer.Atlases (Text_Atlas).Texture_Live then
          declare
             Sets : aliased Descriptor_Set_Array_C (1 .. 1) := [1 => Renderer.Descriptor_Set];
          begin
@@ -263,30 +263,30 @@ is
          return False;
       end if;
 
-      if Renderer.Atlas_Upload_Pending
-        and then Renderer.Atlas_Texture_Live
-        and then Renderer.Atlas_Staging_Live
+      if Renderer.Atlases (Text_Atlas).Upload_Pending
+        and then Renderer.Atlases (Text_Atlas).Texture_Live
+        and then Renderer.Atlases (Text_Atlas).Staging_Live
       then
          Record_Texture_Upload
            (Buffer      => Buffer,
-            Image       => Renderer.Atlas_Image,
-            Staging     => Renderer.Atlas_Staging_Buffer,
-            Initialized => Renderer.Atlas_Initialized,
-            Width       => Renderer.Atlas_Width_Value,
-            Height      => Renderer.Atlas_Height_Value);
+            Image       => Renderer.Atlases (Text_Atlas).Image,
+            Staging     => Renderer.Atlases (Text_Atlas).Staging_Buffer,
+            Initialized => Renderer.Atlases (Text_Atlas).Initialized,
+            Width       => Renderer.Atlases (Text_Atlas).Width,
+            Height      => Renderer.Atlases (Text_Atlas).Height);
       end if;
 
-      if Renderer.Icon_Atlas_Upload_Pending
-        and then Renderer.Icon_Atlas_Texture_Live
-        and then Renderer.Icon_Atlas_Staging_Live
+      if Renderer.Atlases (Icon_Atlas).Upload_Pending
+        and then Renderer.Atlases (Icon_Atlas).Texture_Live
+        and then Renderer.Atlases (Icon_Atlas).Staging_Live
       then
          Record_Texture_Upload
            (Buffer      => Buffer,
-            Image       => Renderer.Icon_Atlas_Image,
-            Staging     => Renderer.Icon_Atlas_Staging_Buffer,
-            Initialized => Renderer.Icon_Atlas_Initialized,
-            Width       => Renderer.Icon_Atlas_Width_Value,
-            Height      => Renderer.Icon_Atlas_Height_Value);
+            Image       => Renderer.Atlases (Icon_Atlas).Image,
+            Staging     => Renderer.Atlases (Icon_Atlas).Staging_Buffer,
+            Initialized => Renderer.Atlases (Icon_Atlas).Initialized,
+            Width       => Renderer.Atlases (Icon_Atlas).Width,
+            Height      => Renderer.Atlases (Icon_Atlas).Height);
       end if;
 
       Vk.Cmd_Begin_Render_Pass
@@ -322,13 +322,13 @@ begin
       end if;
    end loop;
 
-   if Renderer.Atlas_Upload_Pending then
-      Renderer.Atlas_Initialized := True;
-      Renderer.Atlas_Upload_Pending := False;
+   if Renderer.Atlases (Text_Atlas).Upload_Pending then
+      Renderer.Atlases (Text_Atlas).Initialized := True;
+      Renderer.Atlases (Text_Atlas).Upload_Pending := False;
    end if;
-   if Renderer.Icon_Atlas_Upload_Pending then
-      Renderer.Icon_Atlas_Initialized := True;
-      Renderer.Icon_Atlas_Upload_Pending := False;
+   if Renderer.Atlases (Icon_Atlas).Upload_Pending then
+      Renderer.Atlases (Icon_Atlas).Initialized := True;
+      Renderer.Atlases (Icon_Atlas).Upload_Pending := False;
    end if;
 
    Renderer.Commands_Live := Renderer.Command_Buffer_Count = Renderer.Render_Target_Count;

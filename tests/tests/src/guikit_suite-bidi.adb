@@ -38,6 +38,8 @@ package body Guikit_Suite.Bidi is
    procedure Test_Mirrored_Layout (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Mirrored_Field (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Ligature_Is_One_Stop (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Undrawn_Ligature_Is_Two_Stops (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Wide_Character_Straddling_A_Mirrored_Field (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function Utf8 (Codes : Guikit.Bidi.Codepoint_Array) return String is
       Result : Unbounded_String;
@@ -103,6 +105,12 @@ package body Guikit_Suite.Bidi is
         (T, Test_Mirrored_Field'Access, "in a mirrored field the caret starts where its boundary is drawn");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Ligature_Is_One_Stop'Access, "the arrow keys step over a lam-alef ligature whole");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Undrawn_Ligature_Is_Two_Stops'Access,
+         "without the font's lam-alef ligature the caret stops between lam and alef");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Wide_Character_Straddling_A_Mirrored_Field'Access,
+         "a mirrored field's caret counts the whole characters drawn");
    end Register_Tests;
 
    --  Runs every test line of File; returns how many failed and describes
@@ -487,6 +495,65 @@ package body Guikit_Suite.Bidi is
       Assert (Caret_Step (Word, 2, Rightward => False) = 6, "left from before lam passes the whole ligature");
    end Test_Ligature_Is_One_Stop;
 
+   --  A font chain with no lam-alef ligature: drawing keeps lam and alef as
+   --  two letters, and the caret has to as well.
+   function Without_Lam_Alef (Codepoint : Natural) return Boolean is (Codepoint not in 16#FEF5# .. 16#FEFC#);
+
+   procedure Test_Undrawn_Ligature_Is_Two_Stops (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Guikit.Bidi;
+      --  Lam (bytes 0 .. 1) then alef (2 .. 3): drawn right to left, alef
+      --  in cell 0 and lam in cell 1 when they are two letters.
+      Pair : constant String := Utf8 ([Lam, Arabic_Alef]);
+   begin
+      Assert
+        (Natural (Lay_Out (Pair, Without_Lam_Alef'Access).Clusters.Length) = 2,
+         "laid out with the font's answer, the pair is two clusters");
+      Assert
+        (Caret_Step (Pair, 0, Rightward => False, Has_Glyph => Without_Lam_Alef'Access) = 2,
+         "left from the right edge stops between lam and alef");
+      Assert
+        (Caret_Step (Pair, 2, Rightward => False, Has_Glyph => Without_Lam_Alef'Access) = 4,
+         "and then passes the alef");
+      Assert (Caret_Step (Pair, 0, Rightward => False) = 4, "with the ligature drawn it is one stop");
+      Assert
+        (Caret_Column (Pair, 2, Has_Glyph => Without_Lam_Alef'Access) = 1,
+         "the caret between them stands between their cells");
+      Assert (Caret_Column (Pair, 2) = 2, "inside the ligature it stands at its right edge");
+      Assert
+        (Cursor_At_Half_Column (Pair, 2, Has_Glyph => Without_Lam_Alef'Access) = 2,
+         "a click on the near half of the lam puts the caret after it");
+      Assert (Cursor_At_Half_Column (Pair, 2) = 0, "the same click on the ligature is before it");
+      Assert
+        (Guikit.Text_Fields.Caret_X (Pair, 2, 120, 20, 2, Mirrored => False, Has_Glyph => Without_Lam_Alef'Access)
+         = 12,
+         "a field passes the query on: the caret is one cell in");
+      Assert
+        (Guikit.Text_Fields.Cursor_At (Pair, 0, 12, 120, 20, Mirrored => False, Has_Glyph => Without_Lam_Alef'Access)
+         = 2,
+         "and a click there puts it back between the letters");
+   end Test_Undrawn_Ligature_Is_Two_Stops;
+
+   procedure Test_Wide_Character_Straddling_A_Mirrored_Field (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Guikit.Text_Fields;
+      --  Four two-cell characters in a field five cells (60 pixels) wide:
+      --  two of them fit, drawn in the last four cells once mirrored.
+      Kanji : constant String := Utf8 ([16#6F22#, 16#5B57#, 16#6F22#, 16#5B57#]);
+   begin
+      Assert
+        (Caret_X (Kanji, 0, 60, 20, 2, Mirrored => True) = 46,
+         "the caret before the first character starts where it does, four cells from the end:"
+         & Caret_X (Kanji, 0, 60, 20, 2, Mirrored => True)'Image);
+      Assert (Caret_X (Kanji, 6, 60, 20, 2, Mirrored => True) = 0, "after the second it is at the field's end");
+      for Cursor in 0 .. 2 loop
+         Assert
+           (Cursor_At (Kanji, 0, Caret_X (Kanji, 3 * Cursor, 60, 20, 2, Mirrored => True), 60, 20, Mirrored => True)
+            = 3 * Cursor,
+            "a click where the caret is drawn puts it back at" & Natural'Image (3 * Cursor));
+      end loop;
+   end Test_Wide_Character_Straddling_A_Mirrored_Field;
+
    procedure Test_Mirrored_Layout (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);
       use Guikit.Draw;
@@ -501,10 +568,18 @@ package body Guikit_Suite.Bidi is
       Text.Append (Text_Command'(X => 0, Y => 0, Width => 40, Height => 10, others => <>));
       Text.Append (Text_Command'(X => 0, Y => 0, Width => 40, Height => 10, Scale_To_Box => True, others => <>));
       Text.Append (Text_Command'(X => 0, Y => 0, Width => 10, Height => 10,
-                                 Text => Ada.Strings.Unbounded.To_Unbounded_String (">"), others => <>));
+                                 Text => Ada.Strings.Unbounded.To_Unbounded_String (">"),
+                                 Mirror_Glyph => True, others => <>));
       Text.Append (Text_Command'(X => 0, Y => 0, Width => 10, Height => 10,
-                                 Text => Ada.Strings.Unbounded.To_Unbounded_String ("a>"), others => <>));
+                                 Text => Ada.Strings.Unbounded.To_Unbounded_String ("a>"),
+                                 Mirror_Glyph => True, others => <>));
+      Text.Append (Text_Command'(X => 0, Y => 0, Width => 10, Height => 10,
+                                 Text => Ada.Strings.Unbounded.To_Unbounded_String ("("), others => <>));
       Icons.Append (Icon_Command'(X => 0, Y => 0, Size => 16, others => <>));
+      --  Wholly past the right edge, and sticking out past it.
+      Icons.Append (Icon_Command'(X => 120, Y => 0, Size => 16, others => <>));
+      Icons.Append (Icon_Command'(X => 100, Y => 0, Size => 16, Draw_Width => 30, Draw_Height => 20, others => <>));
+      Icons.Append (Icon_Command'(X => 90, Y => 0, Size => 16, others => <>));
       Mirror (Rectangles, 100);
       Mirror (Triangles, 100);
       Mirror (Text, 100);
@@ -513,9 +588,19 @@ package body Guikit_Suite.Bidi is
       Assert (Triangles (1).X1 = 100.0 and then Triangles (1).X2 = 90.0, "a triangle's points are reflected");
       Assert (Text (1).X = 60 and then Text (1).Align_End, "text keeps to the edge its box starts at");
       Assert (not Text (2).Align_End, "text fitted to its box stays centred");
-      Assert (Ada.Strings.Unbounded.To_String (Text (3).Text) = "<", "a lone '>' points the other way");
+      Assert (Ada.Strings.Unbounded.To_String (Text (3).Text) = "<", "a lone '>' symbol points the other way");
       Assert (Ada.Strings.Unbounded.To_String (Text (4).Text) = "a>", "running text is left to Guikit.Bidi");
+      Assert
+        (Ada.Strings.Unbounded.To_String (Text (5).Text) = "(",
+         "a one-character text that is not a symbol, a query of '(', is shown as typed");
       Assert (Icons (1).X = 84, "an icon moves with its box");
+      Assert
+        (Icons (2).Size = 0 and then Icons (2).Draw_Width = 0 and then Icons (2).Draw_Height = 0,
+         "an icon wholly past the right edge stays unseen, not drawn at the left");
+      Assert
+        (Icons (3).Size = 0 and then Icons (3).Draw_Width = 0,
+         "so does one starting right at the edge");
+      Assert (Icons (4).X = 0 and then Icons (4).Size = 16, "one sticking out past it starts at the left edge");
       Assert (Mirror_X (0, 100) = 99 and then Mirror_X (99, 100) = 0, "the pointer is reflected too");
 
       --  A box sticking out past the frame is reflected by what shows of it.
