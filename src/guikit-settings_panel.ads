@@ -251,7 +251,8 @@ package Guikit.Settings_Panel is
    --  @param Focused Whether the panel has keyboard focus.
    --  @param Hover_X Cursor X in pixels (negative when off-window).
    --  @param Hover_Y Cursor Y in pixels.
-   --  @param Rectangles Out: rectangle commands.
+   --  @param Rectangles Out: rectangle commands; whatever the vectors held
+   --  before is dropped, here and in the parameters below.
    --  @param Text Out: text commands.
    --  @param Accessibility Out: accessibility nodes.
    --  @param Has_Glyph Whether the fonts the text is drawn with draw a code

@@ -55,6 +55,13 @@ package body Guikit.Text is
       Guikit.Bidi.Set_Drawable_Forms (Coverage);
    end Record_Forms;
 
+   procedure Record_Drawable_Forms (R : Renderer) is
+   begin
+      if R.Is_Loaded then
+         Record_Forms (R);
+      end if;
+   end Record_Drawable_Forms;
+
    function Atlas_Version (R : Renderer) return Natural is (R.Atlas_Version);
 
    --  How tall the glyph atlas may grow: four times its usual height, which

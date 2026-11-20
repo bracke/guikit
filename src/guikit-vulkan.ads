@@ -120,10 +120,16 @@ package Guikit.Vulkan is
       Pipeline_Ready        : Boolean := False;
       Descriptor_Ready      : Boolean := False;
       Texture_Binding_Count : Natural := 0;
+      --  Both descriptor bindings name their own atlas's live view: the
+      --  icon binding is not falling back to the text atlas.
       Mixed_Texture_Bindings_Ready : Boolean := False;
       Vertex_Buffer_Ready   : Boolean := False;
       Atlas_Texture_Ready   : Boolean := False;
       Icon_Atlas_Texture_Ready : Boolean := False;
+      --  The last frame's icon atlas could not be uploaded
+      --  (Vulkan_Atlas_Texture_Create_Failed for the icons alone): the frame
+      --  was drawn without its icons rather than given up.
+      Icon_Atlas_Upload_Failed : Boolean := False;
       Presented_Frames      : Natural := 0;
       Skipped_Frames        : Natural := 0;
       Failed_Frames         : Natural := 0;
@@ -514,7 +520,12 @@ private
       --  that draws the same vertices in the same theme skips the copy.
       Uploaded_Vertices       : Vertex_Vectors.Vector;
       Uploaded_Theme          : Guikit.Draw.Theme_Kind := Guikit.Draw.Theme_Dark;
+      --  The icon vertices in the memory are collapsed (Upload_Vertices).
+      Uploaded_Icons_Hidden   : Boolean := False;
       Uploaded_Vertices_Valid : Boolean := False;
+      --  The last frame's icon atlas upload failed, so its icons were not
+      --  drawn (Renderer_Diagnostics.Icon_Atlas_Upload_Failed).
+      Icon_Atlas_Failed       : Boolean := False;
       --  The text atlas version and icon atlas signature this renderer's
       --  textures hold, cleared when a present fails.
       Uploaded_Atlas_Version  : Natural := 0;

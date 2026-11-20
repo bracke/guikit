@@ -74,9 +74,13 @@ is
       return False;
    end Ready_To_Draw;
 
-   --  Wait for the last frame's submit, then upload this frame's vertices,
-   --  atlases and read-back buffer. False, with Last_Status set, when a step
-   --  fails.
+   --  Wait for the last frame's submit, then upload this frame's atlases,
+   --  vertices and read-back buffer. False, with Last_Status set, when a
+   --  step the frame cannot be drawn without fails. An icon atlas that
+   --  cannot be uploaded is not one of them: the frame is drawn without its
+   --  icons (Upload_Vertices collapses them), Icon_Atlas_Failed says so, and
+   --  the icon binding keeps naming a live view (the icon atlas's previous
+   --  texture, or the text atlas's as its fallback, Atlas_Uploads).
    function Upload_Frame return Boolean is
    begin
       Renderer.Last_Vk_Result := -10_010;
@@ -96,18 +100,28 @@ is
          Capture_Completed_Readback (Renderer);
       end if;
       Renderer.Last_Vk_Result := -10_020;
-      if not Upload_Vertices (Renderer, Batch) then
-         Renderer.Last_Status := Vulkan_Vertex_Buffer_Create_Failed;
-      elsif not Upload_Atlas (Renderer, Batch) then
+      if not Upload_Atlas (Renderer, Batch) then
          Renderer.Last_Status := Vulkan_Atlas_Texture_Create_Failed;
-      elsif Batch.Icon_Atlas_Dirty
-        and then not Upload_Icon_Atlas (Renderer, Batch)
+         return False;
+      end if;
+
+      --  Upload the icon atlas (binding 1) whenever the batch's icons
+      --  changed, not only when text shares the frame.
+      Renderer.Icon_Atlas_Failed :=
+        Batch.Icon_Atlas_Dirty and then not Upload_Icon_Atlas (Renderer, Batch);
+
+      --  Icons are drawn only from the atlas this frame uploaded or kept:
+      --  not after a failed upload (a texture left from an earlier frame
+      --  holds other tiles), nor through a binding that falls back to the
+      --  text atlas.
+      if not Upload_Vertices
+        (Renderer,
+         Batch,
+         Hide_Icons =>
+           Renderer.Icon_Atlas_Failed
+           or else Renderer.Atlases (Icon_Atlas).Binding /= Binding_Current)
       then
-         --  Upload the icon atlas (binding 1) whenever the batch's icons
-         --  changed, not only when text shares the frame. Until then, and
-         --  after a failed upload, binding 1 falls back to the text atlas
-         --  (Atlas_Uploads), so the set never names a destroyed view.
-         Renderer.Last_Status := Vulkan_Atlas_Texture_Create_Failed;
+         Renderer.Last_Status := Vulkan_Vertex_Buffer_Create_Failed;
       elsif Renderer.Readback_Enabled
         and then not Ensure_Readback_Buffer
           (Renderer,

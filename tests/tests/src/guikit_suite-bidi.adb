@@ -631,6 +631,10 @@ package body Guikit_Suite.Bidi is
       Icons.Append (Icon_Command'(X => 120, Y => 0, Size => 16, others => <>));
       Icons.Append (Icon_Command'(X => 100, Y => 0, Size => 16, Draw_Width => 30, Draw_Height => 20, others => <>));
       Icons.Append (Icon_Command'(X => 90, Y => 0, Size => 16, others => <>));
+      --  Ending exactly at the right edge: its reflection starts exactly at the left.
+      Icons.Append (Icon_Command'(X => 84, Y => 0, Size => 16, others => <>));
+      --  Wide drawn size: the reflection is by Draw_Width, not Size.
+      Icons.Append (Icon_Command'(X => 10, Y => 0, Size => 16, Draw_Width => 40, Draw_Height => 20, others => <>));
       Mirror (Rectangles, 100);
       Mirror (Triangles, 100);
       Mirror (Text, 100);
@@ -654,7 +658,11 @@ package body Guikit_Suite.Bidi is
       Assert
         (Icons (3).Size = 0 and then Icons (3).Draw_Width = 0,
          "so does one starting right at the edge");
-      Assert (Icons (4).X = 0 and then Icons (4).Size = 16, "one sticking out past it starts at the left edge");
+      Assert
+        (Icons (4).Size = 0 and then Icons (4).Draw_Width = 0 and then Icons (4).Draw_Height = 0,
+         "one sticking out past it is not drawn whole at the left edge, shifted from its reflection");
+      Assert (Icons (5).X = 0 and then Icons (5).Size = 16, "one ending at the right edge starts at the left");
+      Assert (Icons (6).X = 50 and then Icons (6).Draw_Width = 40, "a wide picture is reflected by its drawn width");
       Assert (Mirror_X (0, 100) = 99 and then Mirror_X (99, 100) = 0, "the pointer is reflected too");
 
       --  A box sticking out past the frame is reflected by what shows of it.

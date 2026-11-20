@@ -78,10 +78,12 @@ package Guikit.Mirroring is
    --  @param Width Frame width in pixels.
    procedure Mirror (Items : in out Tooltip_Command_Vectors.Vector; Width : Natural);
 
-   --  @param Items Icons to move; their pictures are not flipped, nor cut:
-   --  an icon sticking out past the frame's right edge starts at its left.
+   --  @param Items Icons to move; their pictures are not flipped, nor cut.
    --  An icon wholly past the right edge, which the unmirrored frame does
-   --  not show, is not shown mirrored either: it is left at X 0 with no size
+   --  not show, is not shown mirrored either; nor is one sticking out past
+   --  the right edge, whose reflection would start left of the frame (an
+   --  icon cannot be cut, and drawn whole at the left edge it would sit
+   --  shifted from where it belongs). Either is left at X 0 with no size
    --  (Size, Draw_Width and Draw_Height 0), which the backend draws as
    --  nothing.
    --  @param Width Frame width in pixels.

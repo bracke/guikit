@@ -132,6 +132,10 @@ is
 
    procedure Update_Rows is separate;
 begin
+   --  Out vectors are passed by reference: drop what the caller's held.
+   Rectangles.Clear;
+   Text.Clear;
+   Accessibility.Clear;
    P.Hits.Clear;
    Update_Rows;
 

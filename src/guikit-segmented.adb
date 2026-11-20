@@ -119,10 +119,10 @@ package body Guikit.Segmented is
       Hover_X       : Integer;
       Hover_Y       : Integer;
       Label_Inset   : Integer := -1;
-      Rectangles    : out Guikit.Draw.Rectangle_Command_Vectors.Vector;
-      Text          : out Guikit.Draw.Text_Command_Vectors.Vector;
-      Tooltips      : out Guikit.Draw.Tooltip_Command_Vectors.Vector;
-      Accessibility : out Guikit.Draw.Accessibility_Node_Vectors.Vector)
+      Rectangles    : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text          : in out Guikit.Draw.Text_Command_Vectors.Vector;
+      Tooltips      : in out Guikit.Draw.Tooltip_Command_Vectors.Vector;
+      Accessibility : in out Guikit.Draw.Accessibility_Node_Vectors.Vector)
    is
       Count : constant Natural := Natural (Segments.Length);
 

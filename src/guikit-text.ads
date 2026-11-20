@@ -70,6 +70,16 @@ package Guikit.Text is
       Record_Coverage : Boolean := True)
       return Guikit.Draw.Text_Render_Status;
 
+   --  Record R's fonts as the ones Can_Draw_Form answers for, as a
+   --  successful Initialize given Record_Coverage does: for a caller that
+   --  keeps several loaded renderers and switches its primary one between
+   --  them without loading again, so carets and clicks follow the fonts
+   --  drawn with. Nothing when R is not loaded. May be called from any task,
+   --  though R only from the one using it.
+   --
+   --  @param R Loaded renderer whose fonts' presentation forms to record.
+   procedure Record_Drawable_Forms (R : Renderer);
+
    --  Whether the fonts last loaded successfully by an Initialize given
    --  Record_Coverage -- the application's primary renderer -- can draw
    --  Codepoint, as far as Guikit.Bidi's Arabic shaping asks: for a

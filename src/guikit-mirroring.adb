@@ -98,15 +98,22 @@ package body Guikit.Mirroring is
    procedure Mirror (Items : in out Icon_Command_Vectors.Vector; Width : Natural) is
    begin
       for Item of Items loop
-         if Item.X >= Width then
-            --  Wholly past the frame: nothing of it shows, mirrored or not.
-            Item.X := 0;
-            Item.Size := 0;
-            Item.Draw_Width := 0;
-            Item.Draw_Height := 0;
-         else
-            Item.X := Reflected (Item.X, (if Item.Draw_Width > 0 then Item.Draw_Width else Item.Size), Width);
-         end if;
+         declare
+            Drawn : constant Natural := (if Item.Draw_Width > 0 then Item.Draw_Width else Item.Size);
+         begin
+            if Item.X >= Width or else Drawn > Width - Item.X then
+               --  Wholly past the frame, or sticking out past its right edge:
+               --  reflected, it would start left of the frame, which no X
+               --  says, and an icon is not cut. It is left unseen rather than
+               --  drawn whole at the left edge, shifted from where it belongs.
+               Item.X := 0;
+               Item.Size := 0;
+               Item.Draw_Width := 0;
+               Item.Draw_Height := 0;
+            else
+               Item.X := Width - Item.X - Drawn;
+            end if;
+         end;
       end loop;
    end Mirror;
 

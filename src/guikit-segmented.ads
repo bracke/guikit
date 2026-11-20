@@ -94,10 +94,12 @@ package Guikit.Segmented is
    --  @param Label_Inset Vertical offset of the labels from the region top, in
    --    pixels; negative (the default) centres them in the region. Use it to sit
    --    labels on an external baseline while the cells still fill the region.
-   --  @param Rectangles Out: rectangle commands.
-   --  @param Text Out: text commands.
-   --  @param Tooltips Out: hover tooltip commands.
-   --  @param Accessibility Out: accessibility nodes.
+   --  @param Rectangles Rectangle commands, appended to what the caller's
+   --    frame holds already (a caller draws the control into a frame it is
+   --    building), as are the commands of the parameters below.
+   --  @param Text Text commands, appended.
+   --  @param Tooltips Hover tooltip commands, appended.
+   --  @param Accessibility Accessibility nodes, appended.
    procedure Build_Frame
      (Segments      : Segment_Vectors.Vector;
       Active        : Natural;
@@ -111,9 +113,9 @@ package Guikit.Segmented is
       Hover_X       : Integer;
       Hover_Y       : Integer;
       Label_Inset   : Integer := -1;
-      Rectangles    : out Guikit.Draw.Rectangle_Command_Vectors.Vector;
-      Text          : out Guikit.Draw.Text_Command_Vectors.Vector;
-      Tooltips      : out Guikit.Draw.Tooltip_Command_Vectors.Vector;
-      Accessibility : out Guikit.Draw.Accessibility_Node_Vectors.Vector);
+      Rectangles    : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text          : in out Guikit.Draw.Text_Command_Vectors.Vector;
+      Tooltips      : in out Guikit.Draw.Tooltip_Command_Vectors.Vector;
+      Accessibility : in out Guikit.Draw.Accessibility_Node_Vectors.Vector);
 
 end Guikit.Segmented;

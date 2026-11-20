@@ -108,6 +108,11 @@ is
    --  and only when, Guikit.Layout.Panel_Close_Button says a click hits it.
    procedure Draw_Close_Button is separate;
 begin
+   --  Out vectors are passed by reference: drop what the caller's held.
+   Rectangles.Clear;
+   Text.Clear;
+   Icons.Clear;
+   Accessibility.Clear;
    Scroll_To_Selection;
    Draw_Chrome;
    Draw_Title;

@@ -184,7 +184,8 @@ package Guikit.Command_Palette is
    --  @param Focused Whether the search box has keyboard focus (caret/ring).
    --  @param Hover_X Cursor X in pixels (negative when off-window).
    --  @param Hover_Y Cursor Y in pixels.
-   --  @param Rectangles Out: rectangle commands.
+   --  @param Rectangles Out: rectangle commands; whatever the vectors held
+   --  before is dropped, here and in the parameters below.
    --  @param Text Out: text commands.
    --  @param Icons Out: icon commands.
    --  @param Accessibility Out: accessibility nodes for the palette elements.
