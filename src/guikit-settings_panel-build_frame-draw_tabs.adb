@@ -13,10 +13,8 @@ begin
             declare
                Row_Y     : constant Natural := G.Switch_Y + Tab_Row * Row_H;
                Segs      : Guikit.Segmented.Segment_Vectors.Vector;
-               S_Rects   : Guikit.Draw.Rectangle_Command_Vectors.Vector;
-               S_Text    : Guikit.Draw.Text_Command_Vectors.Vector;
+               --  The tabs' tooltips are not shown: dropped with this local.
                S_Tips    : Guikit.Draw.Tooltip_Command_Vectors.Vector;
-               S_Nodes   : Guikit.Draw.Accessibility_Node_Vectors.Vector;
                CX, CW    : Natural;
                Local_Active : constant Natural :=
                  (if P.Active in First_Ord .. Last_Ord
@@ -35,17 +33,8 @@ begin
                   --  short line-height strip, so the tabs are comfortably tall.
                   Region_Height => Ctrl_H, Clip_Width => Clip_Width, Clip_Height => Clip_Height,
                   Line_Height => LH, Hover_X => Hover_X, Hover_Y => Hover_Y,
-                  Rectangles => S_Rects, Text => S_Text, Tooltips => S_Tips,
-                  Accessibility => S_Nodes);
-               for C of S_Rects loop
-                  Rectangles.Append (C);
-               end loop;
-               for C of S_Text loop
-                  Text.Append (C);
-               end loop;
-               for Node of S_Nodes loop
-                  Accessibility.Append (Node);
-               end loop;
+                  Rectangles => Rectangles, Text => Text, Tooltips => S_Tips,
+                  Accessibility => Accessibility);
                for Ord in First_Ord .. Last_Ord loop
                   Guikit.Segmented.Cell_Bounds
                     (Segs, Content_X, Content_W, LH, Ord - First_Ord + 1, CX, CW);

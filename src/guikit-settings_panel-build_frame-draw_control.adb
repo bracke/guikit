@@ -34,8 +34,6 @@ begin
                   SH    : constant Natural := Ctrl_H;
                   SY    : constant Natural := Row_Y + (Row_H - SH) / 2;
                   Segs  : Guikit.Segmented.Segment_Vectors.Vector;
-                  R     : Guikit.Draw.Rectangle_Command_Vectors.Vector;
-                  T     : Guikit.Draw.Text_Command_Vectors.Vector;
                   Tips  : Guikit.Draw.Tooltip_Command_Vectors.Vector;
                   Nodes : Guikit.Draw.Accessibility_Node_Vectors.Vector;
                   CX, CW : Natural;
@@ -59,21 +57,16 @@ begin
                        (Guikit.Segmented.Segment'
                           (Label => F.Option_Labels.Element (J), others => <>));
                   end loop;
-                  --  Render the variable-width segmented control; the field-level
+                  --  Render the variable-width segmented control straight into
+                  --  the frame's rectangles and text; the field-level
                   --  accessibility node below covers it, so its per-cell nodes and
-                  --  (empty) tooltips are dropped.
+                  --  (empty) tooltips go to locals that are dropped.
                   Guikit.Segmented.Build_Frame
                     (Segments => Segs, Active => Option_Index (F),
                      Region_X => Row_X, Region_Y => SY, Region_Width => Row_W,
                      Region_Height => SH, Clip_Width => Clip_Width, Clip_Height => Clip_Height,
                      Line_Height => LH, Hover_X => Hover_X, Hover_Y => Hover_Y,
-                     Rectangles => R, Text => T, Tooltips => Tips, Accessibility => Nodes);
-                  for C of R loop
-                     Rectangles.Append (C);
-                  end loop;
-                  for C of T loop
-                     Text.Append (C);
-                  end loop;
+                     Rectangles => Rectangles, Text => Text, Tooltips => Tips, Accessibility => Nodes);
                   for J in 1 .. Count loop
                      Guikit.Segmented.Cell_Bounds (Segs, Row_X, Row_W, LH, J, CX, CW);
                      Add_Hit (Hit_Choice, I, J, CX, SY, CW, SH);
