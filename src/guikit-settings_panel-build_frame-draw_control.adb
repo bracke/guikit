@@ -107,14 +107,14 @@ begin
             Field   : constant Guikit.Text_Fields.View :=
               (if Editing
                then Guikit.Text_Fields.View_Of (Value, Value'Length, Text_W, LH, Caret_W, Has_Glyph => Has_Glyph)
-               else (others => 0));
+               else (others => <>));
          begin
             Guikit.Widgets.Draw_Input_Field
               (Rectangles, Clip_Width, Clip_Height, G.Ctrl_X, TY, G.Ctrl_W, TH,
                Guikit.Draw.Input_Color, Guikit.Draw.Border_Color);
             Add_Text (G.Ctrl_X + Field_Inset, VY, Text_W,
                       To_Unbounded_String (Value (Value'First + Field.Skip_Bytes .. Value'Last)),
-                      Guikit.Draw.Text_Color);
+                      Guikit.Draw.Text_Color, Field.Cut_Columns);
             if Editing then
                Guikit.Widgets.Draw_Caret
                  (Rectangles, Clip_Width, Clip_Height, G.Ctrl_X + Field_Inset + Field.Caret_X, VY,

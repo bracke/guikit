@@ -1,4 +1,5 @@
 with Guikit.Layout;
+with Guikit.Widgets;
 
 package body Guikit.Segmented is
 
@@ -95,15 +96,6 @@ package body Guikit.Segmented is
       return 0;
    end Cell_At;
 
-   --  The visible extent of a span [Start, Start + Size) clamped to [0, Limit).
-   --  Compares as Size > Limit - Start rather than Start + Size > Limit so an
-   --  extreme Start + Size cannot overflow (Start < Limit here, so Limit - Start
-   --  is safe).
-   function Clip_Extent (Start, Size, Limit : Natural) return Natural is
-     (if Start >= Limit then 0
-      elsif Size > Limit - Start then Limit - Start
-      else Size);
-
    Label_Padding : constant Natural := 4;
 
    procedure Build_Frame
@@ -128,8 +120,8 @@ package body Guikit.Segmented is
 
       --  Append one rectangle clamped to the drawable clip rectangle.
       procedure Add_Rect (X, Y, W, H : Natural; Color : Guikit.Draw.Render_Color) is
-         RW : constant Natural := Clip_Extent (X, W, Clip_Width);
-         RH : constant Natural := Clip_Extent (Y, H, Clip_Height);
+         RW : constant Natural := Guikit.Widgets.Clipped_Size (X, W, Clip_Width);
+         RH : constant Natural := Guikit.Widgets.Clipped_Size (Y, H, Clip_Height);
       begin
          if RW > 0 and then RH > 0 then
             Rectangles.Append (Guikit.Draw.Rectangle_Command'(X => X, Y => Y, Width => RW, Height => RH,
@@ -179,8 +171,8 @@ package body Guikit.Segmented is
                Label_W : constant Natural :=
                  (if Centred then Text_W
                   elsif CW > 2 * Inner then CW - 2 * Inner else 0);
-               Draw_W  : constant Natural := Clip_Extent (Label_X, Label_W, Clip_Width);
-               Draw_H  : constant Natural := Clip_Extent (Label_Y, Label_H, Clip_Height);
+               Draw_W  : constant Natural := Guikit.Widgets.Clipped_Size (Label_X, Label_W, Clip_Width);
+               Draw_H  : constant Natural := Guikit.Widgets.Clipped_Size (Label_Y, Label_H, Clip_Height);
             begin
                Add_Rect (CX, Region_Y, CW, Region_Height, Fill);
 

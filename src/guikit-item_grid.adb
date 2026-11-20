@@ -341,12 +341,6 @@ package body Guikit.Item_Grid is
          View, Content_X, Content_Y, Content_W, Content_H, Columns, Scroll_Pixels, Line_Height);
    end Calculate_Layout;
 
-   --  The visible extent of a span [Start, Start + Size) clamped to [0, Limit).
-   function Clip_Extent (Start, Size, Limit : Natural) return Natural is
-     (if Start >= Limit then 0
-      elsif Start + Size > Limit then Limit - Start
-      else Size);
-
    --  Append one rectangle clamped to the drawable clip rectangle.
    procedure Emit_Rect
      (Rectangles  : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
@@ -355,31 +349,14 @@ package body Guikit.Item_Grid is
       X, Y, W, H  : Natural;
       Color       : Guikit.Draw.Render_Color)
    is
-      RW : constant Natural := Clip_Extent (X, W, Clip_Width);
-      RH : constant Natural := Clip_Extent (Y, H, Clip_Height);
+      RW : constant Natural := Guikit.Widgets.Clipped_Size (X, W, Clip_Width);
+      RH : constant Natural := Guikit.Widgets.Clipped_Size (Y, H, Clip_Height);
    begin
       if RW > 0 and then RH > 0 then
          Rectangles.Append (Guikit.Draw.Rectangle_Command'(X => X, Y => Y, Width => RW, Height => RH,
                                                            Color => Color));
       end if;
    end Emit_Rect;
-
-   --  Append a one-pixel border (four clipped edges) around a box.
-   procedure Emit_Border
-     (Rectangles  : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
-      Clip_Width  : Natural;
-      Clip_Height : Natural;
-      X, Y, W, H  : Natural;
-      Color       : Guikit.Draw.Render_Color) is
-   begin
-      if W = 0 or else H = 0 then
-         return;
-      end if;
-      Emit_Rect (Rectangles, Clip_Width, Clip_Height, X, Y, W, 1, Color);
-      Emit_Rect (Rectangles, Clip_Width, Clip_Height, X, Y, 1, H, Color);
-      Emit_Rect (Rectangles, Clip_Width, Clip_Height, X, Guikit.Layout.Saturating_Add (Y, H - 1), W, 1, Color);
-      Emit_Rect (Rectangles, Clip_Width, Clip_Height, Guikit.Layout.Saturating_Add (X, W - 1), Y, 1, H, Color);
-   end Emit_Border;
 
    procedure Rename_Field_Extent
      (Cell        : Item_Layout;
@@ -450,7 +427,8 @@ package body Guikit.Item_Grid is
            (Text_Commands, Clip_Width, Clip_Height, Field_X, Field_Y, Field_W,
             Natural'Min (Line_Height, Cell.Height),
             To_Unbounded_String (Raw (Raw'First + Skip_Bytes .. Raw'Last)),
-            (if Dim then Dim_Color else Text_Color), Line_Height, Fit => False, Italic => Dim);
+            (if Dim then Dim_Color else Text_Color), Line_Height, Fit => False, Italic => Dim,
+            Cut_Columns => Field.Cut_Columns);
       else
          Draw_Fitted_Text
            (Text_Commands, Clip_Width, Clip_Height, Field_X, Field_Y, Field_W,
@@ -459,7 +437,8 @@ package body Guikit.Item_Grid is
       end if;
 
       if Editing then
-         Emit_Border (Rectangles, Clip_Width, Clip_Height, Cell.X, Cell.Y, Cell.Width, Cell.Height, Border_Color);
+         Guikit.Widgets.Draw_Border
+           (Rectangles, Clip_Width, Clip_Height, Cell.X, Cell.Y, Cell.Width, Cell.Height, Border_Color);
          Guikit.Widgets.Draw_Focus_Ring
            (Rectangles, Clip_Width, Clip_Height, Cell.X, Cell.Y, Cell.Width, Cell.Height, Focus_Ring_Color);
          declare
@@ -487,11 +466,6 @@ package body Guikit.Item_Grid is
       end if;
    end Draw_Name_Field;
 
-   --  The text truncated to Capacity display columns with a trailing ellipsis
-   --  (Guikit.Utf8.Fit_With_Ellipsis, the toolkit's one truncation rule).
-   function Fitted_Text (Text : Unbounded_String; Capacity : Natural) return Unbounded_String is
-     (To_Unbounded_String (Guikit.Utf8.Fit_With_Ellipsis (To_String (Text), Capacity)));
-
    procedure Draw_Fitted_Text
      (Text_Commands : in out Guikit.Draw.Text_Command_Vectors.Vector;
       Clip_Width    : Natural;
@@ -504,21 +478,22 @@ package body Guikit.Item_Grid is
       Color         : Guikit.Draw.Render_Color;
       Line_Height   : Positive;
       Fit           : Boolean := True;
-      Italic        : Boolean := False)
+      Italic        : Boolean := False;
+      Cut_Columns   : Natural := Guikit.Draw.Auto_Cut)
    is
-      Draw_W   : constant Natural := Clip_Extent (X, Width, Clip_Width);
-      Draw_H   : constant Natural := Clip_Extent (Y, Height, Clip_Height);
+      Draw_W   : constant Natural := Guikit.Widgets.Clipped_Size (X, Width, Clip_Width);
+      Draw_H   : constant Natural := Guikit.Widgets.Clipped_Size (Y, Height, Clip_Height);
       Cell_W   : constant Positive := Guikit.Layout.Caret_Advance_Width (Line_Height);
       Capacity : constant Natural := Draw_W / Cell_W;
       Raw      : constant String := To_String (Text);
-      Result   : constant Unbounded_String := (if Fit then Fitted_Text (Text, Capacity) else Text);
+      Result   : constant Unbounded_String := (if Fit then Guikit.Widgets.Fitted_Text (Text, Capacity) else Text);
       Truncated : constant Boolean := Fit and then To_String (Result) /= Raw;
    begin
       if Draw_W > 0 and then Draw_H > 0 and then Length (Result) > 0 then
          Text_Commands.Append
            (Guikit.Draw.Text_Command'
               (X => X, Y => Y, Width => Draw_W, Height => Draw_H, Text => Result, Color => Color,
-               Truncated => Truncated, Italic => Italic, others => <>));
+               Truncated => Truncated, Italic => Italic, Cut_Columns => Cut_Columns, others => <>));
       end if;
    end Draw_Fitted_Text;
 
@@ -618,11 +593,6 @@ package body Guikit.Item_Grid is
          Emit_Rect (Rectangles, Clip_Width, Clip_Height, X, Y, W, H, Color);
       end Add_Rect;
 
-      procedure Add_Border (X, Y, W, H : Natural; Color : Guikit.Draw.Render_Color) is
-      begin
-         Emit_Border (Rectangles, Clip_Width, Clip_Height, X, Y, W, H, Color);
-      end Add_Border;
-
       CX : constant Natural := Cell.X;
       CY : constant Natural := Cell.Y;
       CW : constant Natural := Cell.Width;
@@ -635,14 +605,12 @@ package body Guikit.Item_Grid is
             Add_Rect (CX, CY, CW, CH, Alternate_Color);
          when Hovered =>
             Add_Rect (CX, CY, CW, CH, Hover_Color);
-            Add_Border (CX, CY, CW, CH, Hover_Color);
          when Selected =>
             Add_Rect (CX, CY, CW, CH, Selection_Color);
-            Add_Border (CX, CY, CW, CH, Selection_Color);
             Add_Rect (CX, CY, Natural'Min (Guikit.Layout.Scaled (3, Line_Height), CW), CH, Border_Color);
          when Drop_Target =>
             Add_Rect (CX, CY, CW, CH, Hover_Color);
-            Add_Border (CX, CY, CW, CH, Selection_Color);
+            Guikit.Widgets.Draw_Border (Rectangles, Clip_Width, Clip_Height, CX, CY, CW, CH, Selection_Color);
             Add_Rect (CX, CY, Natural'Min (Guikit.Layout.Scaled (4, Line_Height), CW), CH, Selection_Color);
       end case;
    end Draw_Item_Background;

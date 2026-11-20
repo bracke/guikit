@@ -299,6 +299,9 @@ package body Guikit.Bidi is
 
    function Cut_Columns (Laid : Line; Columns : Natural) return Natural renames Guikit.Bidi.Carets.Cut_Columns;
 
+   function Drawn_Columns (Laid : Line; Cut, Columns : Natural) return Natural
+     renames Guikit.Bidi.Carets.Drawn_Columns;
+
    function Caret_Column
      (Content   : String;
       Cursor    : Natural;

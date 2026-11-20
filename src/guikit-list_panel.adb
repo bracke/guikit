@@ -9,10 +9,6 @@ package body Guikit.List_Panel is
    use Guikit.Draw;
    use Guikit.Widgets;
 
-   --  Text fitted to Capacity display columns with a trailing ellipsis.
-   function Fit_Text (Text : UString; Capacity : Natural) return UString is
-     (To_Unbounded_String (Guikit.Utf8.Fit_With_Ellipsis (To_String (Text), Capacity)));
-
    --  Where one Draw_Frame call places things: the clip, the panel region,
    --  the row height, and the text column every row's label starts in.
    type Panel_Geometry is record
@@ -45,7 +41,7 @@ package body Guikit.List_Panel is
       Config        : List_Panel_Configuration;
       Draw_Chrome   : Boolean)
    is
-      Title_Text : constant UString := Fit_Text (Config.Title, G.Text_Columns);
+      Title_Text : constant UString := Fitted_Text (Config.Title, G.Text_Columns);
    begin
       if Draw_Chrome then
          Draw_Menu_Panel
@@ -108,7 +104,7 @@ package body Guikit.List_Panel is
       Config        : List_Panel_Configuration)
    is
       Empty_Y         : constant Natural := G.Rows_Y + G.Line_Height;
-      Empty_Text      : constant UString := Fit_Text (Config.Empty_State, G.Text_Columns);
+      Empty_Text      : constant UString := Fitted_Text (Config.Empty_State, G.Text_Columns);
       Empty_Truncated : constant Boolean :=
         Guikit.Utf8.Display_Units (To_String (Config.Empty_State)) > G.Text_Columns;
    begin
@@ -168,8 +164,8 @@ package body Guikit.List_Panel is
          else Avail_W);
       Label_Columns : constant Natural := Label_W / Cell_W;
       Shortcut_Columns : constant Natural := Shortcut_W / Cell_W;
-      Combined_Text : constant UString := Fit_Text (To_Unbounded_String (Combined), Label_Columns);
-      Shortcut_Text : constant UString := Fit_Text (Row.Shortcut, Shortcut_Columns);
+      Combined_Text : constant UString := Fitted_Text (To_Unbounded_String (Combined), Label_Columns);
+      Shortcut_Text : constant UString := Fitted_Text (Row.Shortcut, Shortcut_Columns);
       Truncated : constant Boolean := Guikit.Utf8.Display_Units (Combined) > Label_Columns;
       Shortcut_X : constant Natural :=
         (if Shortcut_W > 0 then G.Region_X + G.Region_Width - Shortcut_W - Config.Text_Padding else 0);

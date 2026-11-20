@@ -973,8 +973,8 @@ procedure Check_All is
    --    * Guikit.Bidi       -> its children (Carets, Data, Levels, Shaping), Utf8
    --    * Guikit.Mirroring  -> Bidi, Draw, Utf8
    --    * Guikit.Text       -> Bidi, Draw, Layout, Shared_Bytes, Utf8
-   --    * Guikit.Text_Fields -> Bidi, Layout, Mirroring, Utf8
-   --    * Guikit.Widgets    -> Draw, Layout (label text metrics)
+   --    * Guikit.Text_Fields -> Bidi, Draw, Layout, Mirroring, Utf8
+   --    * Guikit.Widgets    -> Draw, Layout (label text metrics), Utf8 (text fitting)
    --    * Guikit.Vulkan     -> Draw, Errors, Frame_Analysis, Shared_Bytes
    --      (an icon atlas is uploaded again only when its pixels' serial moves)
    --    * Guikit.Fonts      -> Errors, Text
@@ -1215,13 +1215,15 @@ procedure Check_All is
       Require_Layer
         ("guikit-text_fields",
          [To_Unbounded_String ("Guikit.Bidi"),
+          To_Unbounded_String ("Guikit.Draw"),
           To_Unbounded_String ("Guikit.Layout"),
           To_Unbounded_String ("Guikit.Mirroring"),
           To_Unbounded_String ("Guikit.Utf8")]);
       Require_Layer
         ("guikit-widgets",
          [To_Unbounded_String ("Guikit.Draw"),
-          To_Unbounded_String ("Guikit.Layout")]);
+          To_Unbounded_String ("Guikit.Layout"),
+          To_Unbounded_String ("Guikit.Utf8")]);
       Require_Layer
         ("guikit-vulkan",
          [To_Unbounded_String ("Guikit.Draw"),
@@ -1265,7 +1267,8 @@ procedure Check_All is
       Require_Layer
         ("guikit-segmented",
          [To_Unbounded_String ("Guikit.Draw"),
-          To_Unbounded_String ("Guikit.Layout")]);
+          To_Unbounded_String ("Guikit.Layout"),
+          To_Unbounded_String ("Guikit.Widgets")]);
       Require_Layer
         ("guikit-list_panel",
          [To_Unbounded_String ("Guikit.Draw"),
@@ -1276,7 +1279,6 @@ procedure Check_All is
         ("guikit-menu_tree",
          [To_Unbounded_String ("Guikit.Draw"),
           To_Unbounded_String ("Guikit.Layout"),
-          To_Unbounded_String ("Guikit.Utf8"),
           To_Unbounded_String ("Guikit.Widgets")]);
       Require_Layer
         ("guikit-tree_panel",

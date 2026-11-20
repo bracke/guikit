@@ -224,9 +224,30 @@ package body Guikit_Suite.Item_Grid is
    begin
       Assert (Painted (IG.No_Background) = 0, "a bare cell paints nothing");
       Assert (Painted (IG.Alternate) = 1, "an alternate row is a single fill");
-      Assert (Painted (IG.Hovered) = 5, "hover is a fill plus a four-edge border");
-      Assert (Painted (IG.Selected) = 6, "selection adds a left accent stripe over the fill+border");
+      --  A border the colour of the fill it outlines would not show: hover
+      --  and selection draw none.
+      Assert (Painted (IG.Hovered) = 1, "hover is a single fill");
+      Assert (Painted (IG.Selected) = 2, "selection is a fill and a left accent stripe");
       Assert (Painted (IG.Drop_Target) = 6, "a drop target is fill, border, and an accent stripe");
+
+      --  A cell reaching past Natural'Last is clipped, not summed: no overflow.
+      declare
+         Huge  : constant IG.Item_Layout :=
+           (Visible_Index => 1, X => 10, Y => 10, Width => Natural'Last, Height => Natural'Last, others => 0);
+         R     : Guikit.Draw.Rectangle_Command_Vectors.Vector;
+         Text  : Guikit.Draw.Text_Command_Vectors.Vector;
+      begin
+         IG.Draw_Item_Background (R, 200, 200, Huge, IG.Drop_Target, Sel, Hov, Bor, Alt);
+         Assert
+           (R.First_Element.Width = 190 and then R.First_Element.Height = 190,
+            "a huge cell's fill is clipped to the window");
+         IG.Draw_Fitted_Text
+           (Text, 200, 200, 10, 10, Natural'Last, Natural'Last, Ada.Strings.Unbounded.To_Unbounded_String ("x"),
+            Guikit.Draw.Text_Color, 20);
+         Assert
+           (Text.First_Element.Width = 190 and then Text.First_Element.Height = 190,
+            "so is a huge text box");
+      end;
    end Test_Background;
 
    procedure Test_Group_Header (T : in out AUnit.Test_Cases.Test_Case'Class) is

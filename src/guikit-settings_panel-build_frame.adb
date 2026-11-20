@@ -102,12 +102,17 @@ is
       end if;
    end Add_Rect;
 
-   procedure Add_Text (X, Y, W : Natural; S : UString; Color : Guikit.Draw.Render_Color) is
+   procedure Add_Text
+     (X, Y, W     : Natural;
+      S           : UString;
+      Color       : Guikit.Draw.Render_Color;
+      Cut_Columns : Natural := Guikit.Draw.Auto_Cut) is
    begin
       if W > 0 and then Length (S) > 0 then
          Text.Append
            (Guikit.Draw.Text_Command'
-              (X => X, Y => Y, Width => W, Height => LH, Text => S, Color => Color, others => <>));
+              (X => X, Y => Y, Width => W, Height => LH, Text => S, Color => Color, Cut_Columns => Cut_Columns,
+               others => <>));
       end if;
    end Add_Text;
 

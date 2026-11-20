@@ -15,6 +15,28 @@ package body Guikit.Bidi.Carets is
       return (if Total > Columns then Total - Columns else 0);
    end Cut_Columns;
 
+   function Drawn_Columns (Laid : Line; Cut, Columns : Natural) return Natural is
+      X    : Natural := 0;
+      Skip : Natural := Cut;
+   begin
+      --  As Guikit.Text.Build_Glyphs draws it: the cut skips whole cells,
+      --  then clusters are drawn until one does not fit.
+      for Item of Laid.Clusters loop
+         if Item.Units > 0 then
+            if Skip > 0 then
+               if Item.Units > Skip then
+                  X := X + (Item.Units - Skip);
+               end if;
+               Skip := Skip - Natural'Min (Skip, Item.Units);
+            else
+               exit when X > Columns or else Item.Units > Columns - X;
+               X := X + Item.Units;
+            end if;
+         end if;
+      end loop;
+      return Natural'Min (X, Columns);
+   end Drawn_Columns;
+
    --  The column, before any cut, of a caret Cursor bytes into the text
    --  Laid was laid out from, Length bytes long.
    function Column_In (Laid : Line; Length, Cursor : Natural) return Natural is
@@ -145,7 +167,40 @@ package body Guikit.Bidi.Carets is
    is
    begin
       if not Needs_Layout (Content) then
-         return Guikit.Utf8.Byte_Offset_For_Display_Column (Content, (Half_Column + 1) / 2);
+         --  Character by character, each with the marks after it, under the
+         --  rule the laid-out path below applies: a click on the first half
+         --  of a character's cells -- one half cell of a narrow one, two of a
+         --  wide one -- is before it, otherwise after it.
+         declare
+            Index    : Integer := Content'First;
+            X        : Natural := 0;
+            Prev_End : Natural := 0;
+         begin
+            while Index <= Content'Last loop
+               declare
+                  Codepoint : Natural;
+                  Units     : Natural;
+                  Peek      : Integer;
+               begin
+                  Guikit.Utf8.Decode_Next_Codepoint (Content, Index, Codepoint);
+                  Units := Guikit.Utf8.Codepoint_Display_Units (Codepoint);
+                  while Index <= Content'Last loop
+                     Peek := Index;
+                     Guikit.Utf8.Decode_Next_Codepoint (Content, Peek, Codepoint);
+                     exit when Guikit.Utf8.Codepoint_Display_Units (Codepoint) > 0;
+                     Index := Peek;
+                  end loop;
+                  if Units > 0 then
+                     if Half_Column < 2 * (X + Units) then
+                        return (if Half_Column < 2 * X + Units then Prev_End else Index - Content'First);
+                     end if;
+                     X := X + Units;
+                     Prev_End := Index - Content'First;
+                  end if;
+               end;
+            end loop;
+            return Content'Length;
+         end;
       end if;
 
       declare

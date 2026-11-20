@@ -1,5 +1,6 @@
 with Ada.Strings.Unbounded;
 with Guikit.Layout;
+with Guikit.Utf8;
 
 package body Guikit.Widgets is
 
@@ -27,20 +28,9 @@ package body Guikit.Widgets is
       end if;
    end Saturating_Mul;
 
-   --  Clip a run starting at Start with the given Size to Limit, mirroring the
-   --  renderer: fully off-screen or empty runs clip to zero.
-   function Clipped_Size
-     (Start : Natural;
-      Size  : Natural;
-      Limit : Natural)
-      return Natural is
-   begin
-      if Start >= Limit or else Size = 0 then
-         return 0;
-      else
-         return Natural'Min (Size, Limit - Start);
-      end if;
-   end Clipped_Size;
+   function Fitted_Text (Text : UString; Capacity : Natural) return UString is
+     (Ada.Strings.Unbounded.To_Unbounded_String
+        (Guikit.Utf8.Fit_With_Ellipsis (Ada.Strings.Unbounded.To_String (Text), Capacity)));
 
    --  Append one rectangle, clipped to the window bounds and dropped when empty.
    procedure Add_Clipped_Rect

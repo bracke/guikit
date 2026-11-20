@@ -1,16 +1,11 @@
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
 with Guikit.Layout;
-with Guikit.Utf8;
 with Guikit.Widgets;
 
 package body Guikit.Menu_Tree is
 
    use Guikit.Draw;
-
-   --  Text fitted to Capacity display columns with a trailing ellipsis.
-   function Fit_Text (Text : UString; Capacity : Natural) return UString is
-     (To_Unbounded_String (Guikit.Utf8.Fit_With_Ellipsis (To_String (Text), Capacity)));
 
    procedure Draw_Frame
      (Rectangles    : in out Rectangle_Command_Vectors.Vector;
@@ -31,12 +26,9 @@ package body Guikit.Menu_Tree is
       Cell_W      : constant Positive :=
         Guikit.Layout.Caret_Advance_Width (Line_Height);
 
-      function Clipped (Start, Size, Limit : Natural) return Natural is
-        (if Start >= Limit or else Size = 0 then 0 else Natural'Min (Size, Limit - Start));
-
       procedure Add_Rect (X, Y, W, H : Natural; Color : Render_Color) is
-         Draw_W : constant Natural := Clipped (X, W, Clip_Width);
-         Draw_H : constant Natural := Clipped (Y, H, Clip_Height);
+         Draw_W : constant Natural := Guikit.Widgets.Clipped_Size (X, W, Clip_Width);
+         Draw_H : constant Natural := Guikit.Widgets.Clipped_Size (Y, H, Clip_Height);
       begin
          if Draw_W > 0 and then Draw_H > 0 then
             Rectangles.Append
@@ -45,10 +37,10 @@ package body Guikit.Menu_Tree is
       end Add_Rect;
 
       procedure Add_Text (X, Y, W, H : Natural; Content : UString; Color : Render_Color; Fit : Boolean) is
-         Draw_W   : constant Natural := Clipped (X, W, Clip_Width);
-         Draw_H   : constant Natural := Clipped (Y, H, Clip_Height);
+         Draw_W   : constant Natural := Guikit.Widgets.Clipped_Size (X, W, Clip_Width);
+         Draw_H   : constant Natural := Guikit.Widgets.Clipped_Size (Y, H, Clip_Height);
          Capacity : constant Natural := Draw_W / Cell_W;
-         Fitted   : constant UString := (if Fit then Fit_Text (Content, Capacity) else Content);
+         Fitted   : constant UString := (if Fit then Guikit.Widgets.Fitted_Text (Content, Capacity) else Content);
       begin
          if Draw_W > 0 and then Draw_H > 0 and then Length (Fitted) > 0 then
             Text.Append

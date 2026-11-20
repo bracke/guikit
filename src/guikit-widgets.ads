@@ -16,6 +16,27 @@ with Guikit.Draw;
 --  them and dropped when it would be empty, matching the renderer's primitives.
 package Guikit.Widgets is
 
+   --  The visible extent of a run [Start, Start + Size) clamped to [0, Limit),
+   --  as the renderer clips: zero for a run that is empty or starts at or past
+   --  Limit. Start + Size is never computed, so a huge or saturated Size
+   --  cannot overflow. Every guikit component clips its boxes with it.
+   --
+   --  @param Start First pixel of the run.
+   --  @param Size Length of the run in pixels.
+   --  @param Limit Drawable extent in pixels.
+   --  @return How many pixels of the run lie inside [0, Limit).
+   function Clipped_Size (Start, Size, Limit : Natural) return Natural is
+     (if Start >= Limit or else Size = 0 then 0 else Natural'Min (Size, Limit - Start));
+
+   --  Text truncated to Capacity display columns with a trailing ellipsis
+   --  (Guikit.Utf8.Fit_With_Ellipsis, the toolkit's one truncation rule);
+   --  text that fits is returned unchanged.
+   --
+   --  @param Text Text to fit.
+   --  @param Capacity Display columns available.
+   --  @return The fitted text.
+   function Fitted_Text (Text : Guikit.Draw.UString; Capacity : Natural) return Guikit.Draw.UString;
+
    --  Draw a focus ring: a one-pixel border around the given box, plus a
    --  second border one pixel outside it when the box is not flush against the
    --  top-left window edge. Emits into a base-layer rectangle vector.

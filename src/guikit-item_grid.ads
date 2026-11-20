@@ -214,17 +214,18 @@ package Guikit.Item_Grid is
    --  is at most one of these; No_Background leaves the cell bare.
    type Background_Kind is (No_Background, Alternate, Hovered, Selected, Drop_Target);
 
-   --  Paint one item cell's background into Rectangles: the fill and border plus
-   --  a left accent stripe for the selected and drop-target states, the plain
-   --  fill+border for hover, or the striped alternate-row fill. Everything is
-   --  clipped to the drawable rectangle.
+   --  Paint one item cell's background into Rectangles: the plain fill for
+   --  hover; the selection fill and a left accent stripe for a selected cell;
+   --  the hover fill, a one-pixel border in the selection colour and a left
+   --  accent stripe for a drop target; or the alternate-row fill. Everything
+   --  is clipped to the drawable rectangle.
    --
    --  @param Rectangles Rectangle command vector to append to.
    --  @param Clip_Width Drawable window width in pixels.
    --  @param Clip_Height Drawable window height in pixels.
    --  @param Cell The cell geometry (X/Y/Width/Height are used).
    --  @param Kind Which background to paint.
-   --  @param Selection_Color Selected fill / drop-target accent colour.
+   --  @param Selection_Color Selected fill; drop-target border and stripe colour.
    --  @param Hover_Color Hover and drop-target fill colour.
    --  @param Border_Color Selected left-stripe colour.
    --  @param Alternate_Color Striped alternate-row fill colour.
@@ -259,6 +260,9 @@ package Guikit.Item_Grid is
    --  @param Line_Height Text line height in pixels (drives column width).
    --  @param Fit Whether to truncate to the box width with an ellipsis.
    --  @param Italic Whether to render italic.
+   --  @param Cut_Columns The cells of bidi laid-out text cut off its left
+   --  (Guikit.Draw.Text_Command.Cut_Columns): a scrolled text field's
+   --  Guikit.Text_Fields.View.Cut_Columns; Guikit.Draw.Auto_Cut otherwise.
    procedure Draw_Fitted_Text
      (Text_Commands : in out Guikit.Draw.Text_Command_Vectors.Vector;
       Clip_Width    : Natural;
@@ -271,7 +275,8 @@ package Guikit.Item_Grid is
       Color         : Guikit.Draw.Render_Color;
       Line_Height   : Positive;
       Fit           : Boolean := True;
-      Italic        : Boolean := False);
+      Italic        : Boolean := False;
+      Cut_Columns   : Natural := Guikit.Draw.Auto_Cut);
 
    --  Draw a grouping band-header row: a subdued fill, a muted fitted caption at
    --  the cell's text box, a one-pixel bottom separator, and a non-selectable

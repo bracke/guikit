@@ -182,6 +182,9 @@ package Guikit.Draw is
      (Index_Type   => Positive,
       Element_Type => Triangle_Command);
 
+   --  Text_Command.Cut_Columns' default: no cut chosen by the caller.
+   Auto_Cut : constant Natural := Natural'Last;
+
    --  A run of text to draw in the box at X, Y, Width by Height, clipped to
    --  it. A command with Width 0 draws nothing (Guikit.Text.Build_Glyphs
    --  skips it): an application that draws some text itself still gives
@@ -206,6 +209,15 @@ package Guikit.Draw is
       --  symbol as its mirror image ('<'). Text a user typed or reads (a
       --  query, a value, a name) leaves it False and is shown as it is.
       Mirror_Glyph : Boolean := False;
+      --  Text laid out by Guikit.Bidi only (Guikit.Bidi.Needs_Layout): how
+      --  many display cells of the laid-out text are cut off its left side,
+      --  so the box shows the cells after them. Auto_Cut, the default, cuts
+      --  a right-to-left paragraph too long for its box on the left, so its
+      --  start shows, and a left-to-right one not at all
+      --  (Guikit.Bidi.Cut_Columns). A text field scrolled to keep its caret
+      --  in view passes its view's cut (Guikit.Text_Fields.View.Cut_Columns).
+      --  Text that needs no layout ignores it.
+      Cut_Columns : Natural := Auto_Cut;
    end record;
 
    package Text_Command_Vectors is new Ada.Containers.Vectors

@@ -230,6 +230,18 @@ package Guikit.Bidi is
    --  @return The cells cut off on the left.
    function Cut_Columns (Laid : Line; Columns : Natural) return Natural;
 
+   --  How many display cells a Laid paragraph fills when drawn in a box
+   --  Columns cells wide with Cut cells cut off its left (see
+   --  Guikit.Draw.Text_Command.Cut_Columns): from the cut to the end of the
+   --  last cluster that fits whole. A wide cluster the cut runs through keeps
+   --  its remaining cells, blank.
+   --
+   --  @param Laid A laid-out line.
+   --  @param Cut The cells cut off on the left.
+   --  @param Columns How many display cells the box is.
+   --  @return The cells drawn, at most Columns.
+   function Drawn_Columns (Laid : Line; Cut, Columns : Natural) return Natural;
+
 private
 
    --  Whether a level is right to left.

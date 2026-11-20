@@ -42,6 +42,8 @@ package body Guikit_Suite.Bidi is
    procedure Test_Undrawn_Ligature_Is_Two_Stops (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Wide_Character_Straddling_A_Mirrored_Field (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Default_Follows_Recorded_Forms (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Field_Scrolls_By_Drawn_Columns (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Click_On_Wide_Character (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function Utf8 (Codes : Guikit.Bidi.Codepoint_Array) return String is
       Result : Unbounded_String;
@@ -116,6 +118,12 @@ package body Guikit_Suite.Bidi is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Default_Follows_Recorded_Forms'Access,
          "given no Has_Glyph, carets and layout follow the forms the loaded fonts draw");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Field_Scrolls_By_Drawn_Columns'Access,
+         "a field of mixed-direction text scrolls to where the caret is drawn, and a click maps back");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Click_On_Wide_Character'Access,
+         "a click on the second half of a wide character puts the caret after it");
    end Register_Tests;
 
    --  Every test starts as before any font loaded -- every presentation
@@ -712,6 +720,103 @@ package body Guikit_Suite.Bidi is
       end loop;
       Assert (Cursor_At ("xabc", 1, 0, 120, 20, Mirrored => False) = 1, "a scrolled field counts from what shows");
    end Test_Mirrored_Field;
+
+   procedure Test_Field_Scrolls_By_Drawn_Columns (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Guikit.Text_Fields;
+
+      --  Count copies of one code point.
+      function Run (Code : Natural; Count : Natural) return Guikit.Bidi.Codepoint_Array is
+        (Guikit.Bidi.Codepoint_Array'(1 .. Count => Code));
+
+      Letter_A : constant Natural := Character'Pos ('a');
+
+      --  Line height 20: a cell is 12 pixels, so a 120-pixel field is ten
+      --  cells; the caret is 2 pixels wide.
+      --
+      --  "a" and thirty Hebrew letters: a left-to-right paragraph drawn "a"
+      --  then the Hebrew run reversed, so the caret before the first Hebrew
+      --  letter (byte 1) is drawn on that letter's right, at column 31.
+      Latin_First : constant String := Utf8 (Letter_A & Run (Alef, 30));
+      Typing      : constant View := View_Of (Latin_First, 1, 120, 20, 2, Mirrored => False);
+      --  A Hebrew letter and thirty "a"s: a right-to-left paragraph drawn
+      --  with the Latin run on the left (cells 0 .. 29) and the Hebrew
+      --  letter in cell 30. Byte 17 is before the sixteenth "a", column 15;
+      --  unscrolled, the paragraph shows its last ten cells (21 .. 30).
+      Hebrew_First : constant String := Utf8 (Natural'(Alef) & Run (Letter_A, 30));
+      Inside       : constant View := View_Of (Hebrew_First, 17, 120, 20, 2, Mirrored => False);
+      Reflected    : constant View := View_Of (Hebrew_First, 17, 120, 20, 2, Mirrored => True);
+      At_Start     : constant View := View_Of (Hebrew_First, 0, 120, 20, 2, Mirrored => False);
+   begin
+      Assert
+        (Typing.Skip_Bytes = 0 and then Typing.Cut_Columns = 22,
+         "the view scrolls by drawn cells, keeping column 31 in the last cell:" & Typing'Image);
+      Assert (Typing.Caret_X = 108, "the caret is drawn in the field's last cell, not clamped past it");
+      Assert
+        (Cursor_At (Latin_First, 0, Typing.Caret_X - 1, 120, 20, Mirrored => False,
+                    Cut_Columns => Typing.Cut_Columns) = 1,
+         "a click just left of the caret, on that letter's right half, puts it back before the letter");
+
+      --  Right to left, the caret keeps a cell on its left: column 15 is
+      --  drawn in the field's second cell.
+      Assert
+        (Inside.Skip_Bytes = 0 and then Inside.Cut_Columns = 14 and then Inside.Caret_X = 12,
+         "a right-to-left paragraph scrolls left to the caret's column:" & Inside'Image);
+      Assert
+        (Cursor_At (Hebrew_First, 0, 13, 120, 20, Mirrored => False, Cut_Columns => Inside.Cut_Columns) = 17,
+         "a click just right of the caret, on the sixteenth a's left half, is before it");
+      Assert
+        (At_Start.Cut_Columns = 21 and then At_Start.Caret_X = 118,
+         "the caret at the paragraph's start, its right end, needs no scroll:" & At_Start'Image);
+
+      Assert
+        (Reflected.Cut_Columns = 14 and then Reflected.Caret_X = 106,
+         "mirrored, the same cut, the caret reflected in the ten cells drawn:" & Reflected'Image);
+      Assert
+        (Cursor_At (Hebrew_First, 0, 107, 120, 20, Mirrored => True, Cut_Columns => Reflected.Cut_Columns) = 17,
+         "mirrored, a click there maps back too");
+
+      --  Plain text is still scrolled by bytes, with no cut.
+      declare
+         Plain : constant View := View_Of ("abcdefghijklmnop", 16, 120, 20, 2, Mirrored => False);
+      begin
+         Assert
+           (Plain.Skip_Bytes = 7 and then Plain.Cut_Columns = Guikit.Draw.Auto_Cut and then Plain.Caret_X = 108,
+            "plain text scrolls by bytes as before:" & Plain'Image);
+      end;
+
+      --  The cells drawn after a cut, as Build_Glyphs draws them.
+      declare
+         Laid : constant Guikit.Bidi.Line := Guikit.Bidi.Lay_Out (Hebrew_First);
+      begin
+         Assert (Guikit.Bidi.Drawn_Columns (Laid, 14, 10) = 10, "ten cells after the cut fill the box");
+         Assert (Guikit.Bidi.Drawn_Columns (Laid, 25, 10) = 6, "six cells are left after a cut of 25");
+      end;
+   end Test_Field_Scrolls_By_Drawn_Columns;
+
+   procedure Test_Click_On_Wide_Character (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      --  "a" in cell 0 and a two-cell character in cells 1 .. 2: half cells
+      --  2 and 3 are its first half, 4 and 5 its second.
+      Text : constant String := "a" & Guikit.Utf8.Encode (16#6F22#);
+   begin
+      Assert (Guikit.Bidi.Cursor_At_Half_Column (Text, 0) = 0, "left half of 'a'");
+      Assert (Guikit.Bidi.Cursor_At_Half_Column (Text, 1) = 1, "right half of 'a'");
+      Assert (Guikit.Bidi.Cursor_At_Half_Column (Text, 2) = 1, "first quarter of the wide character");
+      Assert (Guikit.Bidi.Cursor_At_Half_Column (Text, 3) = 1, "second quarter of the wide character");
+      Assert
+        (Guikit.Bidi.Cursor_At_Half_Column (Text, 4) = 4,
+         "third quarter of the wide character, in its second half: after it");
+      Assert (Guikit.Bidi.Cursor_At_Half_Column (Text, 5) = 4, "last quarter of the wide character");
+      Assert (Guikit.Bidi.Cursor_At_Half_Column (Text, 40) = 4, "past the end of the text");
+      Assert
+        (Guikit.Bidi.Cursor_At_Half_Column ("a" & Guikit.Utf8.Encode (16#0301#) & "b", 1) = 3,
+         "after a character is after the marks on it");
+      --  Through a field: a click 30 pixels in, half cell 5 of 12-pixel cells.
+      Assert
+        (Guikit.Text_Fields.Cursor_At (Text, 0, 30, 120, 20, Mirrored => False) = 4,
+         "a field's click on the second half of a wide character is after it");
+   end Test_Click_On_Wide_Character;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

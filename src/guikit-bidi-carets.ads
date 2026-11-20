@@ -54,4 +54,12 @@ private package Guikit.Bidi.Carets is
    --  @return The cells cut off on the left.
    function Cut_Columns (Laid : Line; Columns : Natural) return Natural;
 
+   --  See Guikit.Bidi.Drawn_Columns.
+   --
+   --  @param Laid A laid-out line.
+   --  @param Cut The cells cut off on the left.
+   --  @param Columns How many display cells the box is.
+   --  @return The cells drawn, at most Columns.
+   function Drawn_Columns (Laid : Line; Cut, Columns : Natural) return Natural;
+
 end Guikit.Bidi.Carets;

@@ -41,6 +41,7 @@ package body Guikit_Suite.Widgets is
    procedure Test_Caret (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Marquee (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Input_Field (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Clipping_And_Fitting (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Palette_Row (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Toggle (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Number_Stepper (T : in out AUnit.Test_Cases.Test_Case'Class);
@@ -98,6 +99,9 @@ package body Guikit_Suite.Widgets is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Meter_Huge_Values'Access,
          "Draw_Meter fills in proportion even when the counts times the width pass Long_Long_Integer'Last");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Clipping_And_Fitting'Access,
+         "Clipped_Size clips without overflowing and Fitted_Text ellipsises what does not fit");
    end Register_Tests;
 
    procedure Test_Meter_Huge_Values (T : in out AUnit.Test_Cases.Test_Case'Class) is
@@ -536,6 +540,25 @@ package body Guikit_Suite.Widgets is
       Check_Shadow (20, Offset => 3);
       Check_Shadow (40, Offset => 6);
    end Test_Menu_Tree_Button_Scaling;
+
+   procedure Test_Clipping_And_Fitting (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use type U.Unbounded_String;
+   begin
+      Assert (Clipped_Size (10, 20, 100) = 20, "a run inside the limit keeps its size");
+      Assert (Clipped_Size (90, 20, 100) = 10, "a run past the limit is cut at it");
+      Assert (Clipped_Size (100, 20, 100) = 0, "a run starting at the limit is not drawn");
+      Assert (Clipped_Size (10, 0, 100) = 0, "an empty run is not drawn");
+      Assert
+        (Clipped_Size (10, Natural'Last, 100) = 90
+         and then Clipped_Size (Natural'Last - 1, Natural'Last, Natural'Last) = 1,
+         "a huge run is clipped without overflowing");
+      Assert (Fitted_Text (U.To_Unbounded_String ("abc"), 3) = U.To_Unbounded_String ("abc"), "text that fits stays");
+      Assert
+        (U.Length (Fitted_Text (U.To_Unbounded_String ("abcdef"), 3)) > 0
+         and then Fitted_Text (U.To_Unbounded_String ("abcdef"), 3) /= U.To_Unbounded_String ("abcdef"),
+         "text that does not fit is cut with an ellipsis");
+   end Test_Clipping_And_Fitting;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;

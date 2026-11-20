@@ -103,7 +103,8 @@ is
    --  Text that draws in another order or shape than stored: lay it
    --  out with Guikit.Bidi and draw its clusters left to right. A
    --  right-to-left paragraph too long for its box loses its end -- the
-   --  left -- not its start.
+   --  left -- not its start, unless the command names its own cut
+   --  (Cut_Columns).
    procedure Append_Laid_Out
      (Glyphs  : in out Glyph_Command_Vectors.Vector;
       Overlay : Boolean;
@@ -114,6 +115,8 @@ is
    --  box just as wide as the whole characters of it that fit, standing
    --  against that edge: a wide character the box's start would cut goes
    --  whole, so no blank cell is left at the edge the text stands against.
+   --  Laid-out text with a cut of its own (Cut_Columns) fills the cells
+   --  from the cut on that fit (Guikit.Bidi.Drawn_Columns).
    function Aligned (Given : Text_Command) return Text_Command is
    begin
       if not Given.Align_End or else Given.Scale_To_Box then
@@ -121,8 +124,12 @@ is
       end if;
       declare
          Content : constant String := To_String (Given.Text);
+         Columns : constant Natural := Given.Width / R.Cell_Width;
          Fit     : constant Natural :=
-           Guikit.Utf8.Display_Units (Guikit.Utf8.Prefix_By_Units (Content, Given.Width / R.Cell_Width));
+           (if Given.Cut_Columns /= Auto_Cut and then Guikit.Bidi.Needs_Layout (Content)
+            then Guikit.Bidi.Drawn_Columns
+                   (Guikit.Bidi.Lay_Out (Content, Font_Has'Access), Given.Cut_Columns, Columns)
+            else Guikit.Utf8.Display_Units (Guikit.Utf8.Prefix_By_Units (Content, Columns)));
          Used    : constant Natural := Sat_Mul (Fit, R.Cell_Width);
          Result  : Text_Command := Given;
       begin

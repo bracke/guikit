@@ -9,7 +9,8 @@ begin
       Text.Append
         (Guikit.Draw.Text_Command'
            (X => Field_X, Y => Text_Y, Width => Field_W, Height => LH,
-            Text => To_Unbounded_String (Shown_Query), Color => Guikit.Draw.Text_Color, others => <>));
+            Text => To_Unbounded_String (Shown_Query), Color => Guikit.Draw.Text_Color,
+            Cut_Columns => Field.Cut_Columns, others => <>));
    elsif Length (P.Config.Placeholder) > 0 then
       Text.Append
         (Guikit.Draw.Text_Command'

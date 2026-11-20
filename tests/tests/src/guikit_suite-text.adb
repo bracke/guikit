@@ -363,13 +363,14 @@ package body Guikit_Suite.Text is
 
       --  The glyphs Build_Glyphs places for Values in a box Columns cells wide,
       --  left to right.
-      function Drawn (Values : Codes; Columns : Positive) return Codes is
+      function Drawn (Values : Codes; Columns : Positive; Cut : Natural := Auto_Cut) return Codes is
          Commands : Text_Command_Vectors.Vector;
       begin
          Commands.Append
            (Text_Command'
               (X => 0, Y => 0, Width => Columns * 100, Height => 200,
-               Text => Ada.Strings.Unbounded.To_Unbounded_String (Utf8 (Values)), others => <>));
+               Text => Ada.Strings.Unbounded.To_Unbounded_String (Utf8 (Values)), Cut_Columns => Cut,
+               others => <>));
          declare
             Frame  : constant Text_Render_Result := Guikit.Text.Build_Glyphs (R, Commands, Empty);
             Result : Codes (1 .. Natural (Frame.Glyphs.Length));
@@ -421,6 +422,15 @@ package body Guikit_Suite.Text is
         (Drawn ([Character'Pos ('a'), Character'Pos ('b'), Character'Pos ('c')], 2)
            = Codes'[Character'Pos ('a'), Character'Pos ('b')],
          "a left-to-right text keeps its start, on the left");
+      --  A text field scrolled to its caret names the cut: "a" then
+      --  alef, bet, gimel draws "a" gimel bet alef; one cell cut off the
+      --  left leaves gimel and bet in two cells.
+      Assert
+        (Drawn ([Character'Pos ('a'), Alef, Bet, Gimel], 2, Cut => 1) = Codes'[Gimel, Bet],
+         "a left-to-right paragraph drawn with a cut loses that many cells on the left");
+      Assert
+        (Drawn ([Alef, Bet, Gimel], 2, Cut => 0) = Codes'[Gimel, Bet],
+         "a right-to-left one drawn with no cut shows its left end");
 
       --  The joined forms come from whichever font in the chain has them: a
       --  monospace primary without Arabic still draws Arabic joined. Which
