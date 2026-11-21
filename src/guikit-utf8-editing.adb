@@ -299,4 +299,17 @@ package body Guikit.Utf8.Editing is
       end if;
    end Delete_At;
 
+   function Insert_At
+     (Content : String;
+      Cursor  : Natural;
+      Text    : String)
+      return String
+   is
+      Split : constant Natural := Natural'Min (Cursor, Content'Length);
+   begin
+      return Content (Content'First .. Content'First + Split - 1)
+        & Text
+        & Content (Content'First + Split .. Content'Last);
+   end Insert_At;
+
 end Guikit.Utf8.Editing;

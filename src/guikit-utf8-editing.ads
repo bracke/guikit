@@ -113,4 +113,18 @@ package Guikit.Utf8.Editing is
       New_Text   : out Ada.Strings.Unbounded.Unbounded_String;
       New_Cursor : out Natural);
 
+   --  Insert Text into Content at the byte offset Cursor, clamped to the
+   --  end: the one insertion rule every text field shares (the caller moves
+   --  its caret by Text'Length).
+   --
+   --  @param Content UTF-8 encoded field text.
+   --  @param Cursor Zero-based byte offset of the caret.
+   --  @param Text Text to insert.
+   --  @return Content with Text spliced in at Cursor.
+   function Insert_At
+     (Content : String;
+      Cursor  : Natural;
+      Text    : String)
+      return String;
+
 end Guikit.Utf8.Editing;

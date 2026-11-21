@@ -620,27 +620,18 @@ package body Guikit.Widgets is
       end if;
    end Draw_Button;
 
-   procedure Draw_Tooltip
-     (Rectangles      : in out Rectangle_Command_Vectors.Vector;
-      Text            : in out Text_Command_Vectors.Vector;
-      Clip_Width      : Natural;
-      Clip_Height     : Natural;
-      Box_X           : Natural;
-      Box_Y           : Natural;
-      Box_Width       : Natural;
-      Box_Height      : Natural;
-      Fill_Color      : Render_Color;
-      Border_Color    : Render_Color;
-      Label_X         : Natural;
-      Label_Y         : Natural;
-      Label_Width     : Natural;
-      Label_Height    : Natural;
-      Label_Text      : UString;
-      Label_Truncated : Boolean;
-      Label_Color     : Render_Color)
+   procedure Draw_Tooltip_Box
+     (Rectangles   : in out Rectangle_Command_Vectors.Vector;
+      Text         : in out Text_Command_Vectors.Vector;
+      Clip_Width   : Natural;
+      Clip_Height  : Natural;
+      Box_X        : Natural;
+      Box_Y        : Natural;
+      Box_Width    : Natural;
+      Box_Height   : Natural;
+      Fill_Color   : Render_Color;
+      Border_Color : Render_Color)
    is
-      Draw_W : constant Natural := Clipped_Size (Label_X, Label_Width, Clip_Width);
-      Draw_H : constant Natural := Clipped_Size (Label_Y, Label_Height, Clip_Height);
       Box_W  : constant Natural := Clipped_Size (Box_X, Box_Width, Clip_Width);
       Box_H  : constant Natural := Clipped_Size (Box_Y, Box_Height, Clip_Height);
    begin
@@ -668,6 +659,32 @@ package body Guikit.Widgets is
         (Rectangles, Clip_Width, Clip_Height, Box_X, Box_Y, Box_Width, Box_Height, Fill_Color);
       Add_Border
         (Rectangles, Clip_Width, Clip_Height, Box_X, Box_Y, Box_Width, Box_Height, Border_Color);
+   end Draw_Tooltip_Box;
+
+   procedure Draw_Tooltip
+     (Rectangles      : in out Rectangle_Command_Vectors.Vector;
+      Text            : in out Text_Command_Vectors.Vector;
+      Clip_Width      : Natural;
+      Clip_Height     : Natural;
+      Box_X           : Natural;
+      Box_Y           : Natural;
+      Box_Width       : Natural;
+      Box_Height      : Natural;
+      Fill_Color      : Render_Color;
+      Border_Color    : Render_Color;
+      Label_X         : Natural;
+      Label_Y         : Natural;
+      Label_Width     : Natural;
+      Label_Height    : Natural;
+      Label_Text      : UString;
+      Label_Truncated : Boolean;
+      Label_Color     : Render_Color)
+   is
+      Draw_W : constant Natural := Clipped_Size (Label_X, Label_Width, Clip_Width);
+      Draw_H : constant Natural := Clipped_Size (Label_Y, Label_Height, Clip_Height);
+   begin
+      Draw_Tooltip_Box
+        (Rectangles, Text, Clip_Width, Clip_Height, Box_X, Box_Y, Box_Width, Box_Height, Fill_Color, Border_Color);
 
       if Draw_W > 0
         and then Draw_H > 0

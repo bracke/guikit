@@ -30,6 +30,7 @@ package body Guikit_Suite.Utf8 is
    procedure Test_Cluster_Boundaries (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Fit_With_Ellipsis (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Delete_At (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Insert_At (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Editing_Boundaries (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Column_Offsets_And_Validity (T : in out AUnit.Test_Cases.Test_Case'Class);
 
@@ -78,6 +79,9 @@ package body Guikit_Suite.Utf8 is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Delete_At'Access,
          "Delete_At removes a whole character, a base with its mark, or a word, and nothing at the edges");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Insert_At'Access,
+         "Insert_At splices text at the caret, at either edge, and clamps a caret past the end");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Editing_Boundaries'Access,
          "caret boundaries step whole characters and words; malformed bytes stay separate units");
@@ -287,6 +291,19 @@ package body Guikit_Suite.Utf8 is
       Assert (Guikit.Utf8.Editing.Remove_Range ("abc", 2, 1) = "abc", "an empty range removes nothing");
       Assert (Guikit.Utf8.Editing.Remove_Range ("abc", 1, 99) = "a", "a range past the end is clamped");
    end Test_Delete_At;
+
+   procedure Test_Insert_At (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      Offset : constant String (5 .. 7) := "abc";
+   begin
+      Assert (Guikit.Utf8.Editing.Insert_At ("abc", 0, "X") = "Xabc", "insert at the start");
+      Assert (Guikit.Utf8.Editing.Insert_At ("abc", 1, "XY") = "aXYbc", "insert in the middle");
+      Assert (Guikit.Utf8.Editing.Insert_At ("abc", 3, "X") = "abcX", "insert at the end");
+      Assert (Guikit.Utf8.Editing.Insert_At ("abc", 9, "X") = "abcX", "a caret past the end appends");
+      Assert (Guikit.Utf8.Editing.Insert_At ("", 0, "X") = "X", "insert into empty text");
+      Assert (Guikit.Utf8.Editing.Insert_At ("abc", 2, "") = "abc", "inserting nothing changes nothing");
+      Assert (Guikit.Utf8.Editing.Insert_At (Offset, 1, "X") = "aXbc", "a slice not starting at 1");
+   end Test_Insert_At;
 
    procedure Test_Editing_Boundaries (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);

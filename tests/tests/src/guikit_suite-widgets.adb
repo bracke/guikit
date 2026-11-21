@@ -415,6 +415,24 @@ package body Guikit_Suite.Widgets is
       Assert (Rects (1).Color = Pane_Color, "the first rectangle is the tooltip fill");
       Assert (U.To_String (Texts (1).Text) = "clear", "text outside the tooltip remains queued");
       Assert (Texts (2).X = 24 and then Texts (2).Color = Text_Color, "the label sits at its box origin");
+
+      --  The box alone: the same fill and border, the covered text removed,
+      --  and no label.
+      declare
+         Box_Rects : Rectangle_Command_Vectors.Vector;
+         Box_Texts : Text_Command_Vectors.Vector;
+      begin
+         Box_Texts.Append
+           (Text_Command'
+              (X => 30, Y => 25, Width => 30, Height => 16,
+               Text => U.To_Unbounded_String ("covered"), others => <>));
+         Draw_Tooltip_Box (Box_Rects, Box_Texts, Big, Big, 20, 20, 80, 24, Pane_Color, Border_Color);
+         Assert (Count (Box_Rects) = 5, "a tooltip box is a fill and a four-edge border");
+         Assert (Count (Box_Texts) = 0, "a tooltip box hides the text it covers and adds none");
+         for Index in 1 .. 5 loop
+            Assert (Box_Rects (Index) = Rects (Index), "the box matches Draw_Tooltip's rectangles");
+         end loop;
+      end;
    end Test_Tooltip;
 
    procedure Test_Caret (T : in out AUnit.Test_Cases.Test_Case'Class) is

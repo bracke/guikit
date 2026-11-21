@@ -532,6 +532,33 @@ package Guikit.Widgets is
       Label_Height    : Natural;
       Label_Color     : Guikit.Draw.Render_Color);
 
+   --  Draw a floating hover tooltip's box with no label: the fill and the
+   --  four border edges Draw_Tooltip emits, after removing the queued text
+   --  the box covers. A caller laying its own rows of text inside appends
+   --  them after this.
+   --
+   --  @param Rectangles Rectangle command vector for the fill and border.
+   --  @param Text Text command vector; text under the box is removed.
+   --  @param Clip_Width Drawable window width in pixels.
+   --  @param Clip_Height Drawable window height in pixels.
+   --  @param Box_X Tooltip box left edge in pixels.
+   --  @param Box_Y Tooltip box top edge in pixels.
+   --  @param Box_Width Tooltip box width in pixels.
+   --  @param Box_Height Tooltip box height in pixels.
+   --  @param Fill_Color Tooltip background color.
+   --  @param Border_Color Tooltip border color.
+   procedure Draw_Tooltip_Box
+     (Rectangles   : in out Guikit.Draw.Rectangle_Command_Vectors.Vector;
+      Text         : in out Guikit.Draw.Text_Command_Vectors.Vector;
+      Clip_Width   : Natural;
+      Clip_Height  : Natural;
+      Box_X        : Natural;
+      Box_Y        : Natural;
+      Box_Width    : Natural;
+      Box_Height   : Natural;
+      Fill_Color   : Guikit.Draw.Render_Color;
+      Border_Color : Guikit.Draw.Render_Color);
+
    --  Draw a floating hover tooltip: a filled box with a one-pixel border and a
    --  single padded text label. The rectangles are emitted as the fill followed
    --  by the top, left, bottom and right border edges in that order, then the
