@@ -204,6 +204,67 @@ package Guikit.Item_Grid is
       Line_Height      : Positive := 20)
       return Item_Layout_Vectors.Vector;
 
+   --  The cells on screen only, in position order: Cells (I) is the cell of
+   --  position First + I - 1. Every other position has no area, as in
+   --  Calculate_Layout, but gets no entry: a frame over a large folder
+   --  neither allocates nor walks the items scrolled out of view.
+   type Placed_Layout is record
+      First : Positive := 1;
+      Cells : Item_Layout_Vectors.Vector;
+   end record;
+
+   --  The last position Layout places; First - 1 when it places none.
+   --
+   --  @param Layout A placed layout.
+   --  @return The position of its last cell.
+   function Last (Layout : Placed_Layout) return Natural is
+     (Layout.First + Natural (Layout.Cells.Length) - 1);
+
+   --  The cell of a position: its placed cell, or the all-zero cell of a
+   --  position not on screen.
+   --
+   --  @param Layout A placed layout.
+   --  @param Position One-based item position.
+   --  @return The position's cell.
+   function Cell_At
+     (Layout   : Placed_Layout;
+      Position : Positive)
+      return Item_Layout is
+     (if Position >= Layout.First and then Position <= Last (Layout)
+      then Layout.Cells (Position - Layout.First + 1)
+      else (others => <>));
+
+   --  Calculate_Layout's cells on screen, without the off-screen ones: the
+   --  same geometry, in a Placed_Layout.
+   --
+   --  @param Count Number of items (including group-header rows).
+   --  @param Visible_Index_At An item's one-based visible index.
+   --  @param Is_Header_At Whether an item is a group-header row.
+   --  @param Label_At An item's label (asked only of cells on screen).
+   --  @param View The grid view.
+   --  @param Content_X Content area left edge in pixels.
+   --  @param Content_Y Content area top edge in pixels.
+   --  @param Content_W Content area width in pixels.
+   --  @param Content_H Content area height in pixels.
+   --  @param Columns Details column bounds (ignored for the icon views).
+   --  @param Scroll_Pixels Vertical scroll offset in pixels.
+   --  @param Line_Height Text line height in pixels.
+   --  @return The cells on screen and the position of the first.
+   function Place_Layout
+     (Count            : Natural;
+      Visible_Index_At : not null access function (Position : Positive) return Natural;
+      Is_Header_At     : not null access function (Position : Positive) return Boolean;
+      Label_At         : not null access function (Position : Positive) return String;
+      View             : View_Kind;
+      Content_X        : Natural;
+      Content_Y        : Natural;
+      Content_W        : Natural;
+      Content_H        : Natural;
+      Columns          : Detail_Column_Bounds;
+      Scroll_Pixels    : Natural;
+      Line_Height      : Positive := 20)
+      return Placed_Layout;
+
    --  One-based visible indices, used to carry hit-test results (e.g. the items
    --  a marquee rectangle covers) back to the consumer's selection logic.
    package Visible_Index_Vectors is new Ada.Containers.Vectors
@@ -459,6 +520,18 @@ package Guikit.Item_Grid is
       Y     : Natural)
       return Natural;
 
+   --  Item_At over a placed layout's cells.
+   --
+   --  @param Layout Placed layout.
+   --  @param X Pointer x coordinate in pixels.
+   --  @param Y Pointer y coordinate in pixels.
+   --  @return The one-based visible index, or 0.
+   function Item_At
+     (Layout : Placed_Layout;
+      X      : Natural;
+      Y      : Natural)
+      return Natural;
+
    --  Normalise a marquee drag from its press point (Start) and current pointer
    --  into a canonical rectangle, so drags in any direction give the same rect.
    --
@@ -492,6 +565,22 @@ package Guikit.Item_Grid is
    --  @return The covered visible indices, in layout order.
    function Items_In_Rect
      (Items  : Item_Layout_Vectors.Vector;
+      X      : Natural;
+      Y      : Natural;
+      Width  : Natural;
+      Height : Natural)
+      return Visible_Index_Vectors.Vector;
+
+   --  Items_In_Rect over a placed layout's cells.
+   --
+   --  @param Layout Placed layout.
+   --  @param X Rectangle left edge in pixels.
+   --  @param Y Rectangle top edge in pixels.
+   --  @param Width Rectangle width in pixels.
+   --  @param Height Rectangle height in pixels.
+   --  @return The covered visible indices, in layout order.
+   function Items_In_Rect
+     (Layout : Placed_Layout;
       X      : Natural;
       Y      : Natural;
       Width  : Natural;

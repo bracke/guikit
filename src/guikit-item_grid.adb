@@ -269,6 +269,53 @@ package body Guikit.Item_Grid is
       return Long_Long_Integer (First_Row) * Long_Long_Integer (Cells_Per_Row (View, Metrics, Port)) + 1;
    end First_On_Screen;
 
+   function Place_Layout
+     (Count            : Natural;
+      Visible_Index_At : not null access function (Position : Positive) return Natural;
+      Is_Header_At     : not null access function (Position : Positive) return Boolean;
+      Label_At         : not null access function (Position : Positive) return String;
+      View             : View_Kind;
+      Content_X        : Natural;
+      Content_Y        : Natural;
+      Content_W        : Natural;
+      Content_H        : Natural;
+      Columns          : Detail_Column_Bounds;
+      Scroll_Pixels    : Natural;
+      Line_Height      : Positive := 20)
+      return Placed_Layout
+   is
+      Result  : Placed_Layout;
+      Metrics : constant Cell_Metrics := Cell_Metrics_For (View, Content_W, Line_Height);
+      Port    : constant Viewport :=
+        (X             => Content_X,
+         Y             => Content_Y,
+         Width         => Content_W,
+         Height        => Content_H,
+         Scroll_Pixels => Scroll_Pixels,
+         Line_Height   => Line_Height);
+      First   : constant Long_Long_Integer := First_On_Screen (View, Metrics, Port);
+      Index   : Positive := 1;
+   begin
+      if First > Long_Long_Integer (Count) then
+         return Result;
+      end if;
+      Index := Positive (First);
+      Result.First := Index;
+      while On_Screen (Index, View, Metrics, Port) loop
+         Result.Cells.Append
+           (case View is
+               when Icons_Small | Icons_Large =>
+                 Grid_Cell (Index, Visible_Index_At (Index), Label_At, Metrics, Port),
+               when Details =>
+                 (if Is_Header_At (Index)
+                  then Details_Row (Index, 0, True, Metrics, Columns, Port)
+                  else Details_Row (Index, Visible_Index_At (Index), False, Metrics, Columns, Port)));
+         exit when Index = Count;
+         Index := Index + 1;
+      end loop;
+      return Result;
+   end Place_Layout;
+
    function Calculate_Layout
      (Count            : Natural;
       Visible_Index_At : not null access function (Position : Positive) return Natural;
@@ -284,35 +331,15 @@ package body Guikit.Item_Grid is
       Line_Height      : Positive := 20)
       return Item_Layout_Vectors.Vector
    is
-      Result  : Item_Layout_Vectors.Vector;
-      Metrics : constant Cell_Metrics := Cell_Metrics_For (View, Content_W, Line_Height);
-      Port    : constant Viewport :=
-        (X             => Content_X,
-         Y             => Content_Y,
-         Width         => Content_W,
-         Height        => Content_H,
-         Scroll_Pixels => Scroll_Pixels,
-         Line_Height   => Line_Height);
-      First   : constant Long_Long_Integer := First_On_Screen (View, Metrics, Port);
-      Index   : Positive := 1;
+      Placed : constant Placed_Layout :=
+        Place_Layout
+          (Count, Visible_Index_At, Is_Header_At, Label_At, View, Content_X, Content_Y, Content_W, Content_H,
+           Columns, Scroll_Pixels, Line_Height);
+      Result : Item_Layout_Vectors.Vector;
    begin
       Result.Set_Length (Ada.Containers.Count_Type (Count));
-      if First > Long_Long_Integer (Count) then
-         return Result;
-      end if;
-      Index := Positive (First);
-      while On_Screen (Index, View, Metrics, Port) loop
-         Result.Replace_Element
-           (Index,
-            (case View is
-                when Icons_Small | Icons_Large =>
-                  Grid_Cell (Index, Visible_Index_At (Index), Label_At, Metrics, Port),
-                when Details =>
-                  (if Is_Header_At (Index)
-                   then Details_Row (Index, 0, True, Metrics, Columns, Port)
-                   else Details_Row (Index, Visible_Index_At (Index), False, Metrics, Columns, Port))));
-         exit when Index = Count;
-         Index := Index + 1;
+      for Offset in 0 .. Natural (Placed.Cells.Length) - 1 loop
+         Result.Replace_Element (Placed.First + Offset, Placed.Cells (Offset + 1));
       end loop;
       return Result;
    end Calculate_Layout;
@@ -673,6 +700,13 @@ package body Guikit.Item_Grid is
       return 0;
    end Item_At;
 
+   function Item_At
+     (Layout : Placed_Layout;
+      X      : Natural;
+      Y      : Natural)
+      return Natural is
+     (Item_At (Layout.Cells, X, Y));
+
    procedure Marquee_Rect
      (Start_X   : Natural;
       Start_Y   : Natural;
@@ -720,5 +754,14 @@ package body Guikit.Item_Grid is
       end loop;
       return Hits;
    end Items_In_Rect;
+
+   function Items_In_Rect
+     (Layout : Placed_Layout;
+      X      : Natural;
+      Y      : Natural;
+      Width  : Natural;
+      Height : Natural)
+      return Visible_Index_Vectors.Vector is
+     (Items_In_Rect (Layout.Cells, X, Y, Width, Height));
 
 end Guikit.Item_Grid;

@@ -24,6 +24,7 @@ package body Guikit_Suite.Item_Grid is
    procedure Test_Marquee (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Cell_Metrics (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Calculate_Layout (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Place_Layout (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Background (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Group_Header (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Details_Row (T : in out AUnit.Test_Cases.Test_Case'Class);
@@ -59,6 +60,8 @@ package body Guikit_Suite.Item_Grid is
         (T, Test_Cell_Metrics'Access, "Cell_Metrics_For sizes the cell per view mode");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Calculate_Layout'Access, "Calculate_Layout stacks rows, scrolls, and keeps details columns");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Place_Layout'Access, "Place_Layout holds Calculate_Layout's on-screen cells and no others");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Background'Access, "Draw_Item_Background paints per state and nothing when bare");
       AUnit.Test_Cases.Registration.Register_Routine
@@ -205,6 +208,55 @@ package body Guikit_Suite.Item_Grid is
          Assert (Labels_Read = On_Screen, "only the cells on screen read their label");
       end;
    end Test_Calculate_Layout;
+
+   procedure Test_Place_Layout (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      Cols : IG.Detail_Column_Bounds;
+
+      function Index_At (Position : Positive) return Natural is (if Position mod 7 = 0 then 0 else Position);
+      function Header_At (Position : Positive) return Boolean is (Position mod 7 = 0);
+      function Label_At (Position : Positive) return String is ("item" & Position'Image);
+
+      procedure Check (View : IG.View_Kind; Count, Scroll : Natural) is
+         Full   : constant IG.Item_Layout_Vectors.Vector :=
+           IG.Calculate_Layout
+             (Count, Index_At'Access, Header_At'Access, Label_At'Access, View,
+              Content_X => 10, Content_Y => 30, Content_W => 400, Content_H => 300, Columns => Cols,
+              Scroll_Pixels => Scroll, Line_Height => 20);
+         Placed : constant IG.Placed_Layout :=
+           IG.Place_Layout
+             (Count, Index_At'Access, Header_At'Access, Label_At'Access, View,
+              Content_X => 10, Content_Y => 30, Content_W => 400, Content_H => 300, Columns => Cols,
+              Scroll_Pixels => Scroll, Line_Height => 20);
+         With_Area : Natural := 0;
+      begin
+         for Position in 1 .. Count loop
+            Assert
+              (IG."=" (Full (Position), IG.Cell_At (Placed, Position)),
+               "a position's placed cell is its whole-layout cell");
+            if Full (Position).Height > 0 then
+               With_Area := With_Area + 1;
+               Assert
+                 (Position in Placed.First .. IG.Last (Placed), "a cell with an area is within the placed run");
+            end if;
+         end loop;
+         Assert (Natural (Placed.Cells.Length) = With_Area, "only the cells with an area are placed");
+         Assert
+           (IG.Item_At (Placed, 50, 80) = IG.Item_At (Full, 50, 80)
+            and then IG.Visible_Index_Vectors."="
+              (IG.Items_In_Rect (Placed, 0, 0, 500, 500), IG.Items_In_Rect (Full, 0, 0, 500, 500)),
+            "hit tests answer the same over the placed cells");
+      end Check;
+   begin
+      Cols (IG.Name_Column) := (X => 20, Width => 380);
+      for View in IG.View_Kind loop
+         Check (View, Count => 1_000, Scroll => 0);
+         Check (View, Count => 1_000, Scroll => 2_345);
+         Check (View, Count => 5, Scroll => 0);
+         Check (View, Count => 0, Scroll => 0);
+         Check (View, Count => 40, Scroll => 100_000);
+      end loop;
+   end Test_Place_Layout;
 
    procedure Test_Background (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);
