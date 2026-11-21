@@ -76,32 +76,41 @@ package body Guikit.Text_Fields is
       Column  : constant Natural := Guikit.Bidi.Caret_Column (Text, Cursor, Natural'Last, Has_Glyph);
       --  The cut the text is drawn with unscrolled.
       Natural_Cut : constant Natural := Guikit.Bidi.Cut_Columns (Laid, Columns);
-      --  Where the caret may stand, counted from the cut: as for plain
-      --  text, a left-to-right paragraph keeps a cell after the caret for
-      --  what is typed next, and the field shows columns 0 .. Columns - 1;
-      --  a right-to-left one keeps that cell on the caret's left, 1 ..
-      --  Columns, so the caret at its start, on the right, is not scrolled.
-      Low     : constant Natural := (if Laid.Right_To_Left then 1 else 0);
-      High    : constant Natural := (if Laid.Right_To_Left then Columns else Columns - 1);
-      Cut     : Natural;
    begin
-      if Columns = 0 or else Column in Natural_Cut + Low .. Natural_Cut + High then
-         Cut := Natural_Cut;
-      elsif Column < Natural_Cut + Low then
-         --  The caret is in the cells cut off: bring it to the left edge.
-         Cut := (if Column > Low then Column - Low else 0);
-      else
-         --  Past the field's end: bring it to the right edge.
-         Cut := Column - High;
+      if Columns = 0 then
+         --  Narrower than one cell: nothing is drawn, so there is nothing to
+         --  scroll to, and the caret stands at the field's start.
+         return (Skip_Bytes => 0, Caret_X => 0, Cut_Columns => Natural_Cut);
       end if;
-      return
-        (Skip_Bytes  => 0,
-         Caret_X     =>
-           Caret_Pixel
-             (Column - Cut,
-              (if Mirrored then Guikit.Bidi.Drawn_Columns (Laid, Cut, Columns) else Columns),
-              Field_Width, Cell_W, Caret_Width, Mirrored),
-         Cut_Columns => Cut);
+      declare
+         --  Where the caret may stand, counted from the cut: as for plain
+         --  text, a left-to-right paragraph keeps a cell after the caret for
+         --  what is typed next, and the field shows columns 0 .. Columns - 1;
+         --  a right-to-left one keeps that cell on the caret's left, 1 ..
+         --  Columns, so the caret at its start, on the right, is not
+         --  scrolled.
+         Low  : constant Natural := (if Laid.Right_To_Left then 1 else 0);
+         High : constant Natural := (if Laid.Right_To_Left then Columns else Columns - 1);
+         Cut  : Natural;
+      begin
+         if Column in Natural_Cut + Low .. Natural_Cut + High then
+            Cut := Natural_Cut;
+         elsif Column < Natural_Cut + Low then
+            --  The caret is in the cells cut off: bring it to the left edge.
+            Cut := (if Column > Low then Column - Low else 0);
+         else
+            --  Past the field's end: bring it to the right edge.
+            Cut := Column - High;
+         end if;
+         return
+           (Skip_Bytes  => 0,
+            Caret_X     =>
+              Caret_Pixel
+                (Column - Cut,
+                 (if Mirrored then Guikit.Bidi.Drawn_Columns (Laid, Cut, Columns) else Columns),
+                 Field_Width, Cell_W, Caret_Width, Mirrored),
+            Cut_Columns => Cut);
+      end;
    end Laid_Out_View;
 
    function View_Of

@@ -81,6 +81,8 @@ package Guikit.Text_Fields is
    --  text does, a cell beside it on the side the paragraph is typed
    --  towards: its right in a left-to-right paragraph, its left in a
    --  right-to-left one. Skip_Bytes is then 0 and Cut_Columns holds the cut.
+   --  A field narrower than one cell shows none of it: the cut is the
+   --  unscrolled one and the caret stands at the field's start.
    --
    --  @param Text UTF-8 field text.
    --  @param Cursor Zero-based byte offset of the caret.

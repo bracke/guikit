@@ -44,6 +44,7 @@ package body Guikit_Suite.Bidi is
    procedure Test_Default_Follows_Recorded_Forms (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Field_Scrolls_By_Drawn_Columns (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Click_On_Wide_Character (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Field_Narrower_Than_A_Cell (T : in out AUnit.Test_Cases.Test_Case'Class);
 
    function Utf8 (Codes : Guikit.Bidi.Codepoint_Array) return String is
       Result : Unbounded_String;
@@ -124,6 +125,9 @@ package body Guikit_Suite.Bidi is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Click_On_Wide_Character'Access,
          "a click on the second half of a wide character puts the caret after it");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Field_Narrower_Than_A_Cell'Access,
+         "a field narrower than one cell keeps its caret at its start, whatever the text's direction");
    end Register_Tests;
 
    --  Every test starts as before any font loaded -- every presentation
@@ -817,6 +821,57 @@ package body Guikit_Suite.Bidi is
         (Guikit.Text_Fields.Cursor_At (Text, 0, 30, 120, 20, Mirrored => False) = 4,
          "a field's click on the second half of a wide character is after it");
    end Test_Click_On_Wide_Character;
+
+   procedure Test_Field_Narrower_Than_A_Cell (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      use Guikit.Text_Fields;
+      --  "abc " then three Hebrew letters: a left-to-right paragraph with a
+      --  right-to-left run; and the Hebrew letters alone, a right-to-left one.
+      Mixed  : constant String := "abc " & Utf8 ([Alef, Bet, Gimel]);
+      Hebrew : constant String := Utf8 ([Alef, Bet, Gimel]);
+
+      --  Every caret in Text, in a field Width pixels wide, both ways round.
+      procedure Check (Text : String; Width : Natural) is
+      begin
+         for Mirrored in Boolean loop
+            for Cursor in 0 .. Text'Length loop
+               declare
+                  Shown : constant View := View_Of (Text, Cursor, Width, 20, 2, Mirrored => Mirrored);
+                  Where : constant String :=
+                    " (width" & Width'Image & ", cursor" & Cursor'Image & ", mirrored " & Mirrored'Image & ")";
+               begin
+                  Assert
+                    (Shown.Skip_Bytes = 0 and then Shown.Caret_X <= Width,
+                     "nothing is scrolled and the caret stays in the field:" & Shown'Image & Where);
+                  Assert
+                    (Cursor_At (Text, Shown.Skip_Bytes, Shown.Caret_X, Width, 20, Mirrored => Mirrored,
+                                Cut_Columns => Shown.Cut_Columns) <= Text'Length,
+                     "a click on the caret lands in the text" & Where);
+                  Assert
+                    (Cursor_At (Text, 0, 30, Width, 20, Mirrored => Mirrored) <= Text'Length,
+                     "a click past the field lands in the text" & Where);
+               end;
+            end loop;
+         end loop;
+      end Check;
+   begin
+      --  Line height 20: a cell is 12 pixels, so 0 and 5 pixels hold none.
+      for Width in 0 .. 5 loop
+         Check (Mixed, Width);
+         Check (Hebrew, Width);
+         Check ("abc", Width);
+         --  Laid-out text: nothing shows, so the caret is at the field's start.
+         Assert
+           (View_Of (Mixed, Mixed'Length, Width, 20, 2, Mirrored => False).Caret_X = 0
+            and then View_Of (Hebrew, 0, Width, 20, 2, Mirrored => False).Caret_X = 0
+            and then View_Of (Hebrew, 0, Width, 20, 2, Mirrored => True).Caret_X = 0,
+            "a laid-out field narrower than a cell draws its caret at its start" & Width'Image);
+         Assert
+           (View_Of (Mixed, 0, Width, 20, 2, Mirrored => False).Cut_Columns = 0
+            and then View_Of (Hebrew, 0, Width, 20, 2, Mirrored => False).Cut_Columns = 3,
+            "the cut is the one the text is drawn with unscrolled" & Width'Image);
+      end loop;
+   end Test_Field_Narrower_Than_A_Cell;
 
    function Suite return AUnit.Test_Suites.Access_Test_Suite is
       Result : constant AUnit.Test_Suites.Access_Test_Suite := new AUnit.Test_Suites.Test_Suite;
