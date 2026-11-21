@@ -393,6 +393,8 @@ package body Guikit.Settings_Panel is
       P.Offset := Natural (Integer'Max (0, Integer'Min (Next, Max_Scroll)));
    end Scroll;
 
+   function Scroll_Offset (P : Panel) return Natural is (P.Offset);
+
    function Click (P : in out Panel; X : Integer; Y : Integer) return Boolean is
    begin
       --  Latest first: a control's box (toggle, choice cell, stepper) is

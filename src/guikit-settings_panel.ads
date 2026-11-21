@@ -188,6 +188,12 @@ package Guikit.Settings_Panel is
    --  @param Lines Number of rows to scroll (positive scrolls down).
    procedure Scroll (P : in out Panel; Lines : Integer);
 
+   --  How far the content is scrolled.
+   --
+   --  @param P Panel to inspect.
+   --  @return The scroll offset in rows; 0 at the top.
+   function Scroll_Offset (P : Panel) return Natural;
+
    --  Hit-test a window coordinate using the most recent render: focus a row,
    --  flip a toggle, pick a choice cell, step a number, or press a button. Emits
    --  the corresponding change.
