@@ -11,10 +11,10 @@ package body Guikit.Palette is
    function Is_Continuation (Value : Character) return Boolean is
      (Character'Pos (Value) in 16#80# .. 16#BF#);
 
-   --  UTF-8-aware ASCII/Latin case folding: lowercases ASCII and the Latin-1
-   --  supplement / Latin Extended-A ranges that have a simple lowercase mapping,
-   --  and passes other multi-byte sequences through unchanged so a case-
-   --  insensitive substring match works for accented command names.
+   --  UTF-8-aware ASCII/Latin-1 case folding: lowercases ASCII, the Latin-1
+   --  supplement's capitals and Y with diaeresis, and passes other multi-byte
+   --  sequences through unchanged. The default when the caller supplies no
+   --  Fold_Function to Search.
    function To_Lower (Text : String) return String is
       Result : String (Text'Range);
       Index  : Integer := Text'First;
@@ -77,18 +77,6 @@ package body Guikit.Palette is
       return Result;
    end To_Lower;
 
-   function Contains_Case_Insensitive
-     (Haystack : String;
-      Needle   : String)
-      return Boolean is
-   begin
-      if Needle = "" then
-         return True;
-      end if;
-
-      return Ada.Strings.Fixed.Index (To_Lower (Haystack), To_Lower (Needle)) > 0;
-   end Contains_Case_Insensitive;
-
    function Saturating_Add
      (Left  : Natural;
       Right : Natural)
@@ -101,22 +89,21 @@ package body Guikit.Palette is
       return Left + Right;
    end Saturating_Add;
 
+   --  How well a folded Token matches a folded Field, on top of Base: exact,
+   --  then prefix, then anywhere in it.
    function Field_Score
      (Field : String;
       Token : String;
       Base  : Natural)
-      return Natural
-   is
-      Lower_Field : constant String := To_Lower (Field);
-      Lower_Token : constant String := To_Lower (Token);
+      return Natural is
    begin
-      if Lower_Field = Lower_Token then
+      if Field = Token then
          return Base;
-      elsif Lower_Field'Length >= Lower_Token'Length
-        and then Lower_Field (Lower_Field'First .. Lower_Field'First + Lower_Token'Length - 1) = Lower_Token
+      elsif Field'Length >= Token'Length
+        and then Field (Field'First .. Field'First + Token'Length - 1) = Token
       then
          return Base + 10;
-      elsif Contains_Case_Insensitive (Field, Token) then
+      elsif Ada.Strings.Fixed.Index (Field, Token) > 0 then
          return Base + 20;
       else
          return No_Match_Score;
@@ -175,7 +162,7 @@ package body Guikit.Palette is
             Token : constant String := Query (Query'First + Position .. Query'First + Last - 1);
             Token_Score : constant Natural :=
               Natural'Min
-                 (Field_Score (Identifier, Token, 0),
+                (Field_Score (Identifier, Token, 0),
                  Natural'Min
                    (Field_Score (Label, Token, 100),
                     Natural'Min
@@ -213,9 +200,16 @@ package body Guikit.Palette is
 
    function Search
      (Query : String;
-      Items : Item_Vectors.Vector)
+      Items : Item_Vectors.Vector;
+      Fold  : Fold_Function := null)
       return Item_Vectors.Vector
    is
+      --  Every field and the query folded once, by the caller's folding or
+      --  the toolkit's.
+      function Folded (Text : String) return String is
+        (if Fold = null then To_Lower (Text) else Fold (Text));
+
+      Folded_Query : constant String := Folded (Query);
       --  A match and where it stood among Items: the order is the pair, the
       --  match first and the position only between equal matches. Packed into
       --  one number (match * 100 + position) the position overtook the match
@@ -239,11 +233,11 @@ package body Guikit.Palette is
             Entry_Item : Item := Items.Element (I);
             Base_Score : constant Natural :=
               Query_Score
-                (To_String (Entry_Item.Identifier),
-                 To_String (Entry_Item.Label),
-                 To_String (Entry_Item.Description),
-                 To_String (Entry_Item.Shortcut),
-                 Query);
+                (Folded (To_String (Entry_Item.Identifier)),
+                 Folded (To_String (Entry_Item.Label)),
+                 Folded (To_String (Entry_Item.Description)),
+                 Folded (To_String (Entry_Item.Shortcut)),
+                 Folded_Query);
          begin
             if Base_Score /= No_Match_Score then
                Entry_Item.Score := Base_Score;

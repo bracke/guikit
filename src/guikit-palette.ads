@@ -31,6 +31,12 @@ package Guikit.Palette is
      (Index_Type   => Positive,
       Element_Type => Item);
 
+   --  How Search folds case before it compares: the caller's full Unicode
+   --  case folding (an application with locale data supplies one), or null
+   --  for the toolkit's own, which folds ASCII and Latin-1 letters only.
+   --  The function must keep the text UTF-8.
+   type Fold_Function is access function (Text : String) return String;
+
    --  Filter and rank Items against a query.
    --
    --  Each returned Item's Score is its match: the sum over the query's tokens
@@ -42,10 +48,13 @@ package Guikit.Palette is
    --
    --  @param Query Search text; split into whitespace-separated tokens.
    --  @param Items Candidate entries in their natural (e.g. registry) order.
+   --  @param Fold Case folding applied to the query and every field (null:
+   --    the toolkit's ASCII and Latin-1 folding).
    --  @return Matching Items, scored, best-first for a non-empty query.
    function Search
      (Query : String;
-      Items : Item_Vectors.Vector)
+      Items : Item_Vectors.Vector;
+      Fold  : Fold_Function := null)
       return Item_Vectors.Vector;
 
 end Guikit.Palette;

@@ -2,6 +2,7 @@ with Ada.Containers.Vectors;
 with Ada.Strings.Unbounded;
 
 with Guikit.Draw;
+with Guikit.Palette;
 with Guikit.Shared_Bytes;
 
 --  A stateful, searchable command-palette component built on top of the pure
@@ -70,6 +71,15 @@ package Guikit.Command_Palette is
    --  @param P Palette to update.
    --  @param Config New configuration.
    procedure Set_Configuration (P : in out Palette; Config : Configuration);
+
+   --  Set how the search folds case (Guikit.Palette.Search): null, the
+   --  default, keeps the toolkit's ASCII and Latin-1 folding; an application
+   --  with locale data supplies its full Unicode folding. Another folding
+   --  ranks the commands anew.
+   --
+   --  @param P Palette to update.
+   --  @param Fold The case folding the search applies.
+   procedure Set_Folding (P : in out Palette; Fold : Guikit.Palette.Fold_Function);
 
    --  Replace the command list and re-clamp the selection to the new results.
    --
@@ -228,6 +238,7 @@ private
 
    type Palette is record
       Config       : Configuration;
+      Fold         : Guikit.Palette.Fold_Function := null;
       Commands     : Command_Vectors.Vector;
       Revision     : Revision_Number := 0;   --  bumped by every Set_Commands
       Query        : UString;

@@ -1,6 +1,5 @@
 with Guikit.Layout;
 with Guikit.Text_Fields;
-with Guikit.Palette;
 with Guikit.Utf8;
 with Guikit.Utf8.Editing;
 with Guikit.Widgets;
@@ -45,7 +44,7 @@ package body Guikit.Command_Palette is
          end;
       end loop;
       P.Ranked.Clear;
-      for Item of Guikit.Palette.Search (To_String (P.Query), Items) loop
+      for Item of Guikit.Palette.Search (To_String (P.Query), Items, P.Fold) loop
          P.Ranked.Append (P.Commands.Element (Item.Id));
       end loop;
       P.Ranked_Query    := P.Query;
@@ -82,6 +81,16 @@ package body Guikit.Command_Palette is
    begin
       P.Config := Config;
    end Set_Configuration;
+
+   procedure Set_Folding (P : in out Palette; Fold : Guikit.Palette.Fold_Function) is
+      use type Guikit.Palette.Fold_Function;
+   begin
+      if Fold /= P.Fold then
+         P.Fold := Fold;
+         P.Revision := P.Revision + 1;
+         Refresh_Results (P);
+      end if;
+   end Set_Folding;
 
    procedure Set_Commands (P : in out Palette; Commands : Command_Vectors.Vector) is
       Count : Natural;

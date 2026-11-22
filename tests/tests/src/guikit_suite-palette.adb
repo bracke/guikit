@@ -33,6 +33,7 @@ package body Guikit_Suite.Palette is
    procedure Test_Match_Outranks_Position (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Whitespace_Tokenizing (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Continuation_Byte_Not_Separator (T : in out AUnit.Test_Cases.Test_Case'Class);
+   procedure Test_Caller_Folding (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_High_Contrast_Colors (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Modal_Backdrop_Colors (T : in out AUnit.Test_Cases.Test_Case'Class);
    procedure Test_Icon_Rgb_For (T : in out AUnit.Test_Cases.Test_Case'Class);
@@ -85,6 +86,9 @@ package body Guikit_Suite.Palette is
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_Continuation_Byte_Not_Separator'Access,
          "a letter whose UTF-8 tail is the next-line byte (A-ring, Cyrillic ha) is not split");
+      AUnit.Test_Cases.Registration.Register_Routine
+        (T, Test_Caller_Folding'Access,
+         "a caller's case folding matches letters the toolkit's Latin-1 folding leaves (Cyrillic)");
       AUnit.Test_Cases.Registration.Register_Routine
         (T, Test_High_Contrast_Colors'Access, "high contrast strengthens text and panel boundaries");
       AUnit.Test_Cases.Registration.Register_Routine
@@ -217,6 +221,61 @@ package body Guikit_Suite.Palette is
         (Guikit.Utf8.Whitespace_Separator_Length ("a" & B (16#85#) & "b", 1) = 1,
          "a stray next-line byte after ASCII still separates");
    end Test_Continuation_Byte_Not_Separator;
+
+   --  A stand-in for an application's Unicode folding: lowercases ASCII and
+   --  the basic Cyrillic capitals (U+0410 .. U+042F).
+   function Fold_Cyrillic (Text : String) return String is
+      Result : String := Text;
+      Index  : Integer := Result'First;
+   begin
+      while Index <= Result'Last loop
+         if Index < Result'Last and then Character'Pos (Result (Index)) = 16#D0# then
+            case Character'Pos (Result (Index + 1)) is
+               when 16#90# .. 16#9F# =>
+                  Result (Index + 1) := Character'Val (Character'Pos (Result (Index + 1)) + 16#20#);
+               when 16#A0# .. 16#AF# =>
+                  Result (Index) := Character'Val (16#D1#);
+                  Result (Index + 1) := Character'Val (Character'Pos (Result (Index + 1)) - 16#20#);
+               when others =>
+                  null;
+            end case;
+            Index := Index + 2;
+         else
+            if Result (Index) in 'A' .. 'Z' then
+               Result (Index) := Character'Val (Character'Pos (Result (Index)) + 32);
+            end if;
+            Index := Index + 1;
+         end if;
+      end loop;
+      return Result;
+   end Fold_Cyrillic;
+
+   procedure Test_Caller_Folding (T : in out AUnit.Test_Cases.Test_Case'Class) is
+      pragma Unreferenced (T);
+      function B (Code : Natural) return Character is (Character'Val (Code));
+      --  "Копировать" (Copy) and the query "коп": K is D0 9A, k is D0 BA.
+      Copy  : constant String :=
+        B (16#D0#) & B (16#9A#) & B (16#D0#) & B (16#BE#) & B (16#D0#) & B (16#BF#)
+        & B (16#D0#) & B (16#B8#) & B (16#D1#) & B (16#80#) & B (16#D0#) & B (16#BE#)
+        & B (16#D0#) & B (16#B2#) & B (16#D0#) & B (16#B0#) & B (16#D1#) & B (16#82#)
+        & B (16#D1#) & B (16#8C#);
+      Query : constant String := B (16#D0#) & B (16#BA#) & B (16#D0#) & B (16#BE#) & B (16#D0#) & B (16#BF#);
+      Items : Guikit.Palette.Item_Vectors.Vector;
+   begin
+      Items.Append (Item (1, "copy", Copy));
+      Items.Append (Item (2, "paste", "Paste"));
+      Assert (Guikit.Palette.Search (Query, Items).Is_Empty,
+              "the toolkit's own folding leaves Cyrillic capitals alone");
+      declare
+         Found : constant Guikit.Palette.Item_Vectors.Vector :=
+           Guikit.Palette.Search (Query, Items, Fold_Cyrillic'Access);
+      begin
+         Assert (Natural (Found.Length) = 1 and then Found.Element (1).Id = 1,
+                 "with the caller's folding the lower-case query finds the capitalised label");
+      end;
+      Assert (Natural (Guikit.Palette.Search ("PASTE", Items, Fold_Cyrillic'Access).Length) = 1,
+              "the caller's folding folds the query too");
+   end Test_Caller_Folding;
 
    procedure Test_High_Contrast_Colors (T : in out AUnit.Test_Cases.Test_Case'Class) is
       pragma Unreferenced (T);
