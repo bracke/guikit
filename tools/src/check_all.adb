@@ -1242,6 +1242,7 @@ procedure Check_All is
       --  from.
       Require_Layer ("glfw-input-keys-codes", [1 => To_Unbounded_String ("Guikit.Input")]);
       Require_Layer ("glfw-input-keys-layout", No_Deps);
+      Require_Layer ("glfw-windows-content_scale", No_Deps);
       Require_Layer ("glfw-windows-drop", No_Deps);
       Require_Layer ("glfw-windows-drop-paths", No_Deps);
       Require_Layer ("glfw-windows-icon", No_Deps);
