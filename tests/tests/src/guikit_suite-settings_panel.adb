@@ -226,6 +226,25 @@ package body Guikit_Suite.Settings_Panel is
          Assert (To_String (Ch.Key) = "icon" and then To_String (Ch.Value) = "high-contrast",
                  "editing a text field emits its whole new value");
       end;
+
+      --  The text field's caret: at the end when it takes the focus, where
+      --  the caller puts it after, clamped to the value and kept on a
+      --  character boundary, and back at the end once the focus leaves and
+      --  returns.
+      Assert (SP.Focused_Caret (P) = 13, "a focused text field's caret starts at the end of its value");
+      SP.Set_Focused_Caret (P, 4);
+      Assert (SP.Focused_Caret (P) = 4, "the caller moves the caret");
+      SP.Set_Focused_Caret (P, 99);
+      Assert (SP.Focused_Caret (P) = 13, "a caret past the value is clamped to its end");
+      SP.Set_Focused_Value (P, "na" & Character'Val (16#C3#) & Character'Val (16#AF#) & "ve");
+      Assert (SP.Take_Change (P).Kind = SP.Value_Changed, "the new value is emitted");
+      SP.Set_Focused_Caret (P, 3);
+      Assert (SP.Focused_Caret (P) = 2, "a caret inside a character moves back to its start");
+      SP.Move_Focus (P, -1);
+      SP.Move_Focus (P, 1);
+      Assert (SP.Focused_Caret (P) = 6, "a field focused again has its caret at the end");
+      SP.Move_Focus (P, -1);
+      Assert (SP.Focused_Caret (P) = 0, "a field other than text has no caret");
    end Test_Edit_And_Emit;
 
    procedure Test_Build_Frame (T : in out AUnit.Test_Cases.Test_Case'Class) is

@@ -1309,6 +1309,7 @@ procedure Check_All is
           To_Unbounded_String ("Guikit.Segmented"),
           To_Unbounded_String ("Guikit.Text_Fields"),
           To_Unbounded_String ("Guikit.Utf8"),
+          To_Unbounded_String ("Guikit.Utf8.Editing"),
           To_Unbounded_String ("Guikit.Widgets")]);
       Require_Every_Unit_Layered;
    end Check_Layering;

@@ -3,6 +3,7 @@ with Ada.Strings.Fixed;
 with Guikit.Layout;
 with Guikit.Segmented;
 with Guikit.Utf8;
+with Guikit.Utf8.Editing;
 with Guikit.Widgets;
 
 package body Guikit.Settings_Panel is
@@ -251,6 +252,7 @@ package body Guikit.Settings_Panel is
       end loop;
       if I in 1 .. N and then Field_Is_Visible (P, I) then
          P.Focused   := I;
+         P.Caret_Field := 0;  --  the newly focused field's caret starts at its end
          P.Capturing := 0;   --  moving focus cancels any in-progress capture
       end if;
    end Move_Focus;
@@ -324,6 +326,38 @@ package body Guikit.Settings_Panel is
       P.Fields.Replace_Element (P.Focused, F);
       Emit_Value (P, F.Key, F.Value);
    end Set_Focused_Value;
+
+   function Focused_Caret (P : Panel) return Natural is
+      Ok : Boolean;
+      F  : constant Field := Focused_Field (P, Ok);
+   begin
+      if not Ok or else F.Kind /= Settings_Panel.Text then
+         return 0;
+      end if;
+      declare
+         Value : constant String := To_String (F.Value);
+      begin
+         return
+           (if P.Caret_Field = P.Focused
+            then Guikit.Utf8.Editing.Boundary_At_Or_Before (Value, Natural'Min (P.Caret, Value'Length))
+            else Value'Length);
+      end;
+   end Focused_Caret;
+
+   procedure Set_Focused_Caret (P : in out Panel; Position : Natural) is
+      Ok : Boolean;
+      F  : constant Field := Focused_Field (P, Ok);
+   begin
+      if not Ok or else F.Kind /= Settings_Panel.Text then
+         return;
+      end if;
+      declare
+         Value : constant String := To_String (F.Value);
+      begin
+         P.Caret := Guikit.Utf8.Editing.Boundary_At_Or_Before (Value, Natural'Min (Position, Value'Length));
+         P.Caret_Field := P.Focused;
+      end;
+   end Set_Focused_Caret;
 
    procedure Begin_Capture (P : in out Panel) is
       Ok : Boolean;
@@ -410,6 +444,7 @@ package body Guikit.Settings_Panel is
                   F : Field := P.Fields.Element (H.Field_Index);
                begin
                   P.Focused := H.Field_Index;
+                  P.Caret_Field := 0;
                   --  Any click disarms a pending capture; a click on a Shortcut
                   --  row re-arms it below (the row-level Hit_Focus is the reliable
                   --  hit, since it shadows any control-box hit within the row).

@@ -143,6 +143,24 @@ package Guikit.Settings_Panel is
    --  @param Text New value for the focused Text field.
    procedure Set_Focused_Value (P : in out Panel; Text : String);
 
+   --  The caret of the focused Text field: a byte offset into its value, at a
+   --  character boundary. A field gets the caret at its end when it takes the
+   --  focus; the caller moves it (Set_Focused_Caret) as it edits, and the
+   --  frame draws it there, scrolling a long value to keep it in view.
+   --
+   --  @param P Panel to query.
+   --  @return The caret's byte offset, 0 .. the value's length (0 when no
+   --    Text field is focused).
+   function Focused_Caret (P : Panel) return Natural;
+
+   --  Put the focused Text field's caret at Position, moved back to the
+   --  character boundary at or before it and clamped to the value. A no-op
+   --  unless a Text field is focused. Produces no change.
+   --
+   --  @param P Panel to update.
+   --  @param Position Byte offset into the focused value.
+   procedure Set_Focused_Caret (P : in out Panel; Position : Natural);
+
    --  Press-to-capture for Shortcut fields. Clicking a Shortcut row arms it; the
    --  panel then reports Is_Capturing so the caller can route the next physical
    --  chord to the panel instead of acting on it. The caller formats the chord to
@@ -315,6 +333,11 @@ private
       --  frame follows the focus only when it differs, so a wheel scroll away
       --  from an unchanged focus sticks; an edit resets it to re-follow.
       Followed      : Natural := 0;
+      --  The caret of the Text field Caret_Field (a 1-based index into
+      --  Fields), as a byte offset; any other focused field has its caret at
+      --  the end of its value.
+      Caret         : Natural := 0;
+      Caret_Field   : Natural := 0;
       Content_Rows  : Natural := 0;   --  total rows from the last render
       Visible_Rows  : Natural := 0;   --  visible rows from the last render
       Hits          : Hit_Rect_Vectors.Vector;   --  from the last Build_Frame

@@ -102,11 +102,12 @@ begin
             Caret_W : constant Natural := Natural'Max (1, Cell_W / 6);
             Editing : constant Boolean := Focused and then I = P.Focused;
             Value   : constant String := To_String (F.Value);
-            --  The caret is at the end of the value; a long value scrolls so
-            --  it stays in the field (Guikit.Text_Fields).
+            --  The caret stands where the caller put it (Set_Focused_Caret),
+            --  at the end until then; a long value scrolls so it stays in the
+            --  field (Guikit.Text_Fields).
             Field   : constant Guikit.Text_Fields.View :=
               (if Editing
-               then Guikit.Text_Fields.View_Of (Value, Value'Length, Text_W, LH, Caret_W, Has_Glyph => Has_Glyph)
+               then Guikit.Text_Fields.View_Of (Value, Focused_Caret (P), Text_W, LH, Caret_W, Has_Glyph => Has_Glyph)
                else (others => <>));
          begin
             Guikit.Widgets.Draw_Input_Field
